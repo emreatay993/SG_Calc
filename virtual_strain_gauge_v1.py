@@ -1,9 +1,24 @@
 import context_menu
+import context_menu
+import clr
+clr.AddReference('System.Windows.Forms')
+from System.Windows.Forms import OpenFileDialog, DialogResult
 
-# TODO - SELECT STRAIN GAGE BY USER
-file_path_of_selected_SG_Part_from_library = r"C:\Users\emre_\VS_Code\strain_gauge_calculations\SG_Micro_AE1.pmdb"
+# Create an OpenFileDialog object
+dialog = OpenFileDialog()
 
-# TODO - Select Strain Gage By User
+# Set properties
+dialog.Filter = 'Ansys part database files (*.pmdb)|*.pmdb|All files (*.*)|*.*'  # Filter for pmdb files
+dialog.Title = 'Select an SG part database file'
+
+# Show the dialog and get the result
+if dialog.ShowDialog() == DialogResult.OK:
+    file_path_of_selected_SG_Part_from_library = dialog.FileName
+    print("Selected SG part database file: " + file_path_of_selected_SG_Part_from_library)
+else:
+    print("No SG part database file selected")
+
+
 obj_of_solution = DataModel.GetObjectsByName("Solution")[0]
 
 #Instances
