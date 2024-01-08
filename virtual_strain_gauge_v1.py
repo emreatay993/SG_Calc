@@ -1,5 +1,4 @@
 import context_menu
-import context_menu
 import clr
 clr.AddReference('System.Windows.Forms')
 from System.Windows.Forms import OpenFileDialog, DialogResult
@@ -68,7 +67,7 @@ for i in range(len(list_of_IDs_of_CS_SG_ref_points)):
         
         # Add local grid coordinates and orient them
         CS_SG_grid = Model.CoordinateSystems.AddCoordinateSystem()
-        CS_SG_grid.Name = "CS_Ch_" + str(i + 1) + "_" + str(j)
+        CS_SG_grid.Name = "CS_SG_Ch_" + str(i + 1) + "_" + str(j)
         body_selection_single_channel_of_an_SG = create_geo_selection
         body_selection_single_channel_of_an_SG.Ids = [tree_object_of_gauge.GetGeoBody().Id]
         face_selection_single_channel_of_an_SG = create_geo_selection
@@ -77,6 +76,18 @@ for i in range(len(list_of_IDs_of_CS_SG_ref_points)):
         CS_SG_grid.PrimaryAxis = CoordinateSystemAxisType.PositiveZAxis
         CS_SG_grid.PrimaryAxisDefineBy = CoordinateSystemAlignmentType.Associative
         CS_SG_grid.PrimaryAxisLocation = face_selection_single_channel_of_an_SG
+        
+        # # Also add local grid coordinates for movable strain probes and orient them
+        # CS_SG_grid = Model.CoordinateSystems.AddCoordinateSystem()
+        # CS_SG_grid.Name = "CS_SG_Probe_Ch" + str(i + 1) + "_" + str(j)
+        # body_selection_single_channel_of_an_SG = create_geo_selection
+        # body_selection_single_channel_of_an_SG.Ids = [tree_object_of_gauge.GetGeoBody().Id]
+        # face_selection_single_channel_of_an_SG = create_geo_selection
+        # face_selection_single_channel_of_an_SG.Ids = [tree_object_of_gauge.GetGeoBody().Faces[0].Id]
+        # CS_SG_grid.OriginLocation = body_selection_single_channel_of_an_SG
+        # CS_SG_grid.PrimaryAxis = CoordinateSystemAxisType.PositiveZAxis
+        # CS_SG_grid.PrimaryAxisDefineBy = CoordinateSystemAlignmentType.Associative
+        # CS_SG_grid.PrimaryAxisLocation = face_selection_single_channel_of_an_SG
         
         # Find the long edge of the grid 
         grid_edge_lengths=[tree_object_of_gauge.GetGeoBody().Edges[m].Length 
@@ -141,14 +152,18 @@ part_transform_group.TransformMesh = True
 context_menu.DoTransformGeometry(ExtAPI)
 
 
-
 def group_SG_objects_created():
     
     # Create the lists of objects of different types to group
-    list_of_obj_of_CS_Ch_of_grids = [
+    list_of_obj_of_CS_SG_Ch_of_grids = [
         Model.CoordinateSystems.Children[i]
         for i in range(len(Model.CoordinateSystems.Children))
-        if Model.CoordinateSystems.Children[i].Name.Contains("CS_Ch")]
+        if Model.CoordinateSystems.Children[i].Name.Contains("CS_SG_Ch")]
+    
+    list_of_obj_of_CS_SG_Probe_Ch_of_grids = [
+        Model.CoordinateSystems.Children[i]
+        for i in range(len(Model.CoordinateSystems.Children))
+        if Model.CoordinateSystems.Children[i].Name.Contains("CS_SG_Probe_Ch")]
     
     list_of_obj_all_element_orientations = DataModel.Project.GetChildren(DataModelObjectCategory.ElementOrientation,True)
     list_of_obj_of_grid_element_orientations = [
@@ -185,9 +200,13 @@ def group_SG_objects_created():
         if list_of_obj_of_all_elastic_strains[i].Name.Contains("StrainX_SG_")]
     
     # Group the coordinate systems of each grid channel
-    ExtAPI.DataModel.Tree.Activate(list_of_obj_of_CS_Ch_of_grids)
+    ExtAPI.DataModel.Tree.Activate(list_of_obj_of_CS_SG_Ch_of_grids)
     context_menu.DoCreateGroupingFolderInTree(ExtAPI)
-    DataModel.GetObjectsByName("New Folder")[0].Name = "CS_Ch"
+    DataModel.GetObjectsByName("New Folder")[0].Name = "CS_SG_Ch"
+    
+    ExtAPI.DataModel.Tree.Activate(list_of_obj_of_CS_SG_Probe_Ch_of_grids)
+    context_menu.DoCreateGroupingFolderInTree(ExtAPI)
+    DataModel.GetObjectsByName("New Folder")[0].Name = "CS_SG_Probe_Ch"
     
     # Group the element orientations created
     ExtAPI.DataModel.Tree.Activate(list_of_obj_of_grid_element_orientations)
@@ -213,3 +232,12 @@ group_SG_objects_created()
 
 
 # TODO Her bir local grid CS ye ayni oryantasyona sahip strain probelar ekle
+
+# solution_35 = DataModel.GetObjectById(35)
+# strain_probe_3768 = solution_35.AddStrainProbe()
+# strain_probe_3768.LocationMethod = LocationDefinitionMethod.CoordinateSystem
+# coordinate_system_3638 = DataModel.GetObjectById(3638)
+# strain_probe_3768.CoordinateSystemSelection = coordinate_system_3638
+# strain_probe_3768.ResultSelection = ProbeDisplayFilter.XAxis
+# strain_probe_3768.Name = r"""Ex_Probe_1_1"""
+
