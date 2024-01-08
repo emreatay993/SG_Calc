@@ -2,7 +2,7 @@ import clr
 clr.AddReference('System.Windows.Forms')
 clr.AddReference('System.Drawing')
 
-from System.Windows.Forms import OpenFileDialog, FolderBrowserDialog, DialogResult
+from System.Windows.Forms import OpenFileDialog, FolderBrowserDialog, DialogResult, MessageBox, MessageBoxButtons, MessageBoxIcon
 import System.IO
 
 # Create an OpenFileDialog object
