@@ -128,7 +128,7 @@ for i in range(len(list_of_IDs_of_CS_SG_ref_points)):
         normal_strain_x_SG_grid = obj_of_solution.AddNormalElasticStrain()
         normal_strain_x_SG_grid.Location = body_selection_single_channel_of_an_SG
         normal_strain_x_SG_grid.CoordinateSystem = None  # Results will be in Solution CS
-        normal_strain_x_SG_grid.Name = "StrainX_SG_" + str(i + 1) + "_" + str(j)
+        normal_strain_x_SG_grid.Name = "StrainX_SG" + str(i + 1) + "_" + str(j)
         
         j += 1
     
@@ -145,6 +145,10 @@ for i in range(len(list_of_IDs_of_CS_SG_ref_points)):
     part_transform.Location = body_selection_of_all_channels_of_an_SG
     part_transform.DefineBy = PartTransformationDefinitionType.CoordinateSystem
     part_transform.TargetCoordinateSystem = list_of_obj_of_CS_SG_ref_points[i]
+
+    # Add mesh sizing to the SG grid bodies
+    obj_of_mesh_sizing_SG_grid_bodies = Model.Mesh.AddSizing()
+    obj_of_mesh_sizing_SG_grid_bodies.Location = body_selection_of_all_channels_of_an_SG
 
     # Create surface bonds/connection groups for SG bodies
     connection_group_of_an_SG = Model.Connections.AddConnectionGroup()
@@ -189,7 +193,6 @@ part_transform_group.Activate()
 context_menu.DoTransformGeometry(ExtAPI)
 
 
-
 def group_SG_objects_created():
     
     # Create the lists of objects of different types to group
@@ -230,7 +233,7 @@ def group_SG_objects_created():
     list_of_obj_of_SG_grid_strains = [
         list_of_obj_of_all_elastic_strains[i]
         for i in range(len(list_of_obj_of_all_elastic_strains))
-        if list_of_obj_of_all_elastic_strains[i].Name.Contains("StrainX_SG_")]
+        if list_of_obj_of_all_elastic_strains[i].Name.Contains("StrainX_SG")]
     
     list_of_obj_of_connection_groups_of_SG_bodies = [
     Model.Connections.Children[i]
@@ -298,6 +301,7 @@ change_contact_region_properties_SG_bodies()
 
 
 
+
 # Record the end time
 end_time = time.time()
 
@@ -306,3 +310,4 @@ execution_time = end_time - start_time
 
 # Print the execution time in seconds
 print("Execution time: {:.2f} seconds".format(execution_time))
+
