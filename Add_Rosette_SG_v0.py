@@ -149,6 +149,8 @@ for i in range(len(list_of_IDs_of_CS_SG_ref_points)):
     # Add mesh sizing to the SG grid bodies
     obj_of_mesh_sizing_SG_grid_bodies = Model.Mesh.AddSizing()
     obj_of_mesh_sizing_SG_grid_bodies.Location = body_selection_of_all_channels_of_an_SG
+    obj_of_mesh_sizing_SG_grid_bodies.ElementSize = Quantity(500, "mm")
+    obj_of_mesh_sizing_SG_grid_bodies.Name = "Body_Sizing_SG_" + str(i+1)
 
     # Create surface bonds/connection groups for SG bodies
     connection_group_of_an_SG = Model.Connections.AddConnectionGroup()
@@ -240,6 +242,12 @@ def group_SG_objects_created():
     for i in range(len(Model.Connections.Children))
     if Model.Connections.Children[i].Name.Contains("Contacts_SG_")]
     
+    list_of_obj_of_all_mesh_controls = DataModel.Project.GetChildren(DataModelObjectCategory.MeshControl,True)
+    list_of_obj_of_SG_mesh_controls = [
+        list_of_obj_of_all_mesh_controls[i]
+        for i in range(len(list_of_obj_of_all_mesh_controls))
+        if list_of_obj_of_all_mesh_controls[i].Name.Contains("Body_Sizing_SG_")]
+    
     # Group the coordinate systems of each grid channel
     ExtAPI.DataModel.Tree.Activate(list_of_obj_of_CS_SG_Ch_of_grids)
     context_menu.DoCreateGroupingFolderInTree(ExtAPI)
@@ -270,6 +278,10 @@ def group_SG_objects_created():
     context_menu.DoCreateGroupingFolderInTree(ExtAPI)
     DataModel.GetObjectsByName("New Folder")[0].Name = "Contacts_SG"
     
+    ExtAPI.DataModel.Tree.Activate(list_of_obj_of_SG_mesh_controls)
+    context_menu.DoCreateGroupingFolderInTree(ExtAPI)
+    DataModel.GetObjectsByName("New Folder")[0].Name = "Mesh_Controls_SG"
+
     return list_of_obj_of_connection_groups_of_SG_bodies
 
 #Execute grouping function with some output
@@ -310,4 +322,3 @@ execution_time = end_time - start_time
 
 # Print the execution time in seconds
 print("Execution time: {:.2f} seconds".format(execution_time))
-
