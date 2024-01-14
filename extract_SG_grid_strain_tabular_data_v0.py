@@ -41,8 +41,8 @@ for m in range(len(list_of_obj_of_SG_grid_strains)):
     columns = [numeric_list[i * num_elements_per_column: (i + 1) * num_elements_per_column] for i in range(5)]
 
     # Extract and modify the names of each column data
-    headers_strain.append(list_of_obj_of_SG_grid_strains[m].Name.Substring(8) + "_FEA [eps]")
-    headers_microstrain.append(list_of_obj_of_SG_grid_strains[m].Name.Substring(8) + "_FEA [mu_eps]")
+    headers_strain.append(list_of_obj_of_SG_grid_strains[m].Name.Substring(8))
+    headers_microstrain.append(list_of_obj_of_SG_grid_strains[m].Name.Substring(8))
 
     # Assuming each inner list of columns is a separate column of data
     list_of_strain_data.append(columns[4])
