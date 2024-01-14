@@ -6,7 +6,7 @@ start_time = time.time()
 
 list_of_obj_of_all_elastic_strains = DataModel.Project.GetChildren(DataModelObjectCategory.NormalElasticStrain,True)
 list_of_obj_of_SG_grid_strains = [
-    obj for obj in list_of_obj_of_all_elastic_strains if obj.Name.Contains("StrainX_SG_")
+    obj for obj in list_of_obj_of_all_elastic_strains if obj.Name.Contains("StrainX_SG")
 ]
 
 # Helper function to check if a string can be converted to float
