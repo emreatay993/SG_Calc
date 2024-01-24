@@ -89,7 +89,7 @@ for each_ID_of_underdefined_SG_grids in list_of_IDs_of_underdefined_SG_grids:
     tree_object_of_gauge = DataModel.GetObjectById(each_ID_of_underdefined_SG_grids)
     tree_object_of_gauge.StiffnessOption = ShellElementStiffnessOption.StressEvaluationOnly
     tree_object_of_gauge.Material = "Structural Steel"
-    tree_object_of_gauge.Color = 55295
+    tree_object_of_gauge.PropertyByName("Color").InternalValue = 55295
     tree_object_of_gauge.Name = "SG_Grid_Body_" + str(i + 1) + "_" + str(j)
     # endregion
 
