@@ -111,7 +111,7 @@ class SGSelectionForm(Form):
         list_of_selected_CAD_files_for_each_rosette_SG = self.list_of_selected_CAD_files_for_each_rosette_SG
         
         # Proceed with the selections
-        MessageBox.Show("Project path: {}\nSelected CAD files: {}".format(self.project_path, self.list_of_selected_CAD_files_for_each_rosette_SG), "Selections Made. Click Exit icon at the top right corner of the main window to continue.")
+        MessageBox.Show("Project path: {}\nSelected CAD files: {}".format(self.project_path, self.list_of_selected_CAD_files_for_each_rosette_SG) + ".Click the Exit icon at the top right corner of this window and the main GUI window to continue.", "Selections Made.")
 
     def grid_key_down(self, sender, e):
         if e.Control and e.KeyCode == Keys.V:
