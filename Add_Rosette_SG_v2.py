@@ -2,25 +2,133 @@
 import context_menu
 import clr
 clr.AddReference('System.Windows.Forms')
-from System.Windows.Forms import OpenFileDialog, DialogResult, MessageBoxButtons, MessageBoxIcon, MessageBox
+clr.AddReference('System.Drawing')
+from System.Windows.Forms import (Application, Form, Button, DataGridView,
+                                  FolderBrowserDialog, DialogResult, OpenFileDialog,
+                                  DataGridViewAutoSizeColumnMode, DataGridViewColumnHeadersHeightSizeMode,
+                                  DataGridViewColumnSortMode, DataGridViewCellStyle, MessageBox,
+                                  MessageBoxButtons, MessageBoxIcon, Keys, DataGridViewContentAlignment, Clipboard)
+from System.Drawing import Size, Font, FontStyle, Color, ColorTranslator
 from itertools import chain
+import os
 # endregion
 
-# region Select reference CAD geometry for Rosette strain gauge surface part from a folder
-# Create an OpenFileDialog object
-dialog = OpenFileDialog()
+#---------------------------------------------------------------------------------------------------------
+list_of_selected_CAD_files_for_each_rosette_SG = []
+# region Definition of SG CAD Geometries
+class SGSelectionForm(Form):
+    def __init__(self, num_rows):
+        self.Text = "Rosette SG - Define Reference CAD Files"
+        self.MinimumSize = Size(500, 700)
+        self.AutoSize = True
+        self.AutoSizeMode = System.Windows.Forms.AutoSizeMode.GrowAndShrink
+        self.Font = Font("Calibri", 10)
+        self.initialize_components(num_rows)
 
-# Set properties
-dialog.Filter = 'Ansys part database files (*.pmdb)|*.pmdb|All files (*.*)|*.*'  # Filter for pmdb/IGES files
-dialog.Title = 'Select an SG part database file'
+    def initialize_components(self, num_rows):
+        self.proceed_button = Button()
+        self.proceed_button.Text = "Click here to proceed with the selections below"
+        self.proceed_button.Dock = System.Windows.Forms.DockStyle.Top
+        self.proceed_button.Click += self.proceed_button_click
 
-# Show the dialog and get the result
-if dialog.ShowDialog() == DialogResult.OK:
-    file_path_of_selected_SG_Part_from_library = dialog.FileName
-    print("Selected SG part database file: " + file_path_of_selected_SG_Part_from_library)
-else:
-    print("No SG part database file selected")
+        self.folder_button = Button()
+        self.folder_button.Text = "Click here to select the folder for .pmdb files..."
+        self.folder_button.Dock = System.Windows.Forms.DockStyle.Top
+        self.folder_button.Click += self.folder_button_click
+
+        self.grid = DataGridView()
+        self.grid.Dock = System.Windows.Forms.DockStyle.Fill
+        self.grid.AllowUserToAddRows = False
+        self.grid.RowHeadersVisible = False
+        self.grid.ColumnCount = 2
+        self.grid.Columns[0].Name = "Rosette Names"
+        self.grid.Columns[0].ReadOnly = True
+        self.grid.Columns[0].DefaultCellStyle.Font = Font(self.Font, FontStyle.Bold)
+        #$self.grid.Columns[0].AutoSizeMode = DataGridViewAutoSizeColumnMode.Fill
+        self.grid.Columns[0].DefaultCellStyle.Alignment = DataGridViewContentAlignment.MiddleCenter
+        self.grid.Columns[0].Width = 100
+        self.grid.Columns[1].Name = "Rosette Model No"
+        self.grid.Columns[1].AutoSizeMode = DataGridViewAutoSizeColumnMode.Fill
+        self.grid.Columns[1].DefaultCellStyle.Alignment = DataGridViewContentAlignment.MiddleCenter
+        self.grid.ColumnHeadersDefaultCellStyle.Alignment = DataGridViewContentAlignment.MiddleCenter
+        self.grid.ColumnHeadersDefaultCellStyle.Font = Font(self.Font, FontStyle.Bold)
+        self.grid.ColumnHeadersHeightSizeMode = DataGridViewColumnHeadersHeightSizeMode.DisableResizing
+        self.grid.AllowUserToResizeRows = False
+        self.grid.RowTemplate.Height = 25
+        placeholder_font = Font("Calibri", 8, FontStyle.Italic)
+        placeholder_text = "Copy the name of .pmdb file here, without its file extension"
+        self.grid.Columns[1].DefaultCellStyle.Font = placeholder_font
+        self.grid.Columns[1].DefaultCellStyle.ForeColor = Color.Gray
+
+        for i in range(num_rows):
+            self.grid.Rows.Add("SG_{}".format(i + 1), placeholder_text)
+
+        self.grid.KeyDown += self.grid_key_down
+        self.Controls.Add(self.grid)
+        self.Controls.Add(self.folder_button)
+        self.Controls.Add(self.proceed_button)
+
+        self.project_path = None
+
+    def folder_button_click(self, sender, event):
+        folder_browser_dialog = FolderBrowserDialog()
+        if folder_browser_dialog.ShowDialog() == DialogResult.OK:
+            self.project_path = folder_browser_dialog.SelectedPath
+
+    def proceed_button_click(self, sender, event):
+        if not self.project_path:
+            MessageBox.Show("Please select the project folder first.", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error)
+            return
+        
+        # Check if all Rosette Model No cells are populated
+        all_models_defined = all(row.Cells["Rosette Model No"].Value and
+                                 row.Cells["Rosette Model No"].Value != "Copy name of pmdb here, without file extension"
+                                 for row in self.grid.Rows)
+        if not all_models_defined:
+            MessageBox.Show("Please define the models for all gauges and try again.", "Error",MessageBoxButtons.OK, MessageBoxIcon.Error)
+            return
+    
+        # Retrieve the list of .pmdb files in the selected folder
+        pmdb_files = [f for f in os.listdir(self.project_path) if f.endswith('.pmdb')]
+    
+        # Check if the user-defined model names correspond to .pmdb files in the folder
+        missing_files = []
+        for row in self.grid.Rows:
+            model_name = row.Cells["Rosette Model No"].Value
+            if model_name and "{}.pmdb".format(model_name) not in pmdb_files:
+                missing_files.append((row.Cells["Rosette Names"].Value, model_name))
+    
+        if missing_files:
+            error_message = "The following CAD names could not be found inside the folder for the following strain gauge names:\n"
+            error_message += "\n".join("{}: {}".format(name, model) for name, model in missing_files)
+            MessageBox.Show(error_message, "Error")
+            return
+    
+        # If all checks pass, compile the list of CAD file names
+        self.list_of_selected_CAD_files_for_each_rosette_SG = [os.path.join(self.project_path, row.Cells["Rosette Model No"].Value + ".pmdb") for row in self.grid.Rows]
+        # Also define the list as a global variable to be used later
+        global list_of_selected_CAD_files_for_each_rosette_SG  # Reference the global variable
+        list_of_selected_CAD_files_for_each_rosette_SG = self.list_of_selected_CAD_files_for_each_rosette_SG
+        
+        # Proceed with the selections
+        MessageBox.Show("Project path: {}\nSelected CAD files: {}".format(self.project_path, self.list_of_selected_CAD_files_for_each_rosette_SG), "Selections Made. Click Exit icon at the top right corner of the main window to continue.")
+
+    def grid_key_down(self, sender, e):
+        if e.Control and e.KeyCode == Keys.V:
+            clipboard_data = Clipboard.GetText()
+            rows = clipboard_data.split('\r\n')
+            start_row_index = self.grid.CurrentCell.RowIndex
+            current_column_index = self.grid.CurrentCell.ColumnIndex
+            for i, row_data in enumerate(rows):
+                if start_row_index + i < self.grid.RowCount and current_column_index == 1:
+                    cell_value = row_data.strip()
+                    if cell_value:
+                        self.grid.Rows[start_row_index + i].Cells[current_column_index].Value = cell_value
+                        self.grid.Rows[start_row_index + i].Cells[current_column_index].Style = \
+                            DataGridViewCellStyle(Font=self.Font, ForeColor=Color.Black)
 # endregion
+
+#---------------------------------------------------------------------------------------------------------
 
 # region Check whether solution environment is selected
 try:
@@ -37,17 +145,20 @@ except:
 # endregion
 
 # region Extracting reference points and their IDs for strain gauges.
-list_of_obj_of_CS_SG_ref_points = [
-    Model.CoordinateSystems.Children[i]
+list_of_obj_of_CS_SG_ref_points = \
+    [Model.CoordinateSystems.Children[i]
     for i in range(len(Model.CoordinateSystems.Children))
-    if Model.CoordinateSystems.Children[i].Name.Contains("CS_SG_Ref")
-]
+    if Model.CoordinateSystems.Children[i].Name.Contains("CS_SG_Ref")]
 
-list_of_IDs_of_CS_SG_ref_points = [
-    Model.CoordinateSystems.Children[i].ObjectId
+list_of_IDs_of_CS_SG_ref_points = \
+    [Model.CoordinateSystems.Children[i].ObjectId
     for i in range(len(Model.CoordinateSystems.Children))
-    if Model.CoordinateSystems.Children[i].Name.Contains("CS_SG_Ref")
-]
+    if Model.CoordinateSystems.Children[i].Name.Contains("CS_SG_Ref")]
+# endregion
+
+# region Assign the each rosette SG with their corresponding CAD geometry
+class_instance_of_SG_selector = SGSelectionForm(len(list_of_IDs_of_CS_SG_ref_points))
+Application.Run(class_instance_of_SG_selector)
 # endregion
 
 # region Importing geometry for each strain gauge.
@@ -57,7 +168,7 @@ for i in range(len(list_of_IDs_of_CS_SG_ref_points)):
     geometry_import.Name = "SG_" + str(i + 1) +"_Geometry_Import"
     geometry_import_format = Ansys.Mechanical.DataModel.Enums.GeometryImportPreference.Format.Automatic
     geometry_import_preferences = Ansys.ACT.Mechanical.Utilities.GeometryImportPreferences()
-    geometry_import.Import(file_path_of_selected_SG_Part_from_library, geometry_import_format, geometry_import_preferences)
+    geometry_import.Import(list_of_selected_CAD_files_for_each_rosette_SG[i], geometry_import_format, geometry_import_preferences)
 # endregion
 
 # region Find all underdefined SG grid shell bodies for preprocessing
@@ -213,7 +324,7 @@ for sublist in grouped_list_of_SG_grids:
         
         # Assign the selection info IDs to the selection info of connection group
         selection_info_of_connection_group_of_an_SG.Ids = \
-        list_of_IDs_of_selection_info_of_connection_group_of_an_SG
+        list_of_IDs_of_selection_info_of_connection_group_of_an_SG[0].Ids
         
         # Define bodies of the connection group
         connection_group_of_an_SG.Location = \
@@ -322,7 +433,7 @@ DataModel.GetObjectsByName("New Folder")[0].Name = "Contacts_SG"
 ExtAPI.DataModel.Tree.Activate(list_of_obj_of_SG_mesh_controls)
 context_menu.DoCreateGroupingFolderInTree(ExtAPI)
 DataModel.GetObjectsByName("New Folder")[0].Name = "Mesh_Controls_SG"
-    
+# endregion
 
 # region Modify the contact regions of SG grids/bodies and their properties
 # Add three contact regions under each SG contact group
@@ -350,4 +461,3 @@ for f in range(len(list_of_obj_of_connection_groups_of_SG_bodies)):
         each_SG_contact_region.TrimTolerance = Quantity(max(grid_edge_lengths)*1.5, 'm')
         each_SG_contact_region.RenameBasedOnDefinition()
 # endregion
-
