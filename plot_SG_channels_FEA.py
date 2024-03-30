@@ -17,12 +17,18 @@ file_name = 'SG_FEA_microstrain_data.csv'
 cpython_code = """
 import sys
 import os
-import pandas as pd
-import plotly.graph_objects as go
 from PyQt5.QtCore import Qt
-from PyQt5.QtWidgets import QApplication, QMainWindow, QVBoxLayout, QWidget
+from PyQt5.QtWidgets import QApplication, QMainWindow, QVBoxLayout, QWidget, QMessageBox
 from PyQt5.QtWebEngineWidgets import QWebEngineView
-from plotly.offline import plot
+
+try:
+    import pandas as pd
+    import plotly.graph_objects as go
+    from plotly.offline import plot
+except ImportError as e:
+    app = QApplication(sys.argv)
+    QMessageBox.critical(None, "Import Error", f"Failed to import a required module: {str(e)}")
+    sys.exit(1)
 
 class PlotlyViewer(QWebEngineView):
     def __init__(self, fig, parent=None):
@@ -44,46 +50,43 @@ class PlotWindow(QMainWindow):
         self.initUI()
 
     def initUI(self):
-        file_path = os.path.join(self.folder_name, self.file_name)
-        data = pd.read_csv(file_path)
+        try:
+            file_path = os.path.join(self.folder_name, self.file_name)
+            data = pd.read_csv(file_path)
+        except Exception as e:
+            QMessageBox.critical(self, "File Error", f"Failed to read the file: {str(e)}")
+            sys.exit(1)
+
+        # Proceed with the rest of the code if no exceptions occurred
         data_long = data.melt(id_vars='Time', var_name='Gauge Channel', value_name='µe')
 
         fig = go.Figure()
         for label, df in data_long.groupby('Gauge Channel'):
-            fig.add_trace(go.Scatter(
-                x=df['Time'], 
-                y=df['µe'], 
-                mode='lines', 
-                name=label,
-                hoverinfo='text',
-                text=df.apply(lambda row: f'Gauge Channel={label}<br>Time={row["Time"]} s<br>µe={row["µe"]}', axis=1)
-            ))
+            fig.add_trace(go.Scatter(x=df['Time'], y=df['µe'], mode='lines', name=label))
 
         # Set layout options
-        fig.update_layout(
-            title_text='SG Channels (FEA)',
-            xaxis_title='Time',
-            yaxis_title='µe',
-        )
+        fig.update_layout(title_text='SG Channels (FEA)', xaxis_title='Time', yaxis_title='µe')
 
         self.viewer = PlotlyViewer(fig)
-        
         layout = QVBoxLayout()
         layout.addWidget(self.viewer)
-
         widget = QWidget()
         widget.setLayout(layout)
         self.setCentralWidget(widget)
 
 if __name__ == '__main__':
-    QApplication.setAttribute(Qt.AA_EnableHighDpiScaling, True)
+    QApplication.setAttribute(Qt.AA_EnableHighDpiScaling, True)  # Enable high-DPI scaling
     app = QApplication(sys.argv)
-    mainWindow = PlotWindow('""" + folder_path + """', '""" + file_name + """')
-    mainWindow.show()
-    sys.exit(app.exec_())
+    try:
+        mainWindow = PlotWindow('""" + folder_path + """', '""" + file_name + """')
+        mainWindow.show()
+        sys.exit(app.exec_())
+    except Exception as e:
+        QMessageBox.critical(None, "Application Error", f"An error occurred: {str(e)}")
+        sys.exit(1)
 """
 
-cpython_script_name = "plot_SG_channels_FEA_cpython_code_only.py"
+cpython_script_name = "plot_SG_channels_FEA.py"
 cpython_script_path = sol_selected_environment.WorkingDir + cpython_script_name
 
 # Use StreamWriter with FileStream to write the file with UTF-8 encoding
