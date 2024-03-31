@@ -76,7 +76,8 @@ class PlotWindow(QMainWindow):
             xaxis_title='Time',
             yaxis_title='µe',
         )
-
+        # Generate an offline (html) version of the plotly graph
+        plot(fig, filename=os.path.join(self.folder_name, "SG_FEA_plot.html"), auto_open=False) 
         self.viewer = PlotlyViewer(fig)
         
         layout = QVBoxLayout()
