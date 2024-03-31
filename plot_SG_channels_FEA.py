@@ -43,7 +43,7 @@ class PlotlyViewer(QWebEngineView):
 class PlotWindow(QMainWindow):
     def __init__(self, folder_name, file_name):
         super(PlotWindow, self).__init__()
-        self.setWindowTitle("SG Channels (FEA)")
+        self.setWindowTitle("Plot SG Channels (FEA)")
         self.setGeometry(100, 100, 800, 600)
         self.folder_name = folder_name
         self.file_name = file_name
@@ -57,19 +57,31 @@ class PlotWindow(QMainWindow):
             QMessageBox.critical(self, "File Error", f"Failed to read the file: {str(e)}")
             sys.exit(1)
 
-        # Proceed with the rest of the code if no exceptions occurred
         data_long = data.melt(id_vars='Time', var_name='Gauge Channel', value_name='µe')
 
         fig = go.Figure()
         for label, df in data_long.groupby('Gauge Channel'):
-            fig.add_trace(go.Scatter(x=df['Time'], y=df['µe'], mode='lines', name=label))
+            hover_text = df.apply(lambda row: f'Gauge Channel={label}<br>Time={row["Time"]} s<br>µe={row["µe"]}', axis=1)
+            fig.add_trace(go.Scatter(
+                x=df['Time'], 
+                y=df['µe'], 
+                mode='lines', 
+                name=label,
+                hoverinfo='text',
+                text=hover_text
+            ))
 
-        # Set layout options
-        fig.update_layout(title_text='SG Channels (FEA)', xaxis_title='Time', yaxis_title='µe')
+        fig.update_layout(
+            title_text='SG Channels (FEA)',
+            xaxis_title='Time',
+            yaxis_title='µe',
+        )
 
         self.viewer = PlotlyViewer(fig)
+        
         layout = QVBoxLayout()
         layout.addWidget(self.viewer)
+
         widget = QWidget()
         widget.setLayout(layout)
         self.setCentralWidget(widget)
@@ -77,13 +89,9 @@ class PlotWindow(QMainWindow):
 if __name__ == '__main__':
     QApplication.setAttribute(Qt.AA_EnableHighDpiScaling, True)  # Enable high-DPI scaling
     app = QApplication(sys.argv)
-    try:
-        mainWindow = PlotWindow('""" + solution_directory_path + """', '""" + file_name + """')
-        mainWindow.show()
-        sys.exit(app.exec_())
-    except Exception as e:
-        QMessageBox.critical(None, "Application Error", f"An error occurred: {str(e)}")
-        sys.exit(1)
+    mainWindow = PlotWindow('""" + solution_directory_path + """', '""" + file_name + """')
+    mainWindow.show()
+    sys.exit(app.exec_())
 """
 
 cpython_script_name = "plot_SG_channels_FEA_cpython_code_only.py"
@@ -98,4 +106,3 @@ print("Python file created successfully with UTF-8 encoding.")
 
 # region Use subprocess to run the script
 subprocess.call(['python', cpython_script_path])
-# endregion

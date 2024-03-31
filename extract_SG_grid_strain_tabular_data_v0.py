@@ -1,8 +1,9 @@
 import csv
 import time
+import os
 
-# Record the start time
-start_time = time.time()
+solution_directory_path = sol_selected_environment.WorkingDir
+solution_directory_path = solution_directory_path.Replace("\\", "\\\\")
 
 list_of_obj_of_all_elastic_strains = DataModel.Project.GetChildren(DataModelObjectCategory.NormalElasticStrain,True)
 list_of_obj_of_SG_grid_strains = [
@@ -60,7 +61,7 @@ transposed_data = list(map(list, zip(*list_of_strain_data)))
 
 # Define the path where you want to save the CSV file for strain data
 csv_file_name = "SG_FEA_strain_data.csv"
-file_path = project_path + "/" + csv_file_name  # Assuming project_path is defined elsewhere
+file_path = os.path.join(solution_directory_path, csv_file_name)
 
 # Write the original strain data to a CSV file
 with open(file_path, 'wb') as file:
@@ -71,12 +72,12 @@ with open(file_path, 'wb') as file:
 
 print("SG FEA strain CSV file created at: " + file_path)
 
-# Now create a new list of lists with the values multiplied by 1e6 for microstrain
+# Create a new list of lists with the values multiplied by 1e6 for microstrain
 SG_FEA_microstrain_data = [[value * 1e6 for value in row] for row in transposed_data]
 
 # Define the path for the microstrain CSV file
 SG_FEA_microstrain_csv_file_name = "SG_FEA_microstrain_data.csv"
-SG_FEA_microstrain_file_path = project_path + "/" + SG_FEA_microstrain_csv_file_name  
+SG_FEA_microstrain_file_path = os.path.join(solution_directory_path, SG_FEA_microstrain_csv_file_name)  
 
 # Write the microstrain data to a CSV file
 with open(SG_FEA_microstrain_file_path, 'wb') as file:
@@ -86,13 +87,3 @@ with open(SG_FEA_microstrain_file_path, 'wb') as file:
         writer.writerow([time_data[index]] + row)  # Prepend time data to each row
 
 print("SG FEA microstrain CSV file created at: " + SG_FEA_microstrain_file_path)
-
-
-# Record the end time
-end_time = time.time()
-
-# Calculate the execution time
-execution_time = end_time - start_time
-
-# Print the execution time in seconds
-print("Execution time: {:.2f} seconds".format(execution_time))
