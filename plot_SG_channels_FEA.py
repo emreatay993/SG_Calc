@@ -86,7 +86,7 @@ if __name__ == '__main__':
         sys.exit(1)
 """
 
-cpython_script_name = "plot_SG_channels_FEA.py"
+cpython_script_name = "plot_SG_channels_FEA_cpython_code_only.py"
 cpython_script_path = sol_selected_environment.WorkingDir + cpython_script_name
 
 # Use StreamWriter with FileStream to write the file with UTF-8 encoding
