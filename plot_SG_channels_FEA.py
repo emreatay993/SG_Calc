@@ -10,8 +10,8 @@ import os
 # endregion
 
 # region Define the plot function to be run
-folder_path = sol_selected_environment.WorkingDir[:-1]
-folder_path = folder_path.Replace("\\", "\\\\")
+solution_directory_path = sol_selected_environment.WorkingDir[:-1]
+solution_directory_path = solution_directory_path.Replace("\\", "\\\\")
 file_name = 'SG_FEA_microstrain_data.csv'
 
 cpython_code = """
@@ -78,7 +78,7 @@ if __name__ == '__main__':
     QApplication.setAttribute(Qt.AA_EnableHighDpiScaling, True)  # Enable high-DPI scaling
     app = QApplication(sys.argv)
     try:
-        mainWindow = PlotWindow('""" + folder_path + """', '""" + file_name + """')
+        mainWindow = PlotWindow('""" + solution_directory_path + """', '""" + file_name + """')
         mainWindow.show()
         sys.exit(app.exec_())
     except Exception as e:
