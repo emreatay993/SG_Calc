@@ -61,7 +61,7 @@ for i in range(len(list_of_names_of_SG_grid_strains)):
 
 #-------------------------------------------------------------------------------------------------------------------------------------------------------
 
-# region Find the existing StrainX_SG group, 
+# region Group StrainX_SG objects together
 list_of_obj_of_tree_group_of_StrainX_SG = [
     DataModel.GetObjectsByName(sol_selected_environment.Children[i].Name)[0]
     for i in range(len(sol_selected_environment.Children))
@@ -83,3 +83,4 @@ list_of_obj_of_SG_grid_strains = [
 ExtAPI.DataModel.Tree.Activate(list_of_obj_of_SG_grid_strains)
 context_menu.DoCreateGroupingFolderInTree(ExtAPI)
 DataModel.GetObjectsByName("New Folder")[0].Name = "StrainX_SG"
+# endregion
