@@ -97,6 +97,7 @@ for i in range(len(list_of_filtered_names_of_missing_StrainX_SG)):
     normal_strain_x_SG_grid = sol_selected_environment.AddNormalElasticStrain()
     normal_strain_x_SG_grid.Location = body_selection_of_missing_SG_strainx_results
     normal_strain_x_SG_grid.CoordinateSystem = None  # Results will be in Solution CS
+    normal_strain_x_SG_grid.CalculateTimeHistory = True
     normal_strain_x_SG_grid.Name = list_of_filtered_names_of_missing_StrainX_SG[i]
 # endregion
 
