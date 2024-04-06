@@ -288,6 +288,7 @@ for each_ID_of_underdefined_SG_grids in list_of_IDs_of_underdefined_SG_grids:
     normal_strain_x_SG_grid = obj_of_solution.AddNormalElasticStrain()
     normal_strain_x_SG_grid.Location = body_selection_single_channel_of_an_SG
     normal_strain_x_SG_grid.CoordinateSystem = None  # Results will be in Solution CS
+    normal_strain_x_SG_grid.CalculateTimeHistory = True
     normal_strain_x_SG_grid.Name = "StrainX_SG" + str(i) + "_" + str(j)
     # endregion
 
