@@ -11,15 +11,15 @@ list_of_obj_of_SG_grid_bodies = [
     list_of_obj_of_all_bodies[i]
     for i in range(len(list_of_obj_of_all_bodies))
     if list_of_obj_of_all_bodies[i].Name.Contains("SG_Grid_Body_")
-    and list_of_obj_of_all_bodies[i].Thickness == Quantity('0 [m]')
-    and list_of_obj_of_all_bodies[i].ObjectState == ObjectState.FullyDefined]
+    and list_of_obj_of_all_bodies[i].Thickness == Quantity(0.00001, 'mm')
+    and list_of_obj_of_all_bodies[i].ObjectState not in (ObjectState.Suppressed, ObjectState.UnderDefined)]
     
 list_of_names_of_SG_grid_bodies = [
     list_of_obj_of_all_bodies[i].Name
     for i in range(len(list_of_obj_of_all_bodies))
     if list_of_obj_of_all_bodies[i].Name.Contains("SG_Grid_Body_")
-    and list_of_obj_of_all_bodies[i].Thickness == Quantity('0 [m]')
-    and list_of_obj_of_all_bodies[i].ObjectState == ObjectState.FullyDefined]
+    and list_of_obj_of_all_bodies[i].Thickness == Quantity(0.00001, 'mm')
+    and list_of_obj_of_all_bodies[i].ObjectState not in (ObjectState.Suppressed, ObjectState.UnderDefined)]
 # endregion
 
 #-------------------------------------------------------------------------------------------------------------------------------------------------------
