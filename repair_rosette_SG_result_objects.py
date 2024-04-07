@@ -39,7 +39,7 @@ if len(list_of_obj_of_SG_grid_strains) > 0:
 #-------------------------------------------------------------------------------------------------------------------------------------------------------
 
 # region Get the list of StrainX_SG objects to be added
-list_of_names_of_SG_grid_strains = [name.replace("SG_Grid_Body", "StrainX_SG") for name in list_of_names_of_SG_grid_bodies]
+list_of_names_of_SG_grid_strains = [name.replace("SG_Grid_Body_", "StrainX_SG") for name in list_of_names_of_SG_grid_bodies]
 # endregion
 
 #-------------------------------------------------------------------------------------------------------------------------------------------------------
