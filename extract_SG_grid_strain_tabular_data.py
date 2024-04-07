@@ -34,7 +34,7 @@ solution_directory_path = solution_directory_path.Replace("\\", "\\\\")
 # region Get the the names of active StrainX_SG objects in the selected analysis environment
 list_of_names_of_SG_grid_strains = [] # Initialize the list
 
-list_of_obj_of_all_elastic_strains = DataModel.Project.GetChildren(DataModelObjectCategory.NormalElasticStrain,True)
+list_of_obj_of_all_elastic_strains = sol_selected_environment.GetChildren(DataModelObjectCategory.NormalElasticStrain,True)
 list_of_names_of_SG_grid_strains = [
     obj.Name for obj in list_of_obj_of_all_elastic_strains 
     if obj.Name.Contains("StrainX_SG")
@@ -85,9 +85,16 @@ for m in range(len(list_of_names_of_SG_grid_strains)):
     num_elements_per_column = len(numeric_list) // 5
     columns = [numeric_list[i * num_elements_per_column: (i + 1) * num_elements_per_column] for i in range(5)]
 
+    # Use regular expressions to extract the "SG_x_y" part
+    match = re.search(r"(SG\d+_\d+)", list_of_names_of_SG_grid_strains[m])
+    if match:
+        sg_name = match.group(1)  # Extract the "SG_x_y" part
+    else:
+        sg_name = "Unknown"  # Default value if the pattern doesn't match
+
     # Extract and modify the names of each column data
-    headers_strain.append(list_of_names_of_SG_grid_strains[m].Substring(8))
-    headers_microstrain.append(list_of_names_of_SG_grid_strains[m].Substring(8))
+    headers_strain.append(sg_name)
+    headers_microstrain.append(sg_name)
 
     # Assuming each inner list of columns is a separate column of data
     list_of_strain_data.append(columns[4])
