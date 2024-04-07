@@ -17,6 +17,7 @@ file_name = 'SG_FEA_microstrain_data.csv'
 cpython_code = """
 import sys
 import os
+import re
 from PyQt5.QtCore import Qt
 from PyQt5.QtWidgets import QApplication, QMainWindow, QVBoxLayout, QWidget, QMessageBox
 from PyQt5.QtWebEngineWidgets import QWebEngineView
@@ -48,6 +49,12 @@ class PlotWindow(QMainWindow):
         self.folder_name = folder_name
         self.file_name = file_name
         self.initUI()
+        
+    def extract_sort_key(self, channel_name):
+        match = re.match(r'SG(\d+)_(\d+)', channel_name)
+        if match:
+            return tuple(map(int, match.groups()))
+        return (0, 0)  # Return a default sort key for safety
 
     def initUI(self):
         try:
@@ -56,11 +63,15 @@ class PlotWindow(QMainWindow):
         except Exception as e:
             QMessageBox.critical(self, "File Error", f"Failed to read the file: {str(e)}")
             sys.exit(1)
-
+    
         data_long = data.melt(id_vars='Time', var_name='Gauge Channel', value_name='µe')
-
+    
+        # Apply the sorting key extraction function and sort
+        data_long['SortKey'] = data_long['Gauge Channel'].apply(self.extract_sort_key)
+        data_long_sorted = data_long.sort_values(by='SortKey')
+    
         fig = go.Figure()
-        for label, df in data_long.groupby('Gauge Channel'):
+        for label, df in data_long_sorted.groupby('Gauge Channel', sort = False):
             hover_text = df.apply(lambda row: f'Gauge Channel={label}<br>Time={row["Time"]} s<br>µe={row["µe"]}', axis=1)
             fig.add_trace(go.Scatter(
                 x=df['Time'], 
