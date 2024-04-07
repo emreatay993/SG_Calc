@@ -68,14 +68,78 @@ class PlotWindow(QMainWindow):
                 mode='lines', 
                 name=label,
                 hoverinfo='text',
-                text=hover_text
+                text=hover_text,
+                hoverlabel = dict(
+                    font_size = 10,
+                    bgcolor='rgba(255, 255, 255, 0.5)')
             ))
 
         fig.update_layout(
-            title_text='SG Channels (FEA)',
+            title_text='SG Channel Results (FEA)',
+            title_x=0.5,  # Center the title
+            legend_title_text='Gauge Channel',
+            template="plotly_white",
+            plot_bgcolor='rgba(0,0,0,0)',
             xaxis_title='Time',
             yaxis_title='µe',
+            
+            font=dict(
+                family="Arial, sans-serif",  # Setting a universal font for the plot
+                size=12,
+                color="#0077B6"  # light sky blue
+                ),
+                
+            xaxis=dict(
+                showline=True,
+                showgrid=True,
+                showticklabels=True,
+                linewidth=2,
+                tickfont=dict(
+                    family='Arial, sans-serif',
+                    size=12,
+                    ),
+                tickmode='auto',
+                nticks=30
+                ),
+            grid=dict(
+                rows=1,
+                columns=1,
+                pattern="independent"
+                ),
+                
+            yaxis=dict(
+                showgrid=True,
+                zeroline=False,
+                showline=False,
+                showticklabels=True,
+                linecolor='rgb(204, 204, 204)',
+                tickmode='auto',
+                nticks=30
+                ),
+            )
+            
+        
+        # Hover mode configuration for better interaction
+        fig.update_traces(
+        line=dict(width=2),
+        marker=dict(size=3),
+        mode='markers+lines'
         )
+        
+        fig.update_yaxes(
+        showspikes=False,
+        spikecolor="#0077B6",  # Set spike color
+        spikethickness=1,  # Set spike thickness
+        spikedash='dot',  # Set spike style
+        )
+        
+        fig.update_xaxes(
+        showspikes=False,
+        spikecolor="#0077B6",  # Set spike color
+        spikethickness=1,  # Set spike thickness
+        spikedash='dot',  # Set spike style
+        )
+        
         # Generate an offline (html) version of the plotly graph
         plot(fig, filename=os.path.join(self.folder_name, "SG_FEA_plot.html"), auto_open=False) 
         self.viewer = PlotlyViewer(fig)
