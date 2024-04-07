@@ -171,3 +171,6 @@ print("Python file created successfully with UTF-8 encoding.")
 
 # region Use subprocess to run the script
 subprocess.call(['python', cpython_script_path])
+# Delete the cpython script from the solution directory
+os.remove(cpython_script_path)
+# endregion
