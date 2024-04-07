@@ -15,21 +15,24 @@ solution_directory_path = solution_directory_path.Replace("\\", "\\\\")
 file_name = 'SG_FEA_microstrain_data.csv'
 
 cpython_code = """
-import sys
-import os
-import re
-from PyQt5.QtCore import Qt
-from PyQt5.QtWidgets import QApplication, QMainWindow, QVBoxLayout, QWidget, QMessageBox
-from PyQt5.QtWebEngineWidgets import QWebEngineView
-
 try:
     import pandas as pd
     import plotly.graph_objects as go
     from plotly.offline import plot
+    import plotly.express as px
+    import sys
+    import os
+    import re
+    from PyQt5.QtCore import Qt
+    from PyQt5.QtWidgets import QApplication, QMainWindow, QVBoxLayout, QWidget, QMessageBox
+    from PyQt5.QtWebEngineWidgets import QWebEngineView
+    
 except ImportError as e:
     app = QApplication(sys.argv)
     QMessageBox.critical(None, "Import Error", f"Failed to import a required module: {str(e)}")
     sys.exit(1)
+
+color_scale = px.colors.sequential.matter
 
 class PlotlyViewer(QWebEngineView):
     def __init__(self, fig, parent=None):
@@ -73,11 +76,18 @@ class PlotWindow(QMainWindow):
         fig = go.Figure()
         for label, df in data_long.groupby('Gauge Channel', sort = False):
             hover_text = df.apply(lambda row: f'Gauge Channel={label}<br>Time={row["Time"]} s<br>µe={row["µe"]}', axis=1)
+            
+            # Determine the color for the current trace
+            trace_index = list(data_long['Gauge Channel'].unique()).index(label)
+            color_index = trace_index / (len(data_long['Gauge Channel'].unique()) - 1)
+            trace_color = px.colors.sample_colorscale(color_scale, color_index)[0]
+            
             fig.add_trace(go.Scatter(
                 x=df['Time'], 
                 y=df['µe'], 
                 mode='lines', 
                 name=label,
+                line=dict(color=trace_color),
                 hoverinfo='text',
                 text=hover_text,
                 hoverlabel = dict(
@@ -183,5 +193,5 @@ print("Python file created successfully with UTF-8 encoding.")
 # region Use subprocess to run the script
 subprocess.call(['python', cpython_script_path])
 # Delete the cpython script from the solution directory
-os.remove(cpython_script_path)
+#os.remove(cpython_script_path)
 # endregion
