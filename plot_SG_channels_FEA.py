@@ -71,7 +71,7 @@ class PlotWindow(QMainWindow):
         data_long_sorted = data_long.sort_values(by='SortKey')
     
         fig = go.Figure()
-        for label, df in data_long_sorted.groupby('Gauge Channel', sort = False):
+        for label, df in data_long.groupby('Gauge Channel', sort = False):
             hover_text = df.apply(lambda row: f'Gauge Channel={label}<br>Time={row["Time"]} s<br>µe={row["µe"]}', axis=1)
             fig.add_trace(go.Scatter(
                 x=df['Time'], 
