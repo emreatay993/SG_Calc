@@ -32,7 +32,7 @@ except ImportError as e:
     QMessageBox.critical(None, "Import Error", f"Failed to import a required module: {str(e)}")
     sys.exit(1)
 
-color_scale = px.colors.sequential.matter
+my_discrete_color_scheme = px.colors.qualitative.Set3
 
 class PlotlyViewer(QWebEngineView):
     def __init__(self, fig, parent=None):
@@ -74,13 +74,14 @@ class PlotWindow(QMainWindow):
         data_long_sorted = data_long.sort_values(by='SortKey')
     
         fig = go.Figure()
-        for label, df in data_long.groupby('Gauge Channel', sort = False):
+        for label, df in data_long.groupby('Gauge Channel', sort=False):
             hover_text = df.apply(lambda row: f'Gauge Channel={label}<br>Time={row["Time"]} s<br>µe={row["µe"]}', axis=1)
             
-            # Determine the color for the current trace
+            # Calculate trace_index here
             trace_index = list(data_long['Gauge Channel'].unique()).index(label)
-            color_index = trace_index / (len(data_long['Gauge Channel'].unique()) - 1)
-            trace_color = px.colors.sample_colorscale(color_scale, color_index)[0]
+            
+            # Then use trace_index to determine the color for the current trace
+            trace_color = my_discrete_color_scheme[trace_index % len(my_discrete_color_scheme)]
             
             fig.add_trace(go.Scatter(
                 x=df['Time'], 
