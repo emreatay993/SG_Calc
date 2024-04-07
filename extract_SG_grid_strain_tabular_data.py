@@ -40,6 +40,11 @@ list_of_names_of_SG_grid_strains = [
     if obj.Name.Contains("StrainX_SG")
     and obj.ObjectState != ObjectState.Suppressed]
 
+list_of_IDs_of_SG_grid_strains = [
+    obj.ObjectId for obj in list_of_obj_of_all_elastic_strains 
+    if obj.Name.Contains("StrainX_SG")
+    and obj.ObjectState != ObjectState.Suppressed]
+
 # Throw an error if no active StrainX_SG objects are found in the selected analysis environment.
 if len(list_of_names_of_SG_grid_strains) == 0:
     MessageBox.Show("There are no active SG strain contours to be extracted within the selected analysis environment.", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error)
@@ -48,7 +53,18 @@ if len(list_of_names_of_SG_grid_strains) == 0:
 # ----------------------------------------------------------------------------------------------------------------
 
 # region Make sure that all StrainX_SG objects are and will be evaluated in the ascending order. 
-list_of_names_of_SG_grid_strains = sort_strain_names(list_of_names_of_SG_grid_strains)
+# Pair each ID with its corresponding name
+paired_list = list(zip(list_of_IDs_of_SG_grid_strains, list_of_names_of_SG_grid_strains))
+
+# Use your existing sort function on the paired list, sorting by the second element of each pair (the name)
+sorted_pairs = sorted(paired_list, key=lambda x: extract_numbers(x[1]))
+
+# Unzip the pairs back into two lists
+sorted_IDs, sorted_names = zip(*sorted_pairs)
+
+# Convert tuples back to lists, if necessary
+list_of_IDs_of_SG_grid_strains = list(sorted_IDs)
+list_of_names_of_SG_grid_strains = list(sorted_names)
 # endregion
 
 # ----------------------------------------------------------------------------------------------------------------
@@ -69,7 +85,7 @@ headers_microstrain = []
 
 for m in range(len(list_of_names_of_SG_grid_strains)):
 
-    DataModel.GetObjectsByName(list_of_names_of_SG_grid_strains[m])[0].Activate()
+    DataModel.GetObjectById(list_of_IDs_of_SG_grid_strains[m]).Activate()
     Pane = ExtAPI.UserInterface.GetPane(MechanicalPanelEnum.TabularData)
     Con = Pane.ControlUnknown
 
