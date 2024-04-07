@@ -79,7 +79,7 @@ class SGSelectionForm(Form):
 
     def proceed_button_click(self, sender, event):
         if not self.project_path:
-            MessageBox.Show("Please select the project folder first.", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error)
+            MessageBox.Show("Please select the folder containing the reference part database files before proceeding.", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error)
             return
         
         # Check if all Rosette Model No cells are populated
@@ -113,7 +113,7 @@ class SGSelectionForm(Form):
         list_of_selected_CAD_files_for_each_rosette_SG = self.list_of_selected_CAD_files_for_each_rosette_SG
         
         # Proceed with the selections
-        MessageBox.Show("Project path: {}\nSelected CAD files: {}".format(self.project_path, self.list_of_selected_CAD_files_for_each_rosette_SG) + ".Click the Exit icon at the top right corner of this window and the main GUI window to continue.", "Selections Made.")
+        MessageBox.Show("Project path: {}\n\nSelected CAD files: {}".format(self.project_path, self.list_of_selected_CAD_files_for_each_rosette_SG) + "\n\n.Click the Exit icon at the top right corner of this window and the main GUI window to continue.", "Selections Made.")
 
     def grid_key_down(self, sender, e):
         if e.Control and e.KeyCode == Keys.V:
