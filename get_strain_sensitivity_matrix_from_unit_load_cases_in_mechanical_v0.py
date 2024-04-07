@@ -11,18 +11,32 @@ The columns of sensitivity matrix correspond to the response of each strain gaug
 Therefore the rows in each column correspond to sensitivity of each strain gage to that unit load case.
 '''
 
+# ----------------------------------------------------------------------------------------------------------
 
+# region Import necessary libraries
 import csv
 import os
+# endregion
 
+# ----------------------------------------------------------------------------------------------------------
+
+# region Filter all analysis environments that contains "Unit_Load_Study_LC_" in their names
 list_of_obj_of_all_analysis_environments = DataModel.Project.GetChildren(DataModelObjectCategory.Analysis,True)
-
-# Filter all analysis environments that contains "Unit_Load_Study_LC_" in their names
 list_of_obj_of_analysis_environments_of_unit_load_studies = [
     list_of_obj_of_all_analysis_environments[i]
     for i in range(len(list_of_obj_of_all_analysis_environments))
     if list_of_obj_of_all_analysis_environments[i].Name.Contains("Unit_Load_Study_LC_")]
 
+# Throw an error if analysis environments named Unit_Load_Study_LC are not defined in the tree.
+if len(list_of_obj_of_analysis_environments_of_unit_load_studies) == 0:
+    message_no_analysis_found = "Analysis environments that starts with the name 'Unit_Load_Study_LC' are not defined in the tree. Please define these environments along with their SG results at each SG channel and try again."
+    msg = Ansys.Mechanical.Application.Message(message_no_analysis_found, MessageSeverityType.Error)
+    ExtAPI.Application.Messages.Add(msg)
+# endregion
+
+# ----------------------------------------------------------------------------------------------------------
+
+# region Get results from environments
 ''' 
 From environments with "Unit_Load_Study_LC_" in their names,
 - Get the objects with SG_ in their names if:
@@ -33,7 +47,7 @@ From environments with "Unit_Load_Study_LC_" in their names,
 list_of_obj_of_SG_results_of_unit_load_studies = [
     [list_of_obj_of_analysis_environments_of_unit_load_studies[i].Solution.Children[k].Average.Value
      for k in range(len(list_of_obj_of_analysis_environments_of_unit_load_studies[i].Solution.Children))
-     if list_of_obj_of_analysis_environments_of_unit_load_studies[i].Solution.Children[k].Name.Contains("SG_")
+     if list_of_obj_of_analysis_environments_of_unit_load_studies[i].Solution.Children[k].Name.Contains("StrainX_SG")
      and list_of_obj_of_analysis_environments_of_unit_load_studies[i].Solution.Children[k].DataModelObjectCategory == DataModelObjectCategory.NormalElasticStrain
      and list_of_obj_of_analysis_environments_of_unit_load_studies[i].Solution.Children[k].Suppressed == False]
     for i in range(len(list_of_obj_of_analysis_environments_of_unit_load_studies))
@@ -52,15 +66,19 @@ with open(csv_file_path, 'wb') as csvfile:
     # Use zip(*list_of_obj_of_SG_results_of_unit_load_studies) to transpose the list of lists
     for row in zip(*list_of_obj_of_SG_results_of_unit_load_studies):
         writer.writerow(row)
+# endregion
 
-# Show the generated strain sensitivity matrix [A]
-message = r"""
+# ----------------------------------------------------------------------------------------------------------
+
+# region Show the generated strain sensitivity matrix [A]
+message_success = r"""
 The script for generating the strain sensitivity matrix [A] is run successfully.
 Please verify the contents of the generated CSV file in the specified project path by the "Project Folder" button.
 """
-msg = Ansys.Mechanical.Application.Message(message, MessageSeverityType.Info)
+msg = Ansys.Mechanical.Application.Message(message_success, MessageSeverityType.Info)
 ExtAPI.Application.Messages.Add(msg)
 
 # Open the CSV file with the default application
 if os.name == 'nt':  # For Windows
     os.startfile(csv_file_path)
+# endregion
