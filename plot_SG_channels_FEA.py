@@ -14,6 +14,8 @@ solution_directory_path = sol_selected_environment.WorkingDir[:-1]
 solution_directory_path = solution_directory_path.Replace("\\", "\\\\")
 file_name = 'SG_FEA_microstrain_data.csv'
 
+cpython_script_name = "plot_SG_channels_FEA_cpython_code_only.py"
+cpython_script_path = sol_selected_environment.WorkingDir + cpython_script_name
 cpython_code = """
 try:
     import pandas as pd
@@ -24,7 +26,7 @@ try:
     import os
     import re
     from PyQt5.QtCore import Qt
-    from PyQt5.QtWidgets import QApplication, QMainWindow, QVBoxLayout, QWidget, QMessageBox
+    from PyQt5.QtWidgets import QApplication, QMainWindow, QVBoxLayout, QWidget, QMessageBox, QComboBox
     from PyQt5.QtWebEngineWidgets import QWebEngineView
     
 except ImportError as e:
@@ -32,7 +34,7 @@ except ImportError as e:
     QMessageBox.critical(None, "Import Error", f"Failed to import a required module: {str(e)}")
     sys.exit(1)
 
-my_discrete_color_scheme = px.colors.qualitative.Set3
+my_discrete_color_scheme = px.colors.qualitative.Light24
 
 class PlotlyViewer(QWebEngineView):
     def __init__(self, fig, parent=None):
@@ -47,7 +49,7 @@ class PlotlyViewer(QWebEngineView):
 class PlotWindow(QMainWindow):
     def __init__(self, folder_name, file_name):
         super(PlotWindow, self).__init__()
-        self.setWindowTitle("Plot SG Channels (FEA)")
+        self.setWindowTitle('SG Results - FEA: """ + sol_selected_environment.Parent.Name + """')
         self.setGeometry(100, 100, 800, 600)
         self.folder_name = folder_name
         self.file_name = file_name
@@ -97,12 +99,12 @@ class PlotWindow(QMainWindow):
             ))
 
         fig.update_layout(
-            title_text='SG Channel Results (FEA)',
+            title_text='SG Results - FEA: """ + sol_selected_environment.Parent.Name + """',
             title_x=0.5,  # Center the title
             legend_title_text='Gauge Channel',
             template="plotly_white",
-            plot_bgcolor='rgba(0,0,0,0)',
-            xaxis_title='Time',
+            plot_bgcolor='rgba(0,0,0,0.005)',
+            xaxis_title='Time [s]',
             yaxis_title='µe',
             
             font=dict(
@@ -163,7 +165,7 @@ class PlotWindow(QMainWindow):
         )
         
         # Generate an offline (html) version of the plotly graph
-        plot(fig, filename=os.path.join(self.folder_name, "SG_FEA_plot.html"), auto_open=False) 
+        plot(fig, filename=os.path.join(self.folder_name, 'SG_FEA_""" + sol_selected_environment.Parent.Name + """.html'), auto_open=False) 
         self.viewer = PlotlyViewer(fig)
         
         layout = QVBoxLayout()
@@ -179,10 +181,8 @@ if __name__ == '__main__':
     mainWindow = PlotWindow('""" + solution_directory_path + """', '""" + file_name + """')
     mainWindow.show()
     sys.exit(app.exec_())
+    os.remove(cpython_script_path)
 """
-
-cpython_script_name = "plot_SG_channels_FEA_cpython_code_only.py"
-cpython_script_path = sol_selected_environment.WorkingDir + cpython_script_name
 
 # Use StreamWriter with FileStream to write the file with UTF-8 encoding
 with StreamWriter(FileStream(cpython_script_path, FileMode.Create, FileAccess.Write), UTF8Encoding(True)) as writer:
@@ -191,8 +191,5 @@ with StreamWriter(FileStream(cpython_script_path, FileMode.Create, FileAccess.Wr
 print("Python file created successfully with UTF-8 encoding.")
 # endregion
 
-# region Use subprocess to run the script
-subprocess.call(['python', cpython_script_path])
-# Delete the cpython script from the solution directory
-#os.remove(cpython_script_path)
-# endregion
+# Use subprocess to run the script
+subprocess.Popen(['python', cpython_script_path])
