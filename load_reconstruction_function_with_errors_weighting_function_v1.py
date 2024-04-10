@@ -1,3 +1,16 @@
+# Load Reconstruction
+
+"""
+Estimates the loads applied on a system based on the measured strains from each SG channel.
+The load estimation is based on two inputs, "SG_FEA_strain_data.csv" and "strain_sensitivity_matrix_{Date}.csv". 
+This button searches the measured SG results file from FEA ("SG_FEA_strain_data.csv") for measured strains created by the "SG Strain" command, 
+inside the solution folder of the selected analysis environment. 
+However, the "strain_sensitivity_matrix_{Date}.csv" file is searched inside 
+the project folder specified by the "Project Folder" button.
+
+"""
+
+
 # region Import necessary libraries
 from System.Drawing import Color, Font, FontStyle, Size, Point, SolidBrush, Pen
 from System.Windows.Forms import (Application, Form, Label, Button, DialogResult, MessageBox, MessageBoxButtons, 
@@ -168,7 +181,7 @@ class PlotlyViewer(QWebEngineView):
 class PlotWindow(QMainWindow):
     def __init__(self, folder_name, file_name):
         super(PlotWindow, self).__init__()
-        self.setWindowTitle('SG Results - FEA: """ + sol_selected_environment.Parent.Name + """')
+        self.setWindowTitle('Load Reconstruction - FEA: """ + sol_selected_environment.Parent.Name + """')
         self.setGeometry(100, 100, 800, 600)
         self.folder_name = folder_name
         self.file_name = file_name
@@ -188,18 +201,18 @@ class PlotWindow(QMainWindow):
             QMessageBox.critical(self, "File Error", f"Failed to read the file: {str(e)}")
             sys.exit(1)
     
-        data_long = data.melt(id_vars='Time [s]', var_name='Load Component', value_name='Load Factor')
+        data_long = data.melt(id_vars='Time [s]', var_name='Component', value_name='Load Factor')
     
         # Apply the sorting key extraction function and sort
-        data_long['SortKey'] = data_long['Load Component'].apply(self.extract_sort_key)
+        data_long['SortKey'] = data_long['Component'].apply(self.extract_sort_key)
         data_long_sorted = data_long.sort_values(by='SortKey')
     
         fig = go.Figure()
-        for label, df in data_long.groupby('Load Component', sort=False):
-            hover_text = df.apply(lambda row: f'Load Component={label}<br>Time={row["Time [s]"]} s<br>Load Factor={row["Load Factor"]}', axis=1)
+        for label, df in data_long.groupby('Component', sort=False):
+            hover_text = df.apply(lambda row: f'Component={label}<br>Time={row["Time [s]"]} s<br>Load Factor={row["Load Factor"]}', axis=1)
             
             # Calculate trace_index here
-            trace_index = list(data_long['Load Component'].unique()).index(label)
+            trace_index = list(data_long['Component'].unique()).index(label)
             
             # Then use trace_index to determine the color for the current trace
             trace_color = my_discrete_color_scheme[trace_index % len(my_discrete_color_scheme)]
@@ -220,7 +233,7 @@ class PlotWindow(QMainWindow):
         fig.update_layout(
             title_text='Load Reconstruction - FEA: """ + sol_selected_environment.Parent.Name + """',
             title_x=0.5,  # Center the title
-            legend_title_text='Load Component',
+            legend_title_text='Component',
             template="plotly_white",
             plot_bgcolor='rgba(0,0,0,0.005)',
             xaxis_title='Time [s]',
@@ -284,7 +297,7 @@ class PlotWindow(QMainWindow):
         )
         
         # Generate an offline (html) version of the plotly graph
-        plot(fig, filename=os.path.join(self.folder_name, 'SG_FEA_""" + sol_selected_environment.Parent.Name + """.html'), auto_open=False) 
+        plot(fig, filename=os.path.join(self.folder_name, 'Load_Reconstruction_FEA_""" + sol_selected_environment.Parent.Name + """.html'), auto_open=False) 
         self.viewer = PlotlyViewer(fig)
         
         layout = QVBoxLayout()
@@ -398,7 +411,7 @@ if __name__ == '__main__':
     mainWindow = PlotWindow('""" + solution_directory_path + """', estimated_loads_csv_file_path)
     mainWindow.show()
     sys.exit(app.exec_())
-#    os.remove(cpython_script_path)
+    os.remove(cpython_script_path)
 # endregion
 """
 
