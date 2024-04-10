@@ -210,6 +210,9 @@ list_of_endtime_of_time_steps = list_of_endtime_of_time_steps[0]
 # region Run the GUI to get the requested timesteps as inputs.
 # Get the first unit load study and its number of steps
 number_of_analysis_steps_of_unit_load_study = list_of_obj_of_analysis_environments_of_unit_load_studies[0].AnalysisSettings.NumberOfSteps
+#Initialize time step variables
+endtime_of_unit_load = None
+endtime_of_initial_load = None
 
 form = Form()
 Application.EnableVisualStyles()
