@@ -146,7 +146,7 @@ class Form(Form):
                 # Retrieve the corresponding end time based on the selected index
                 self.endtime_of_unit_load = float(list_of_endtime_of_time_steps[selectedIndex])
                 # Assuming you have a way to determine the initial load end time, otherwise set a default or use user input
-                self.endtime_of_initial_load = float(self.readOnlyTextBox1.Text)  # Example: using the value from readOnlyTextBox1, make sure to validate this as well
+                self.endtime_of_initial_load = float(list_of_endtime_of_time_steps[selectedIndex-1])
                 self.DialogResult = DialogResult.OK
                 self.Close()
             else:
@@ -218,6 +218,7 @@ Application.Run(form)
 # After the form is closed, if OK was clicked, access the values
 if form.DialogResult == DialogResult.OK:
     endtime_of_unit_load = form.endtime_of_unit_load
+    endtime_of_initial_load = form.endtime_of_initial_load
 # endregion
 
 # ----------------------------------------------------------------------------------------------------------
