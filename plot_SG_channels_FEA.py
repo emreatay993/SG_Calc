@@ -5,7 +5,7 @@ import clr
 clr.AddReference('mscorlib')  # Ensure the core .NET assembly is referenced
 from System.IO import StreamWriter, FileStream, FileMode, FileAccess
 from System.Text import UTF8Encoding
-import subprocess
+from System.Diagnostics import Process, ProcessWindowStyle
 import os
 # endregion
 
@@ -17,12 +17,15 @@ file_name = 'SG_FEA_microstrain_data.csv'
 cpython_script_name = "plot_SG_channels_FEA_cpython_code_only.py"
 cpython_script_path = sol_selected_environment.WorkingDir + cpython_script_name
 cpython_code = """
+import warnings
+warnings.filterwarnings("ignore", category=DeprecationWarning)
+
 try:
+    import sys
     import pandas as pd
     import plotly.graph_objects as go
     from plotly.offline import plot
     import plotly.express as px
-    import sys
     import os
     import re
     from PyQt5.QtCore import Qt
@@ -191,5 +194,16 @@ with StreamWriter(FileStream(cpython_script_path, FileMode.Create, FileAccess.Wr
 print("Python file created successfully with UTF-8 encoding.")
 # endregion
 
-# Use subprocess to run the script
-subprocess.Popen(['python', cpython_script_path])
+# Run the CPython script asynchronously
+process = Process()
+# Configure the process to hide the window and not use the shell execute feature
+#process.StartInfo.CreateNoWindow = True
+
+process.StartInfo.UseShellExecute = True
+# Set the command to run the Python interpreter with your script as the argument
+process.StartInfo.WindowStyle = ProcessWindowStyle.Minimized
+process.StartInfo.FileName = "cmd.exe"  # Use cmd.exe to allow window manipulation
+process.StartInfo.Arguments = '/c python "' + cpython_script_path + '"'
+# Start the process
+process.Start()
+# endregion
