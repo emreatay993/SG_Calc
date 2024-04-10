@@ -164,7 +164,7 @@ list_of_obj_of_all_analysis_environments = DataModel.Project.GetChildren(DataMod
 list_of_obj_of_analysis_environments_of_unit_load_studies = [
     list_of_obj_of_all_analysis_environments[i]
     for i in range(len(list_of_obj_of_all_analysis_environments))
-    if list_of_obj_of_all_analysis_environments[i].Name.Contains("Unit_Load_Study_LC_")]
+    if list_of_obj_of_all_analysis_environments[i].Name.Contains("Unit_Load_Study_LC")]
 
 # Throw an error if analysis environments named Unit_Load_Study_LC are not defined in the tree.
 if len(list_of_obj_of_analysis_environments_of_unit_load_studies) == 0:
