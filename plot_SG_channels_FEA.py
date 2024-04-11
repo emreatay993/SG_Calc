@@ -209,7 +209,7 @@ process.StartInfo.UseShellExecute = True
 # Set the command to run the Python interpreter with your script as the argument
 process.StartInfo.WindowStyle = ProcessWindowStyle.Minimized
 process.StartInfo.FileName = "cmd.exe"  # Use cmd.exe to allow window manipulation
-process.StartInfo.Arguments = '/c python "' + cpython_script_path + '"'
+process.StartInfo.Arguments = '/k python "' + cpython_script_path + '"'
 # Start the process
 process.Start()
 # endregion
