@@ -21,7 +21,6 @@ import clr
 clr.AddReference('System.Windows.Forms')
 clr.AddReference('System.Drawing')
 clr.AddReference("System")
-from System import DateTime
 from System.Drawing import *
 from System.Windows.Forms import *
 # endregion
@@ -320,12 +319,7 @@ list_of_SG_results_of_unit_load_studies_only = [
     for results_list, initial_list in 
     zip(list_of_SG_results_of_unit_load_studies, list_of_SG_initial_strains_of_unit_load_studies)]
 
-# Get the current date and time
-current_time = DateTime.Now
-# Format the date and time in the desired format and replace colons with underscores
-formatted_time = current_time.ToString("dd_MM_yyyy__HH_mm_ss")
-# Append the formatted date and time to the file name
-csv_file_name = 'strain_sensitivity_matrix_{0}.csv'.format(formatted_time)
+csv_file_name = 'strain_sensitivity_matrix.csv'
 
 csv_file_path = os.path.join(project_path, csv_file_name)
 
