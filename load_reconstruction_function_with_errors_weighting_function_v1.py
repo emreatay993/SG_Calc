@@ -2,19 +2,21 @@
 
 """
 Estimates the loads applied on a system based on the measured strains from each SG channel.
-The load estimation is based on two inputs, "SG_FEA_strain_data.csv" and "strain_sensitivity_matrix_{Date}.csv". 
+The load estimation is based on two inputs, "SG_FEA_strain_data.csv" and "strain_sensitivity_matrix.csv". 
 This button searches the measured SG results file from FEA ("SG_FEA_strain_data.csv") for measured strains created by the "SG Strain" command, 
 inside the solution folder of the selected analysis environment. 
-However, the "strain_sensitivity_matrix_{Date}.csv" file is searched inside 
+However, the "strain_sensitivity_matrix.csv" file is searched inside 
 the project folder specified by the "Project Folder" button.
 
 """
 
-
 # region Import necessary libraries
+import os
 from System.Drawing import Color, Font, FontStyle, Size, Point, SolidBrush, Pen
-from System.Windows.Forms import (Application, Form, Label, Button, DialogResult, MessageBox, MessageBoxButtons, 
-                                  MessageBoxIcon, TextBox, ControlStyles, FlowLayoutPanel, ComboBox, Padding)
+from System.Windows.Forms import *
+from System.Diagnostics import Process, ProcessWindowStyle
+from System.IO import StreamWriter, FileStream, FileMode, FileAccess, StreamReader
+from System.Text import UTF8Encoding
 # endregion
 
 # ----------------------------------------------------------------------------------------------------------------
@@ -328,7 +330,7 @@ def find_files_with_strain_sensitivity_matrix(project_path):
         app = QApplication([])
 
         # Show an error messagebox
-        QMessageBox.critical(None, "Error", "More than one file with 'strain_sensitivity_matrix' found!")
+        QMessageBox.critical(None, "Error", "More than one file with 'strain_sensitivity_matrix' is found. There should be only one strain_sensitivity_matrix.csv inside the folder for the program to continue.")
 
         # No need to explicitly destroy the QApplication
     if len(matching_files) == 1:
@@ -405,13 +407,17 @@ print(loads_df_with_errors_per_gauge)  # Display the first few rows of the estim
 print("CSV file saved at: " + estimated_loads_csv_file_path)
 
 # region Show the estimated loads
-if __name__ == '__main__':
-    QApplication.setAttribute(Qt.AA_EnableHighDpiScaling, True)  # Enable high-DPI scaling
-    app = QApplication(sys.argv)
-    mainWindow = PlotWindow('""" + solution_directory_path + """', estimated_loads_csv_file_path)
-    mainWindow.show()
-    sys.exit(app.exec_())
-    os.remove(cpython_script_path)
+try:
+    if __name__ == '__main__':
+        QApplication.setAttribute(Qt.AA_EnableHighDpiScaling, True)  # Enable high-DPI scaling
+        app = QApplication(sys.argv)
+        mainWindow = PlotWindow('""" + solution_directory_path + """', estimated_loads_csv_file_path)
+        mainWindow.show()
+        sys.exit(app.exec_())
+        os.remove(cpython_script_path)
+except Exception as e:
+        print(f"An error occurred: {e}")
+        input("Press Enter to close...")
 # endregion
 """
 
@@ -429,7 +435,7 @@ process = Process()
 
 process.StartInfo.UseShellExecute = True
 # Set the command to run the Python interpreter with your script as the argument
-#process.StartInfo.WindowStyle = ProcessWindowStyle.Minimized
+process.StartInfo.WindowStyle = ProcessWindowStyle.Minimized
 process.StartInfo.FileName = "cmd.exe"  # Use cmd.exe to allow window manipulation
 process.StartInfo.Arguments = '/c python "' + cpython_script_path + '"'
 # Start the process

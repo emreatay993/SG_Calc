@@ -178,13 +178,19 @@ class PlotWindow(QMainWindow):
         widget.setLayout(layout)
         self.setCentralWidget(widget)
 
-if __name__ == '__main__':
-    QApplication.setAttribute(Qt.AA_EnableHighDpiScaling, True)  # Enable high-DPI scaling
-    app = QApplication(sys.argv)
-    mainWindow = PlotWindow('""" + solution_directory_path + """', '""" + file_name + """')
-    mainWindow.show()
-    sys.exit(app.exec_())
-    os.remove(cpython_script_path)
+# region Show the results
+try:
+    if __name__ == '__main__':
+        QApplication.setAttribute(Qt.AA_EnableHighDpiScaling, True)  # Enable high-DPI scaling
+        app = QApplication(sys.argv)
+        mainWindow = PlotWindow('""" + solution_directory_path + """', '""" + file_name + """')
+        mainWindow.show()
+        sys.exit(app.exec_())
+        os.remove(cpython_script_path)
+except Exception as e:
+        print(f"An error occurred: {e}")
+        input("Press Enter to close...")
+# endregion
 """
 
 # Use StreamWriter with FileStream to write the file with UTF-8 encoding
