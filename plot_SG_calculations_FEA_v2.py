@@ -298,15 +298,6 @@ def calculate_von_mises_stress(S1, S2, S3=0):
 # Initialize the QApplication instance
 app_dialog = QApplication(sys.argv)
 
-# region Define material properties
-input_dialog = InputDialog()
-if input_dialog.exec_() == QDialog.Accepted:
-    E = input_dialog.user_input.get('E')
-    v = input_dialog.user_input.get('v')
-else:
-    sys.exit("Material properties input was canceled or failed.")
-# # endregion
-
 # File selection for FEA strain data
 file_path_FEA, _ = QFileDialog().getOpenFileName(None, 'Open FEA raw data file for SG rosettes', '', 'All Files (*);;CSV Files (*.csv)')
 
@@ -351,8 +342,21 @@ strain_gauge_data_FEA
 # endregion
 # endregion
 
+# region Define material properties
+input_dialog = InputDialog()
+if input_dialog.exec_() == QDialog.Accepted:
+    E = input_dialog.user_input.get('E')
+    v = input_dialog.user_input.get('v')
+    
+    # Convert to numpy column arrays to get individual E and v at each index (therefore, at each time step) later
+    E = (np.full(time.shape, E))
+    v = (np.full(time.shape, v))
+else:
+    sys.exit("Material properties input was canceled or failed.")
+# # endregion
+
 # region Functions for main calculation loop
-def process_sg_number(sg_number, strain_gauge_data):
+def process_sg_number(sg_number, strain_gauge_data, E, v):
     sg_cols = [col for col in strain_gauge_data.columns if f'SG{sg_number}_' in col]
     new_columns = []
     if len(sg_cols) == 3:
@@ -362,7 +366,7 @@ def process_sg_number(sg_number, strain_gauge_data):
             strains = strain_gauge_data[sg_cols].values.astype(dtype=np.float64)
             global_strains = np.array([transform_strains_to_global(*strain, current_angles) for strain in strains])
             principal_strains = np.array([calculate_principal_strains(strain[0], strain[1], strain[2]) for strain in global_strains])
-            principal_stresses = np.array([calculate_principal_stresses(strain, E, v) for strain in principal_strains])
+            principal_stresses = np.array([calculate_principal_stresses(strain, E[i], v[i]) for i, strain in enumerate(principal_strains)])
             principal_strain_orientation = np.array([calculate_principal_strain_orientation(strain[0], strain[1], strain[2]) for strain in global_strains])
             biaxiality_ratios = calculate_biaxiality_ratio(principal_stresses[:, 0], principal_stresses[:, 1])
             von_mises_stresses = np.array([calculate_von_mises_stress(*stress) for stress in principal_stresses])
@@ -386,7 +390,7 @@ def calculate_all_SG_variables(strain_gauge_data, rosette_angles_df):
 
     new_columns_list = []
     with concurrent.futures.ThreadPoolExecutor() as executor:
-        results = executor.map(lambda sg_number: process_sg_number(sg_number, strain_gauge_data), sg_numbers)
+        results = executor.map(lambda sg_number: process_sg_number(sg_number, strain_gauge_data, E, v), sg_numbers)
         for result in results:
             new_columns_list.extend(result)
 
@@ -412,7 +416,7 @@ try:
         app_plot = QApplication(sys.argv)
         mainWindow = PlotWindow('""" + solution_directory_path + """', '""" + file_name_of_SG_calculations + """')
         mainWindow.show()
-        sys.exit(app.exec_())
+        sys.exit(app_plot.exec_())
         # os.remove(cpython_script_path)
 except Exception as e:
         print(f"An error occurred: {e}")
