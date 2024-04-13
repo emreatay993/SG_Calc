@@ -31,7 +31,7 @@ try:
     import os
     import re
     from PyQt5.QtCore import Qt
-    from PyQt5.QtWidgets import QApplication, QMainWindow, QHBoxLayout, QVBoxLayout, QWidget, QMessageBox, QComboBox
+    from PyQt5.QtWidgets import QApplication, QMainWindow, QLineEdit, QDialog, QHBoxLayout, QVBoxLayout, QWidget, QMessageBox, QComboBox
     from PyQt5.QtWebEngineWidgets import QWebEngineView
     from PyQt5.QtWidgets import QApplication, QFileDialog
     from PyQt5.QtWidgets import QLabel, QSizePolicy, QPushButton
@@ -47,6 +47,53 @@ except ImportError as e:
 # region Define classes and global functions/variables
 QApplication.setAttribute(Qt.AA_EnableHighDpiScaling, True)
 my_discrete_color_scheme = px.colors.qualitative.Light24
+
+class FlatLineEdit(QLineEdit):
+    def __init__(self, placeholder_text=""):
+        super(FlatLineEdit, self).__init__()
+        self.setPlaceholderText(placeholder_text)
+        self.setStyleSheet("QLineEdit {border: 1px solid #bfbfbf; border-radius: 5px; padding: 5px; background-color: #ffffff;} QLineEdit:focus {border: 2px solid #0077B6;}")
+
+
+class InputDialog(QDialog):
+    def __init__(self, parent=None):
+        super(InputDialog, self).__init__(parent)
+        self.initUI()
+
+    def initUI(self):
+        self.setWindowTitle('Enter Material Properties')
+        self.setGeometry(100, 100, 300, 200)
+        
+        layout = QVBoxLayout()
+        
+        self.labelE = QLabel("Young's Modulus (Pa):")
+        self.lineEditE = FlatLineEdit("Enter Young's Modulus (e.g., 200e9)")
+        layout.addWidget(self.labelE)
+        layout.addWidget(self.lineEditE)
+        
+        self.labelV = QLabel("Poisson's Ratio:")
+        self.lineEditV = FlatLineEdit("Enter Poisson's Ratio (e.g., 0.3)")
+        layout.addWidget(self.labelV)
+        layout.addWidget(self.lineEditV)
+        
+        self.okButton = QPushButton('OK')
+        self.okButton.clicked.connect(self.acceptInputs)
+        self.okButton.setStyleSheet("background-color: #0077B6; color: white; padding: 5px; border-radius: 5px;")
+        layout.addWidget(self.okButton)
+        
+        self.setLayout(layout)
+
+    def acceptInputs(self):
+        try:
+            E = float(self.lineEditE.text())
+            v = float(self.lineEditV.text())
+            # Optionally add validation rules here
+            if E <= 0 or v <= 0 or v >= 0.5:
+                raise ValueError("Please enter valid values: E > 0, 0 < v < 0.5")
+            self.user_input = {'E': E, 'v': v}
+            self.accept()  # Close the dialog and return success
+        except ValueError as ve:
+            QMessageBox.critical(self, "Input Error", str(ve))
 
 class PlotlyViewer(QWebEngineView):
     def __init__(self, fig, parent=None):
@@ -90,7 +137,7 @@ class PlotWindow(QMainWindow):
 
         self.comboBox.currentIndexChanged.connect(self.update_plot)
         self.viewer = PlotlyViewer(go.Figure())
-        self.savePlotButton = QPushButton("Save current plot as an HTML")
+        self.savePlotButton = QPushButton("Save current plot as HTML file")
         self.savePlotButton.clicked.connect(self.save_current_plot)
         
         self.update_plot(0)  # Initialize plot
@@ -247,14 +294,18 @@ def calculate_von_mises_stress(S1, S2, S3=0):
     return sigma_vm
 # endregion
 
-# region Define material properties
-E = 200e9  
-v = 0.3
-# endregion
-
 # region Selecting the input SG FEA channel data (in microstrains) and rosette configuration file via a dialog box
-# Initialize the application
-app_dialog = QApplication(sys.argv)
+# Initialize the QApplication instance
+app = QApplication(sys.argv)
+
+# region Define material properties
+input_dialog = InputDialog()
+if input_dialog.exec_() == QDialog.Accepted:
+    E = input_dialog.user_input.get('E')
+    v = input_dialog.user_input.get('v')
+else:
+    sys.exit("Material properties input was canceled or failed.")
+# # endregion
 
 # File selection for FEA strain data
 file_path_FEA, _ = QFileDialog().getOpenFileName(None, 'Open FEA raw data file for SG rosettes', '', 'All Files (*);;CSV Files (*.csv)')
@@ -297,6 +348,7 @@ else:
 
 print("Selected FEA data from directory:   ", file_path_FEA)
 strain_gauge_data_FEA
+# endregion
 # endregion
 
 # region Functions for main calculation loop
@@ -344,6 +396,7 @@ def calculate_all_SG_variables(strain_gauge_data, rosette_angles_df):
 
 # region Calculate the SG results (FEA)
 if file_path_FEA:
+    print("Here is E:" + str(E) + "and v:" + str(v))
     strain_gauge_data_FEA = calculate_all_SG_variables(strain_gauge_data_FEA, rosette_angles_df)
     strain_gauge_data_FEA.insert(0, 'Time', time)
     strain_gauge_data_FEA.set_index('Time', inplace=True)
@@ -361,7 +414,7 @@ try:
         mainWindow = PlotWindow('""" + solution_directory_path + """', '""" + file_name_of_SG_calculations + """')
         mainWindow.show()
         sys.exit(app.exec_())
-        os.remove(cpython_script_path)
+        # os.remove(cpython_script_path)
 except Exception as e:
         print(f"An error occurred: {e}")
         input("Press Enter to close...")
