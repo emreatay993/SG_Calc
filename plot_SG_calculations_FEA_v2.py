@@ -39,7 +39,7 @@ try:
     from concurrent.futures import ThreadPoolExecutor
 except ImportError as e:
 
-    app = QApplication(sys.argv)
+    app_messagebox = QApplication(sys.argv)
     QMessageBox.critical(None, "Import Error", f"Failed to import a required module: {str(e)}")
     sys.exit(1)
 # endregion
@@ -296,7 +296,7 @@ def calculate_von_mises_stress(S1, S2, S3=0):
 
 # region Selecting the input SG FEA channel data (in microstrains) and rosette configuration file via a dialog box
 # Initialize the QApplication instance
-app = QApplication(sys.argv)
+app_dialog = QApplication(sys.argv)
 
 # region Define material properties
 input_dialog = InputDialog()
@@ -396,7 +396,6 @@ def calculate_all_SG_variables(strain_gauge_data, rosette_angles_df):
 
 # region Calculate the SG results (FEA)
 if file_path_FEA:
-    print("Here is E:" + str(E) + "and v:" + str(v))
     strain_gauge_data_FEA = calculate_all_SG_variables(strain_gauge_data_FEA, rosette_angles_df)
     strain_gauge_data_FEA.insert(0, 'Time', time)
     strain_gauge_data_FEA.set_index('Time', inplace=True)
@@ -410,7 +409,7 @@ strain_gauge_data_FEA.to_csv(r'""" + file_path_of_SG_calculations + """')
 # region Show the results
 try:
     if __name__ == '__main__':
-        app = QApplication(sys.argv)
+        app_plot = QApplication(sys.argv)
         mainWindow = PlotWindow('""" + solution_directory_path + """', '""" + file_name_of_SG_calculations + """')
         mainWindow.show()
         sys.exit(app.exec_())
