@@ -66,8 +66,8 @@ class InputDialog(QDialog):
         
         layout = QVBoxLayout()
         
-        self.labelE = QLabel("Young's Modulus (Pa):")
-        self.lineEditE = FlatLineEdit("Enter Young's Modulus (e.g., 200e9)")
+        self.labelE = QLabel("Young's Modulus [GPa]:")
+        self.lineEditE = FlatLineEdit("Enter Young's Modulus in GPa (e.g., 200)")
         layout.addWidget(self.labelE)
         layout.addWidget(self.lineEditE)
         
@@ -86,6 +86,7 @@ class InputDialog(QDialog):
     def acceptInputs(self):
         try:
             E = float(self.lineEditE.text())
+            E = E*1e9  # Convert the [GPa] to SI units [Pa]
             v = float(self.lineEditV.text())
             # Optionally add validation rules here
             if E <= 0 or v <= 0 or v >= 0.5:
