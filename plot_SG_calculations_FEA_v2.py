@@ -31,10 +31,10 @@ try:
     import os
     import re
     from PyQt5.QtCore import Qt
-    from PyQt5.QtWidgets import QApplication, QMainWindow, QLineEdit, QDialog, QHBoxLayout, QVBoxLayout, QWidget, QMessageBox, QComboBox
+    from PyQt5.QtWidgets import (QApplication, QMainWindow, QLineEdit, QDialog, QHBoxLayout, 
+                                 QVBoxLayout, QWidget, QMessageBox, QComboBox, QCheckBox, QFileDialog,
+                                 QLabel, QSizePolicy, QPushButton, QTableWidget, QTableWidgetItem, QHeaderView)
     from PyQt5.QtWebEngineWidgets import QWebEngineView
-    from PyQt5.QtWidgets import QApplication, QFileDialog
-    from PyQt5.QtWidgets import QLabel, QSizePolicy, QPushButton
     import concurrent.futures
     from concurrent.futures import ThreadPoolExecutor
 except ImportError as e:
@@ -55,46 +55,132 @@ class FlatLineEdit(QLineEdit):
         self.setStyleSheet("QLineEdit {border: 1px solid #bfbfbf; border-radius: 5px; padding: 5px; background-color: #ffffff;} QLineEdit:focus {border: 2px solid #0077B6;}")
 
 
-class InputDialog(QDialog):
+class MaterialPropertiesDialog(QDialog):
     def __init__(self, parent=None):
-        super(InputDialog, self).__init__(parent)
+        super(MaterialPropertiesDialog, self).__init__(parent)
         self.initUI()
 
     def initUI(self):
         self.setWindowTitle('Enter Material Properties')
-        self.setGeometry(100, 100, 300, 200)
-        
+        self.setGeometry(100, 100, 100, 100)
+        self.fullWidth = 500
+        self.fullHeight = 400
+        self.reducedWidth = 400
+        self.reducedHeight = 200
+
+        self.setStyleSheet("QWidget { font-size: 11px; } QPushButton { background-color: #0077B6; color: white; border-radius: 5px; padding: 6px; } QLineEdit { border: 1px solid #ccc; border-radius: 5px; padding: 5px; background-color: #ffffff; } QLabel { color: #333; }")
+
         layout = QVBoxLayout()
-        
-        self.labelE = QLabel("Young's Modulus [GPa]:")
-        self.lineEditE = FlatLineEdit("Enter Young's Modulus in GPa (e.g., 200)")
-        layout.addWidget(self.labelE)
-        layout.addWidget(self.lineEditE)
-        
-        self.labelV = QLabel("Poisson's Ratio:")
-        self.lineEditV = FlatLineEdit("Enter Poisson's Ratio (e.g., 0.3)")
-        layout.addWidget(self.labelV)
-        layout.addWidget(self.lineEditV)
-        
-        self.okButton = QPushButton('OK')
-        self.okButton.clicked.connect(self.acceptInputs)
-        self.okButton.setStyleSheet("background-color: #0077B6; color: white; padding: 5px; border-radius: 5px;")
-        layout.addWidget(self.okButton)
-        
         self.setLayout(layout)
 
-    def acceptInputs(self):
+        # Adjusting the layout for labels and line edits
+        formLayout = QVBoxLayout()
+        
+        self.labelE = QLabel("Young's Modulus [GPa]:")
+        self.lineEditE = QLineEdit(self)
+        formLayout.addWidget(self.labelE)
+        formLayout.addWidget(self.lineEditE)
+
+        self.labelV = QLabel("Poisson's Ratio:")
+        self.lineEditV = QLineEdit(self)
+        formLayout.addWidget(self.labelV)
+        formLayout.addWidget(self.lineEditV)
+
+        layout.addLayout(formLayout)
+
+        # Checkbox for time-dependent input
+        self.checkbox = QCheckBox("Time Dependent Input:")
+        self.checkbox.stateChanged.connect(self.toggle_time_dependent_input)
+        layout.addWidget(self.checkbox)
+
+        # File selection and data table visibility
+        fileLayout = QHBoxLayout()
+        self.fileLabel = QLabel("Select a directory for 'T vs. E, v' data:")
+        self.fileLabel.setVisible(False)
+        self.selectFileButton = QPushButton("Select File")
+        self.selectFileButton.clicked.connect(self.select_file)
+        self.selectFileButton.setVisible(False)
+        fileLayout.addWidget(self.fileLabel)
+        fileLayout.addWidget(self.selectFileButton)
+        layout.addLayout(fileLayout)
+
+        self.filePathLineEdit = QLineEdit(self)
+        self.filePathLineEdit.setReadOnly(True)
+        self.filePathLineEdit.setVisible(False)
+        layout.addWidget(self.filePathLineEdit)
+
+        # Table to display the data
+        self.dataTable = QTableWidget(self)
+        self.dataTable.setColumnCount(3)
+        self.dataTable.setHorizontalHeaderLabels(["Temperature [°C]", "Young's Modulus [GPa]", "Poisson's Ratio"])
+        self.dataTable.setVisible(False)
+        self.dataTable.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
+        layout.addWidget(self.dataTable)
+
+        # OK and Cancel buttons
+        buttonLayout = QHBoxLayout()
+        self.okButton = QPushButton('OK')
+        self.okButton.clicked.connect(self.acceptInputs)
+        cancelButton = QPushButton('Cancel')
+        cancelButton.clicked.connect(self.reject)
+        buttonLayout.addWidget(self.okButton)
+        buttonLayout.addWidget(cancelButton)
+        layout.addLayout(buttonLayout)
+        
+        self.resize(self.reducedWidth, self.reducedHeight+100)
+
+    def toggle_time_dependent_input(self, state):
+        is_checked = state == Qt.Checked
+        if is_checked:
+            self.resize(self.fullWidth, self.fullHeight)
+            self.lineEditE.clear()
+            self.lineEditV.clear()
+            self.lineEditE.setStyleSheet("background-color: #e0e0e0;")  # Light grey background
+            self.lineEditV.setStyleSheet("background-color: #e0e0e0;")  # Light grey background
+        else:
+            self.resize(self.reducedWidth, self.reducedHeight)
+            self.lineEditE.setStyleSheet("background-color: #ffffff;")  # White background
+            self.lineEditV.setStyleSheet("background-color: #ffffff;")  # White background
+        self.lineEditE.setDisabled(is_checked)
+        self.lineEditV.setDisabled(is_checked)
+        self.fileLabel.setVisible(is_checked)
+        self.selectFileButton.setVisible(is_checked)
+        self.filePathLineEdit.setVisible(is_checked)
+        self.dataTable.setVisible(is_checked)
+
+    def select_file(self):
+        file_path, _ = QFileDialog.getOpenFileName(self, "Open File", "", "CSV Files (*.csv);;All Files (*)")
+        if file_path:
+            self.filePathLineEdit.setText(file_path)
+            self.load_data(file_path)
+
+    def load_data(self, file_path):
         try:
-            E = float(self.lineEditE.text())
-            E = E*1e9  # Convert the [GPa] to SI units [Pa]
-            v = float(self.lineEditV.text())
-            # Optionally add validation rules here
-            if E <= 0 or v <= 0 or v >= 0.5:
-                raise ValueError("Please enter valid values: E > 0, 0 < v < 0.5")
-            self.user_input = {'E': E, 'v': v}
-            self.accept()  # Close the dialog and return success
-        except ValueError as ve:
-            QMessageBox.critical(self, "Input Error", str(ve))
+            data = pd.read_csv(file_path, encoding='ISO-8859-1')
+            self.populate_table(data)
+        except Exception as e:
+            QMessageBox.critical(self, "Error", f"Failed to load the file: {str(e)}")
+
+    def populate_table(self, data):
+        self.dataTable.setRowCount(len(data))
+        for i, (index, row) in enumerate(data.iterrows()):
+            self.dataTable.setItem(i, 0, QTableWidgetItem(str(row[0])))
+            self.dataTable.setItem(i, 1, QTableWidgetItem(str(row[1])))
+            self.dataTable.setItem(i, 2, QTableWidgetItem(str(row[2])))
+        self.dataTable.setVisible(True)
+        
+    def acceptInputs(self):
+            try:
+                E = float(self.lineEditE.text())
+                E = E*1e9  # Convert the [GPa] to SI units [Pa]
+                v = float(self.lineEditV.text())
+                # Optionally add validation rules here
+                if E <= 0 or v <= 0 or v >= 0.5:
+                    raise ValueError("Please enter valid values: E > 0, 0 < v < 0.5")
+                self.user_input = {'E': E, 'v': v}
+                self.accept()  # Close the dialog and return success
+            except ValueError as ve:
+                QMessageBox.critical(self, "Input Error", str(ve))
 
 class PlotlyViewer(QWebEngineView):
     def __init__(self, fig, parent=None):
@@ -129,14 +215,19 @@ class PlotWindow(QMainWindow):
         self.label.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
         self.label.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
         
-        # Combobox setup
+        # Combobox setups
         self.comboBox = QComboBox()
         self.comboBox.addItem("All")
         self.comboBox.addItem("Raw Strain Data")
         # Add data groups to the combobox
         self.add_combobox_items()
+        
+        self.refNumberComboBox = QComboBox()
+        self.refNumberComboBox.addItem("-")  # Similar to "All" functionality
+        self.add_ref_number_items()
 
         self.comboBox.currentIndexChanged.connect(self.update_plot)
+        self.refNumberComboBox.currentIndexChanged.connect(self.update_plot)
         self.viewer = PlotlyViewer(go.Figure())
         self.savePlotButton = QPushButton("Save current plot as HTML file")
         self.savePlotButton.clicked.connect(self.save_current_plot)
@@ -147,6 +238,7 @@ class PlotWindow(QMainWindow):
         filter_layout = QHBoxLayout()
         filter_layout.addWidget(self.label)
         filter_layout.addWidget(self.comboBox)
+        filter_layout.addWidget(self.refNumberComboBox)
         filter_layout.addWidget(self.savePlotButton)
         filter_layout.addStretch()  # Add stretch to push everything to the left
 
@@ -173,19 +265,32 @@ class PlotWindow(QMainWindow):
         
         for suffix in sorted(suffixes):
             self.comboBox.addItem(suffix)
+            
+    def add_ref_number_items(self):
+        ref_numbers = set(col.split('_')[1] for col in self.data.columns if '_' in col and col.split('_')[1].isdigit())
+        for ref_number in sorted(ref_numbers, key=int):
+            self.refNumberComboBox.addItem(ref_number)
 
     def update_plot(self, index):
         fig = go.Figure()
         selected_group = self.comboBox.currentText()
-
+        selected_ref_number = self.refNumberComboBox.currentText()
+    
+        # Determine columns based on the selected suffix
         if selected_group == "All":
             trace_columns = [col for col in self.data.columns if col != 'Time']
         elif selected_group == "Raw Strain Data":
             trace_columns = [col for col in self.data.columns if re.match(r'SG\d+_\d+$', col)]
         else:
-            pattern = r'_{}$'.format(re.escape(selected_group))
-            trace_columns = [col for col in self.data.columns if re.search(pattern, col)]
-
+            trace_columns = [col for col in self.data.columns if col.endswith(selected_group)]
+    
+        # Further filter columns based on the selected reference number
+        if selected_ref_number != "-":
+            trace_columns = [col for col in trace_columns if col.split('_')[1] == selected_ref_number]
+    
+        # Debug output
+        print(f"Filtered columns: {trace_columns}")
+    
         # Assign colors to visible traces based on their new filtered position
         for idx, col in enumerate(trace_columns):
             color_idx = idx % len(my_discrete_color_scheme)
@@ -344,7 +449,7 @@ strain_gauge_data_FEA
 # endregion
 
 # region Define material properties
-input_dialog = InputDialog()
+input_dialog = MaterialPropertiesDialog()
 if input_dialog.exec_() == QDialog.Accepted:
     E = input_dialog.user_input.get('E')
     v = input_dialog.user_input.get('v')
