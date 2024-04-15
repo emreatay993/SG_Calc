@@ -29,7 +29,9 @@ try:
     import os
     import re
     from PyQt5.QtCore import Qt
-    from PyQt5.QtWidgets import QApplication, QMainWindow, QVBoxLayout, QWidget, QMessageBox, QComboBox
+    from PyQt5.QtWidgets import (QApplication, QMainWindow, QLineEdit, QDialog, QHBoxLayout, 
+                                 QVBoxLayout, QWidget, QMessageBox, QComboBox, QCheckBox, QFileDialog,
+                                 QLabel, QSizePolicy, QPushButton, QTableWidget, QTableWidgetItem, QHeaderView)
     from PyQt5.QtWebEngineWidgets import QWebEngineView
     
 except ImportError as e:
@@ -51,132 +53,150 @@ class PlotlyViewer(QWebEngineView):
 
 class PlotWindow(QMainWindow):
     def __init__(self, folder_name, file_name):
-        super(PlotWindow, self).__init__()
-        self.setWindowTitle('SG Results - FEA: """ + sol_selected_environment.Parent.Name + """')
+        super().__init__()
+        self.setWindowTitle('SG Strains - FEA: """ + sol_selected_environment.Parent.Name + """')
         self.setGeometry(100, 100, 800, 600)
         self.folder_name = folder_name
         self.file_name = file_name
+        self.data = None
         self.initUI()
         
-    def extract_sort_key(self, channel_name):
-        match = re.match(r'SG(\d+)_(\d+)', channel_name)
-        if match:
-            return tuple(map(int, match.groups()))
-        return (0, 0)  # Return a default sort key for safety
-
     def initUI(self):
+        file_path = os.path.join(self.folder_name, self.file_name)
         try:
-            file_path = os.path.join(self.folder_name, self.file_name)
-            data = pd.read_csv(file_path)
+            self.data = pd.read_csv(file_path)
         except Exception as e:
             QMessageBox.critical(self, "File Error", f"Failed to read the file: {str(e)}")
             sys.exit(1)
-    
-        data_long = data.melt(id_vars='Time', var_name='Gauge Channel', value_name='µe')
-    
-        # Apply the sorting key extraction function and sort
-        data_long['SortKey'] = data_long['Gauge Channel'].apply(self.extract_sort_key)
-        data_long_sorted = data_long.sort_values(by='SortKey')
-    
-        fig = go.Figure()
-        for label, df in data_long.groupby('Gauge Channel', sort=False):
-            hover_text = df.apply(lambda row: f'Gauge Channel={label}<br>Time={row["Time"]} s<br>µe={row["µe"]}', axis=1)
-            
-            # Calculate trace_index here
-            trace_index = list(data_long['Gauge Channel'].unique()).index(label)
-            
-            # Then use trace_index to determine the color for the current trace
-            trace_color = my_discrete_color_scheme[trace_index % len(my_discrete_color_scheme)]
-            
-            fig.add_trace(go.Scatter(
-                x=df['Time'], 
-                y=df['µe'], 
-                mode='lines', 
-                name=label,
-                line=dict(color=trace_color),
-                hoverinfo='text',
-                text=hover_text,
-                hoverlabel = dict(
-                    font_size = 10,
-                    bgcolor='rgba(255, 255, 255, 0.5)')
-            ))
+        
+        # Filter Data label setup
+        self.label = QLabel("Filter Data:")
+        self.label.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
+        self.label.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
+        
+        # Combobox setups
+        self.comboBox = QComboBox()
+        self.comboBox.addItem("All")
+        self.comboBox.addItem("Raw Strain Data")
+        # Add data groups to the combobox
+        self.add_combobox_items()
+        
+        self.refNumberComboBox = QComboBox()
+        self.refNumberComboBox.addItem("All Channels")  # Similar to "All" functionality
+        self.add_ref_number_items()
 
-        fig.update_layout(
-            title_text='SG Results - FEA: """ + sol_selected_environment.Parent.Name + """',
-            title_x=0.5,  # Center the title
-            legend_title_text='Gauge Channel',
-            template="plotly_white",
-            plot_bgcolor='rgba(0,0,0,0.005)',
-            xaxis_title='Time [s]',
-            yaxis_title='µe',
-            
-            font=dict(
-                family="Arial, sans-serif",  # Setting a universal font for the plot
-                size=12,
-                color="#0077B6"  # light sky blue
-                ),
-                
-            xaxis=dict(
-                showline=True,
-                showgrid=True,
-                showticklabels=True,
-                linewidth=2,
-                tickfont=dict(
-                    family='Arial, sans-serif',
-                    size=12,
-                    ),
-                tickmode='auto',
-                nticks=30
-                ),
-            grid=dict(
-                rows=1,
-                columns=1,
-                pattern="independent"
-                ),
-                
-            yaxis=dict(
-                showgrid=True,
-                zeroline=False,
-                showline=False,
-                showticklabels=True,
-                linecolor='rgb(204, 204, 204)',
-                tickmode='auto',
-                nticks=30
-                ),
-            )
-            
+        self.comboBox.currentIndexChanged.connect(self.update_plot)
+        self.refNumberComboBox.currentIndexChanged.connect(self.update_plot)
+        self.viewer = PlotlyViewer(go.Figure())
+        self.savePlotButton = QPushButton("Save current plot as HTML file")
+        self.savePlotButton.clicked.connect(self.save_current_plot)
         
-        # Hover mode configuration for better interaction
-        fig.update_traces(
-        line=dict(width=2),
-        marker=dict(size=3),
-        mode='markers+lines'
-        )
-        
-        fig.update_yaxes(
-        showspikes=False,
-        spikecolor="#0077B6",  # Set spike color
-        spikethickness=1,  # Set spike thickness
-        spikedash='dot',  # Set spike style
-        )
-        
-        fig.update_xaxes(
-        showspikes=False,
-        spikecolor="#0077B6",  # Set spike color
-        spikethickness=1,  # Set spike thickness
-        spikedash='dot',  # Set spike style
-        )
-        
-        # Generate an offline (html) version of the plotly graph
-        plot(fig, filename=os.path.join(self.folder_name, 'SG_FEA_""" + sol_selected_environment.Parent.Name + """.html'), auto_open=False) 
-        self.viewer = PlotlyViewer(fig)
-        
+        self.update_plot(0)  # Initialize plot
+
+        # Modify the layout setup to add the label and combobox horizontally
+        filter_layout = QHBoxLayout()
+        filter_layout.addWidget(self.label)
+        #filter_layout.addWidget(self.comboBox)
+        filter_layout.addWidget(self.refNumberComboBox)
+        filter_layout.addWidget(self.savePlotButton)
+        filter_layout.addStretch()  # Add stretch to push everything to the left
+
+        # Create the main layout
         layout = QVBoxLayout()
+        
+        # Add the filter layout to the main layout using addLayout
+        layout.addLayout(filter_layout)
+        
+        # Add the rest of your widgets to the layout
         layout.addWidget(self.viewer)
-
+        
+        # Set the layout to the central widget
         widget = QWidget()
         widget.setLayout(layout)
         self.setCentralWidget(widget)
+
+    def add_combobox_items(self):
+        suffixes = set()
+        for col in self.data.columns:
+            if '_' in col and not col.split('_')[1].isdigit():
+                suffix = col.split('_', 1)[1]
+                suffixes.add(suffix)
+        
+        for suffix in sorted(suffixes):
+            self.comboBox.addItem(suffix)
+            
+    def add_ref_number_items(self):
+        ref_numbers = set(col.split('_')[1] for col in self.data.columns if '_' in col and col.split('_')[1].isdigit())
+        for ref_number in sorted(ref_numbers, key=int):
+            self.refNumberComboBox.addItem(ref_number)
+
+    def update_plot(self, index):
+        fig = go.Figure()
+        selected_group = self.comboBox.currentText()
+        selected_ref_number = self.refNumberComboBox.currentText()
+    
+        # Determine columns based on the selected suffix
+        if selected_group == "All":
+            trace_columns = [col for col in self.data.columns if col != 'Time']
+        elif selected_group == "Raw Strain Data":
+            trace_columns = [col for col in self.data.columns if re.match(r'SG\d+_\d+$', col)]
+        else:
+            trace_columns = [col for col in self.data.columns if col.endswith(selected_group)]
+    
+        # Further filter columns based on the selected reference number
+        if selected_ref_number != "All Channels":
+            trace_columns = [col for col in trace_columns if col.split('_')[1] == selected_ref_number]
+    
+        # Debug output
+        print(f"Filtered columns: {trace_columns}")
+    
+        # Assign colors to visible traces based on their new filtered position
+        for idx, col in enumerate(trace_columns):
+            color_idx = idx % len(my_discrete_color_scheme)
+            fig.add_trace(go.Scatter(
+                x=self.data['Time'],
+                y=self.data[col],
+                mode='lines',
+                name=col,
+                line=dict(color=my_discrete_color_scheme[color_idx]),  # Assign color based on position in filtered list
+                hovertemplate='%{meta}<br>Time = %{x:.2f} s<br>µε = %{y:.1f}<extra></extra>',
+                hoverlabel=dict(font_size=10, bgcolor='rgba(255, 255, 255, 0.5)'),
+                meta=col
+            ))
+            
+        fig.update_layout(
+            title_text='SG Strains (FEA) - Grid Channel: ' + selected_ref_number,
+            title_x=0.5,
+            legend_title_text='Result',
+            template="plotly_white",
+            plot_bgcolor='rgba(0,0,0,0.005)',
+            xaxis_title='Time [s]',
+            yaxis_title='µε',
+            font=dict(family="Arial, sans-serif", size=12, color="#0077B6"),
+            xaxis=dict(showline=True, showgrid=True, showticklabels=True, linewidth=2, tickfont=dict(family='Arial, sans-serif', size=12), tickmode='auto', nticks=30),
+            yaxis=dict(showgrid=True, zeroline=False, showline=False, showticklabels=True, linecolor='rgb(204, 204, 204)', tickmode='auto', nticks=30)
+        )
+
+        # Update the viewer's figure with the new figure
+        self.viewer.fig = fig
+
+        raw_html = plot(fig, include_plotlyjs='cdn', output_type='div', config={'staticPlot': False})
+        self.viewer.setHtml(raw_html)
+        
+    def save_current_plot(self):
+        # Retrieve the parent name from the environment for the filename
+        parent_name = '''""" + sol_selected_environment.Parent.Name + """'''
+        # Construct the filename
+        filename = f"SG_Strains_FEA__{parent_name}.html"
+        
+        # Debug: Print the figure data to verify its contents
+        print("Saving plot with data:")
+        print(self.viewer.fig.data)
+        
+        # Save the current figure to an interactive HTML file
+        plot(self.viewer.fig, filename=os.path.join(self.folder_name, filename), output_type='file', auto_open=False)
+        QMessageBox.information(self, "Plot Saved", f"The plot has been saved as {filename} in the solution directory.")
+# endregion
 
 # region Show the results
 try:
@@ -209,7 +229,7 @@ process.StartInfo.UseShellExecute = True
 # Set the command to run the Python interpreter with your script as the argument
 process.StartInfo.WindowStyle = ProcessWindowStyle.Minimized
 process.StartInfo.FileName = "cmd.exe"  # Use cmd.exe to allow window manipulation
-process.StartInfo.Arguments = '/k python "' + cpython_script_path + '"'
+process.StartInfo.Arguments = '/c python "' + cpython_script_path + '"'
 # Start the process
 process.Start()
 # endregion
