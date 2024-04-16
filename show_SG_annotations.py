@@ -1,5 +1,50 @@
 # region Import necessary libraries
 import re
+import csv
+import os
+import System
+from System.Windows.Forms import (Form, ComboBox, Button, Label, 
+                                  Application, MessageBox, MessageBoxButtons, 
+                                  DialogResult, OpenFileDialog)
+# endregion
+
+# region Class definition(s) for GUI
+class DataSelectionForm(Form):
+    def __init__(self, times, measurements):
+        self.Text = "Data Selection"
+        self.Width = 300
+        self.Height = 200
+
+        # Time selection ComboBox
+        self.timeCombo = ComboBox()
+        self.timeCombo.Parent = self
+        self.timeCombo.Location = System.Drawing.Point(30, 30)
+        self.timeCombo.Width = 200
+        [self.timeCombo.Items.Add(time) for time in times]
+        self.timeCombo.SelectedIndex = 0  # Default selection
+
+        # Measurement type selection ComboBox
+        self.measurementCombo = ComboBox()
+        self.measurementCombo.Parent = self
+        self.measurementCombo.Location = System.Drawing.Point(30, 70)
+        self.measurementCombo.Width = 200
+        [self.measurementCombo.Items.Add(m) for m in measurements]
+        self.measurementCombo.SelectedIndex = 0  # Default selection
+
+        # OK Button
+        self.okButton = Button()
+        self.okButton.Text = "OK"
+        self.okButton.Location = System.Drawing.Point(100, 110)
+        self.okButton.Parent = self
+        self.okButton.Click += self.button_clicked
+
+    def button_clicked(self, sender, args):
+        global time_value, measurement_type
+        time_value = float(self.timeCombo.SelectedItem)
+        measurement_type = self.measurementCombo.SelectedItem
+        print("Selected Time:", time_value)
+        print("Selected Measurement Type:", measurement_type)
+        self.Close()
 # endregion
 
 # region Filter the list of name of reference channels (in this case Ch_2) from each CS_SG_Ch object
@@ -47,31 +92,138 @@ label_manager.DeleteLabels(list_of_obj_of_SG_label_calculation)
 # region Configure the graphics settings
 label_manager.LabelObscureStyle = MechanicalEnums.Graphics.ObscuredLabelStyle.eHiddenStyle
 # Create a color scale for the labels to be generated
-def normalize_data(data):
-    min_val = min(data)
-    max_val = max(data)
-    range_val = max_val - min_val
-    if range_val == 0:  # to avoid division by zero if all numbers are the same
-        return [0.5 for _ in data]  # midpoint in hue range
-    return [(float(i - min_val) / range_val) for i in data]
+def interpolate_segment(color1, color2, segment_fraction):
+    return tuple(color1[i] + (color2[i] - color1[i]) * segment_fraction for i in range(3))
 
-def map_to_hsv(normalized_data, start_hue=240, end_hue=270):
-    # Convert normalized value to a hue value between start_hue and end_hue
-    return [(start_hue + (end_hue - start_hue) * x, 1.0, 1.0) for x in normalized_data]
+def get_rainbow_color(value, min_val, max_val):
+    # Define the color range for the gradient
+    colors = [
+        (255, 0, 0),       # Red
+        (255, 127, 0),     # Orange
+        (255, 255, 0),     # Yellow
+        (0, 255, 0),       # Green
+        (0, 0, 255),       # Blue
+        (75, 0, 130),      # Indigo
+        (148, 0, 211)      # Violet
+    ]
+    
+    # Determine how many segments there are
+    num_segments = len(colors) - 1
+    
+    # Scale the value to the number of segments
+    scaled_value = float(value - min_val) / float(max_val - min_val) * num_segments
+    
+    # Determine which two colors to interpolate between
+    first_color_index = int(scaled_value)
+    second_color_index = min(first_color_index + 1, num_segments)
+    
+    # Determine the fraction between the two colors
+    segment_fraction = scaled_value - first_color_index
+    
+    # Interpolate between the two colors
+    return interpolate_segment(colors[first_color_index], colors[second_color_index], segment_fraction)
 
-def hsv_to_rgb(hsv_colors):
-    # Convert HSV to RGB
-    return [tuple(int(i * 255) for i in colorsys.hsv_to_rgb(h * 360.0 / 360, s, v)) for h, s, v in hsv_colors]
-
-def generate_color_list(data):
-    normalized_data = normalize_data(data)
-    hsv_colors = map_to_hsv(normalized_data)
-    rgb_colors = hsv_to_rgb(hsv_colors)
+def numbers_to_rainbow_colors(numbers):
+    min_val = min(numbers)
+    max_val = max(numbers)
+    
+    # Generate a color for each number
+    colors = [get_rainbow_color(num, min_val, max_val) for num in numbers]
+    
+    # Convert to RGB format as integers from 0 to 255
+    rgb_colors = [(int(r), int(g), int(b)) for r, g, b in colors]
+    
     return rgb_colors
-
-# Generate the rainbow scale
-color_list = generate_color_list(list_of_SG_reference_numbers)
 # endregion
+
+# region Classify and parse calculated SG values if there is any
+# Function to classify headers based on measurement types
+def classify_headers_by_measurement(file_path):
+    with open(file_path, 'r') as file:
+        reader = csv.reader(file)
+        headers = next(reader)  # Read the header row
+        measurements = {}  # Dictionary to store measurement types and indices
+
+        # Regex to extract measurement types from header names
+        pattern_measurement = re.compile(r'SG\d+_(\w+)')
+
+        for index, header in enumerate(headers):
+            match = pattern_measurement.search(header)
+            if match:
+                measurement = match.group(1)
+                if measurement not in measurements:
+                    measurements[measurement] = []
+                measurements[measurement].append(index)
+            elif "Time" in header:
+                measurements["Time"] = [index]
+
+    return measurements
+
+# Function to read a specific row based on "Time" and optionally filter by measurement type
+def read_row_based_on_time_and_measurement(file_path, time_value, measurement_type=None):
+    measurements = classify_headers_by_measurement(file_path)  # Get measurement groups
+    with open(file_path, 'r') as file:
+        reader = csv.reader(file)
+        header = next(reader)
+        time_index = header.index('Time')
+
+        for row in reader:
+            if float(row[time_index]) == float(time_value):
+                if measurement_type:
+                    # Filter for specific measurement type
+                    indices = measurements.get(measurement_type, [])
+                    return [float(row[i]) for i in indices]
+                else:
+                    # Return all values converted to float
+                    return [float(value) for value in row]
+
+# Function to classify headers and find unique time values
+def prepare_data(file_path):
+    times = set()
+    with open(file_path, 'r') as file:
+        reader = csv.reader(file)
+        header = next(reader)  # Skip the header
+        for row in reader:
+            times.add(row[0])  # Assuming time values are in the first column
+    return sorted(times), ['epsilon_x', 'epsilon_y', 'von_Mises', 'gamma_xy', 'sigma_1', 'sigma_2', 'theta_p', 'Biaxiality_Ratio']
+
+# Try to read the SG calculation results from solution folder path, if there is any file
+solution_directory_path = sol_selected_environment.WorkingDir[:-1]
+solution_directory_path = solution_directory_path.Replace("\\", "\\\\")
+file_name_of_SG_calculations = 'SG_calculations_FEA.csv'
+file_path_of_SG_calculations = os.path.join(solution_directory_path,file_name_of_SG_calculations)
+
+if os.path.exists(file_path_of_SG_calculations):
+    times, measurements = prepare_data(file_path_of_SG_calculations)
+    form = DataSelectionForm(times, measurements)
+    Application.Run(form)
+    list_of_requested_SG_label_result = read_row_based_on_time_and_measurement(file_path_of_SG_calculations, time_value, measurement_type)
+    # Determine the color scheme of labels based on calculated SG data
+    color_list = numbers_to_rainbow_colors(list_of_SG_reference_numbers)
+if not os.path.exists(file_path_of_SG_calculations):
+    message = '"SG_calculations_FEA.csv" file is not found in the solution directory. Would you like to manually specify this file?'
+    title = 'File Not Found'
+    result = MessageBox.Show(message, title, MessageBoxButtons.YesNo, MessageBoxIcon.Warning)
+    if result == DialogResult.Yes:
+        file_dialog = OpenFileDialog()
+        file_dialog.Filter = "CSV files (*.csv)|*.csv"
+        file_dialog.Title = "Select a CSV file of SG Calculations"
+        if file_dialog.ShowDialog() == DialogResult.OK:
+            file_path_of_SG_calculations = file_dialog.FileName
+            print("File selected:", file_path_of_SG_calculations)
+            times, measurements = prepare_data(file_path_of_SG_calculations)
+            form = DataSelectionForm(times, measurements)
+            Application.Run(form)
+            list_of_requested_SG_label_result = read_row_based_on_time_and_measurement(file_path_of_SG_calculations, time_value, measurement_type)
+            # Determine the color scheme of labels based on calculated SG data
+            color_list = numbers_to_rainbow_colors(list_of_SG_reference_numbers)
+    else:
+        print("No")
+        list_of_requested_SG_label_result = [""]*len(list_of_coordinates_of_all_filtered_names_of_CS_SG_channels)
+        # Determine the color scheme of labels based on SG numbers
+        color_list = numbers_to_rainbow_colors(list_of_SG_reference_numbers)
+# endregion
+
 
 # region Create SG labels on the screen
 # Refractoring collector list for a better readability of the code
@@ -80,13 +232,15 @@ xyz_list = list_of_coordinates_of_all_filtered_names_of_CS_SG_channels
 # Initialize list of label objects
 list_of_obj_of_SG_label_calculation = []
 
-colors_of_SG_labels = map_values_to_colors(list_of_SG_reference_numbers, 14)
 with Graphics.Suspend():
     with Transaction():
         # Assign a background color for each numerical value
         for i in range(len(xyz_list)):
             obj_of_SG_label_calculation = label_manager.CreateLabel(sol_selected_environment)
-            obj_of_SG_label_calculation.Note = "SG_" + str(list_of_SG_reference_numbers[i])
+            obj_of_SG_label_calculation.Note = ("SG_" 
+                                                + str(list_of_SG_reference_numbers[i]) 
+                                                + ": "
+                                                + str(round(list_of_requested_SG_label_result[i], 2)))
             obj_of_SG_label_calculation.Scoping.XYZ = Point((xyz_list[i][0], xyz_list[i][1], xyz_list[i][2]), 'm')
             obj_of_SG_label_calculation.ShowAlways = True
             obj_of_SG_label_calculation.Color = Ansys.ACT.Common.Graphics.Color(red=color_list[i][0], 
