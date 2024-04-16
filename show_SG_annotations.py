@@ -125,6 +125,8 @@ def get_rainbow_color(value, min_val, max_val):
         (75, 0, 130),      # Indigo
         (148, 0, 211)      # Violet
     ]
+    # Reverse the color order so that colors go from violet-blue to red as they increase
+    colors.reverse()
     
     # Determine how many segments there are
     num_segments = len(colors) - 1
@@ -218,7 +220,7 @@ if os.path.exists(file_path_of_SG_calculations):
     Application.Run(form)
     list_of_requested_SG_label_result = read_row_based_on_time_and_measurement(file_path_of_SG_calculations, time_value, measurement_type)
     # Determine the color scheme of labels based on calculated SG data
-    color_list = numbers_to_rainbow_colors(list_of_SG_reference_numbers)
+    color_list = numbers_to_rainbow_colors(list_of_requested_SG_label_result)
 if not os.path.exists(file_path_of_SG_calculations):
     message = '"SG_calculations_FEA.csv" file is not found in the solution directory. Would you like to manually specify this file?'
     title = 'File Not Found'
@@ -234,13 +236,15 @@ if not os.path.exists(file_path_of_SG_calculations):
             form = DataSelectionForm(times, measurements)
             Application.Run(form)
             list_of_requested_SG_label_result = read_row_based_on_time_and_measurement(file_path_of_SG_calculations, time_value, measurement_type)
+            list_of_requested_SG_label_result = [round(num, 2) for num in list_of_requested_SG_label_result]
             # Determine the color scheme of labels based on calculated SG data
-            color_list = numbers_to_rainbow_colors(list_of_SG_reference_numbers)
+            color_list = numbers_to_rainbow_colors(list_of_requested_SG_label_result)
     else:
         print("No")
         list_of_requested_SG_label_result = [""]*len(list_of_coordinates_of_all_filtered_names_of_CS_SG_channels)
         # Determine the color scheme of labels based on SG numbers
         color_list = numbers_to_rainbow_colors(list_of_SG_reference_numbers)
+
 # endregion
 
 
@@ -259,7 +263,7 @@ with Graphics.Suspend():
             obj_of_SG_label_calculation.Note = ("SG_" 
                                                 + str(list_of_SG_reference_numbers[i]) 
                                                 + ": "
-                                                + str(round(list_of_requested_SG_label_result[i], 2)))
+                                                + str(list_of_requested_SG_label_result[i]))
             obj_of_SG_label_calculation.Scoping.XYZ = Point((xyz_list[i][0], xyz_list[i][1], xyz_list[i][2]), 'm')
             obj_of_SG_label_calculation.ShowAlways = True
             obj_of_SG_label_calculation.Color = Ansys.ACT.Common.Graphics.Color(red=color_list[i][0], 
