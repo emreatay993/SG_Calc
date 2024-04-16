@@ -117,14 +117,24 @@ def interpolate_segment(color1, color2, segment_fraction):
 def get_rainbow_color(value, min_val, max_val):
     # Define the color range for the gradient
     colors = [
-        (255, 0, 0),       # Red
-        (255, 127, 0),     # Orange
-        (255, 255, 0),     # Yellow
-        (0, 255, 0),       # Green
-        (0, 0, 255),       # Blue
-        (75, 0, 130),      # Indigo
-        (148, 0, 211)      # Violet
-    ]
+             (255, 0, 0),
+             (255, 178, 0),
+             (255, 216, 0),
+             (255, 255, 0),
+             (216, 255, 0),
+             (178, 255, 0),
+             (89, 255, 0),
+             (0, 255, 0),
+             (0, 255, 89),
+             (0, 255, 178),
+             (0, 255, 216),
+             (0, 255, 255),
+             (0, 216, 255),
+             (0, 178, 255),
+             (0, 89, 255),
+             (0, 0, 255),
+             (0, 0, 255),
+             (153, 153, 102)]
     # Reverse the color order so that colors go from violet-blue to red as they increase
     colors.reverse()
     
