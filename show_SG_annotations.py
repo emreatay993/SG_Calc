@@ -5,7 +5,7 @@ import os
 import System
 from System.Windows.Forms import (Form, ComboBox, Button, Label, 
                                   Application, MessageBox, MessageBoxButtons, 
-                                  DialogResult, OpenFileDialog)
+                                  DialogResult, OpenFileDialog, Keys)
 # endregion
 
 # region Class definition(s) for GUI
@@ -38,7 +38,26 @@ class DataSelectionForm(Form):
         self.okButton.Parent = self
         self.okButton.Click += self.button_clicked
 
+        # Enable KeyPreview to catch key events before they reach other controls
+        self.KeyPreview = True
+
+        # Handle key down events on the form
+        self.KeyDown += self.form_key_down
+
     def button_clicked(self, sender, args):
+        # Actions to perform when OK button is clicked
+        self.perform_actions()
+
+    def form_key_down(self, sender, args):
+        # Check if the Enter key was pressed
+        if args.KeyCode == Keys.Enter:
+            # Prevent further processing of the key event
+            args.Handled = True
+            # Perform the same actions as clicking the OK button
+            self.perform_actions()
+
+    def perform_actions(self):
+        # Common actions to perform (previously in button_clicked)
         global time_value, measurement_type
         time_value = float(self.timeCombo.SelectedItem)
         measurement_type = self.measurementCombo.SelectedItem
