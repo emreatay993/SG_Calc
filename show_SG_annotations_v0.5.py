@@ -73,7 +73,7 @@ list_of_names_of_CS_SG_channels = [list_of_all_coordinate_systems[i].Name
                                    if list_of_all_coordinate_systems[i].Name.Contains("CS_SG_Ch_")
                                    and list_of_all_coordinate_systems[i].ObjectState != ObjectState.Suppressed]
 # Regular expression to match channel names where y = 2, possibly followed by an underscore and more characters
-pattern = r'CS_SG_Ch_(\d+)_2(_|$)'
+pattern = r'CS_SG_Ch_(\d+)_2[^0-9]*'
 # Filtered list using regular expression
 list_of_filtered_names_of_CS_SG_channels = [
     channel for channel in list_of_names_of_CS_SG_channels if re.search(pattern, channel)]
