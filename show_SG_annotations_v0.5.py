@@ -5,7 +5,7 @@ import os
 import System
 from System.Windows.Forms import (Form, ComboBox, Button, Label, 
                                   Application, MessageBox, MessageBoxButtons, 
-                                  DialogResult, OpenFileDialog, Keys)
+                                  MessageBoxIcon, DialogResult, OpenFileDialog, Keys)
 # endregion
 
 # region Class definition(s) for GUI
@@ -259,6 +259,15 @@ if not os.path.exists(file_path_of_SG_calculations):
 
 
 # region Create SG labels on the screen
+#Define whether labels will always stay on the screen
+message = 'Would you like the SG labels to always stay on the screen?'
+title = 'Select an option'
+result = MessageBox.Show(message, title, MessageBoxButtons.YesNo, MessageBoxIcon.Warning)
+if result == DialogResult.Yes:
+    yes_no_choice_is_labels_always_on_screen = True
+elif result == DialogResult.No:
+    yes_no_choice_is_labels_always_on_screen = False
+
 # Refractoring collector list for a better readability of the code
 xyz_list = None
 xyz_list = list_of_coordinates_of_all_filtered_names_of_CS_SG_channels
@@ -275,7 +284,7 @@ with Graphics.Suspend():
                                                 + ": "
                                                 + str(list_of_requested_SG_label_result[i]))
             obj_of_SG_label_calculation.Scoping.XYZ = Point((xyz_list[i][0], xyz_list[i][1], xyz_list[i][2]), 'm')
-            obj_of_SG_label_calculation.ShowAlways = True
+            obj_of_SG_label_calculation.ShowAlways = yes_no_choice_is_labels_always_on_screen
             obj_of_SG_label_calculation.Color = Ansys.ACT.Common.Graphics.Color(red=color_list[i][0], 
                                                                                 green=color_list[i][1], 
                                                                                 blue=color_list[i][2], 
