@@ -229,6 +229,7 @@ if os.path.exists(file_path_of_SG_calculations):
     form = DataSelectionForm(times, measurements)
     Application.Run(form)
     list_of_requested_SG_label_result = read_row_based_on_time_and_measurement(file_path_of_SG_calculations, time_value, measurement_type)
+    list_of_requested_SG_label_result = [round(num, 2) for num in list_of_requested_SG_label_result] # round off the results to two significant digits
     # Determine the color scheme of labels based on calculated SG data
     color_list = numbers_to_rainbow_colors(list_of_requested_SG_label_result)
 if not os.path.exists(file_path_of_SG_calculations):
