@@ -226,7 +226,7 @@ pattern = r'CS_SG_Ch_(\d+)_2[^0-9]*'
 list_of_filtered_names_of_CS_SG_channels = [
     channel for channel in list_of_names_of_CS_SG_channels if re.search(pattern, channel)]
 # Sort the list of filtered names of CS_SG_Channels so that they are in natural order
-list_of_names_of_CS_SG_channels.sort(key=extract_number)
+list_of_filtered_names_of_CS_SG_channels.sort(key=extract_number)
 # Extract SG reference numbers as well
 list_of_SG_reference_numbers = [
     int(re.search(pattern, channel).group(1))  # Capture the group 1 which is the reference number
