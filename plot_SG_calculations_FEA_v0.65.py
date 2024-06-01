@@ -405,7 +405,11 @@ def plot_graph(n_clicks):
             my_fig.add_trace(go.Scattergl(
                 x=output_data['Time'],
                 y=output_data[col],
-                name=col
+                name=col,
+                line=dict(color=my_discrete_color_scheme[color_idx]),  # Assign color based on position in filtered list
+                hovertemplate='%{meta}<br>Time = %{x:.2f} s<br>Data = %{y:.1f}<extra></extra>',
+                hoverlabel=dict(font_size=10, bgcolor='rgba(255, 255, 255, 0.5)'),
+                meta=col
             ))
             
         return my_fig
