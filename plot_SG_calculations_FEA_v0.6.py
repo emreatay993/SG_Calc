@@ -2,41 +2,50 @@
 import csv
 import context_menu
 import clr
+
 clr.AddReference('mscorlib')  # Ensure the core .NET assembly is referenced
 from System.IO import StreamWriter, FileStream, FileMode, FileAccess
 from System.Text import UTF8Encoding
 from System.Diagnostics import Process, ProcessWindowStyle
 import os
+
 # endregion
 
 # region Define the plot function to be run
 solution_directory_path = sol_selected_environment.WorkingDir[:-1]
 solution_directory_path = solution_directory_path.Replace("\\", "\\\\")
 file_name_of_SG_calculations = 'SG_calculations_FEA.csv'
-file_path_of_SG_calculations = os.path.join(solution_directory_path,file_name_of_SG_calculations)
+file_path_of_SG_calculations = os.path.join(solution_directory_path, file_name_of_SG_calculations)
 
 cpython_script_name = "plot_SG_calculations_FEA_cpython_code_only.py"
 cpython_script_path = sol_selected_environment.WorkingDir + cpython_script_name
-cpython_code = """
+cpython_code ="""
 # region Import necessary modules
 import warnings
 warnings.filterwarnings("ignore", category=DeprecationWarning)
 try:
     import sys
+    import threading
     import pandas as pd
     import numpy as np
     import plotly.graph_objects as go
     from plotly.offline import plot
     import plotly.express as px
+    import plotly.figure_factory as ff
     import os
     import re
     from PyQt5.QtCore import Qt
-    from PyQt5.QtWidgets import (QApplication, QMainWindow, QLineEdit, QDialog, QHBoxLayout, 
+    from PyQt5 import QtCore
+    from PyQt5.QtWidgets import (QApplication, QMainWindow, QLineEdit, QDialog, QHBoxLayout,
                                  QVBoxLayout, QWidget, QMessageBox, QComboBox, QCheckBox, QFileDialog,
                                  QLabel, QSizePolicy, QPushButton, QTableWidget, QTableWidgetItem, QHeaderView)
     from PyQt5.QtWebEngineWidgets import QWebEngineView
     import concurrent.futures
     from concurrent.futures import ThreadPoolExecutor
+
+    import dash
+    from dash import dcc, html
+    import dash_bootstrap_components as dbc
 except ImportError as e:
 
     app_messagebox = QApplication(sys.argv)
@@ -53,7 +62,6 @@ class FlatLineEdit(QLineEdit):
         super(FlatLineEdit, self).__init__()
         self.setPlaceholderText(placeholder_text)
         self.setStyleSheet("QLineEdit {border: 1px solid #bfbfbf; border-radius: 5px; padding: 5px; background-color: #ffffff;} QLineEdit:focus {border: 2px solid #0077B6;}")
-
 
 class MaterialPropertiesDialog(QDialog):
     def __init__(self, parent=None):
@@ -75,7 +83,7 @@ class MaterialPropertiesDialog(QDialog):
 
         # Adjusting the layout for labels and line edits
         formLayout = QVBoxLayout()
-        
+
         self.labelE = QLabel("Young's Modulus [GPa]:")
         self.lineEditE = QLineEdit(self)
         formLayout.addWidget(self.labelE)
@@ -126,7 +134,7 @@ class MaterialPropertiesDialog(QDialog):
         buttonLayout.addWidget(self.okButton)
         buttonLayout.addWidget(cancelButton)
         layout.addLayout(buttonLayout)
-        
+
         self.resize(self.reducedWidth, self.reducedHeight+100)
 
     def toggle_time_dependent_input(self, state):
@@ -168,7 +176,7 @@ class MaterialPropertiesDialog(QDialog):
             self.dataTable.setItem(i, 1, QTableWidgetItem(str(row[1])))
             self.dataTable.setItem(i, 2, QTableWidgetItem(str(row[2])))
         self.dataTable.setVisible(True)
-        
+
     def acceptInputs(self):
             try:
                 E = float(self.lineEditE.text())
@@ -183,14 +191,15 @@ class MaterialPropertiesDialog(QDialog):
                 QMessageBox.critical(self, "Input Error", str(ve))
 
 class PlotlyViewer(QWebEngineView):
-    def __init__(self, fig, parent=None):
-        super(PlotlyViewer, self).__init__(parent)
-        self.fig = fig
-        self.initUI()
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.qdash = QDash()
+        self.qdash.run(debug=True, use_reloader=False)
+        self.load(QtCore.QUrl("http://127.0.0.1:8050"))
 
-    def initUI(self):
-        raw_html = plot(self.fig, include_plotlyjs='cdn', output_type='div', config={'staticPlot': False})
-        self.setHtml(raw_html)
+    def update_plot(self, fig):
+        self.qdash.update_graph(fig)
+        self.reload()
 
 class PlotWindow(QMainWindow):
     def __init__(self, folder_name, file_name):
@@ -201,7 +210,7 @@ class PlotWindow(QMainWindow):
         self.file_name = file_name
         self.data = None
         self.initUI()
-        
+
     def initUI(self):
         file_path = os.path.join(self.folder_name, self.file_name)
         try:
@@ -209,29 +218,29 @@ class PlotWindow(QMainWindow):
         except Exception as e:
             QMessageBox.critical(self, "File Error", f"Failed to read the file: {str(e)}")
             sys.exit(1)
-        
+
         # Filter Data label setup
         self.label = QLabel("Filter Data:")
         self.label.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
         self.label.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
-        
+
         # Combobox setups
         self.comboBox = QComboBox()
         self.comboBox.addItem("All")
         self.comboBox.addItem("Raw Strain Data")
         # Add data groups to the combobox
         self.add_combobox_items()
-        
+
         self.refNumberComboBox = QComboBox()
         self.refNumberComboBox.addItem("-")  # Similar to "All" functionality
         self.add_ref_number_items()
 
         self.comboBox.currentIndexChanged.connect(self.update_plot)
         self.refNumberComboBox.currentIndexChanged.connect(self.update_plot)
-        self.viewer = PlotlyViewer(go.Figure())
+        self.viewer = PlotlyViewer()
         self.savePlotButton = QPushButton("Save current plot as HTML file")
         self.savePlotButton.clicked.connect(self.save_current_plot)
-        
+
         self.update_plot(0)  # Initialize plot
 
         # Modify the layout setup to add the label and combobox horizontally
@@ -244,13 +253,13 @@ class PlotWindow(QMainWindow):
 
         # Create the main layout
         layout = QVBoxLayout()
-        
+
         # Add the filter layout to the main layout using addLayout
         layout.addLayout(filter_layout)
-        
+
         # Add the rest of your widgets to the layout
         layout.addWidget(self.viewer)
-        
+
         # Set the layout to the central widget
         widget = QWidget()
         widget.setLayout(layout)
@@ -262,10 +271,10 @@ class PlotWindow(QMainWindow):
             if '_' in col and not col.split('_')[1].isdigit():
                 suffix = col.split('_', 1)[1]
                 suffixes.add(suffix)
-        
+
         for suffix in sorted(suffixes):
             self.comboBox.addItem(suffix)
-            
+
     def add_ref_number_items(self):
         ref_numbers = set(col.split('_')[1] for col in self.data.columns if '_' in col and col.split('_')[1].isdigit())
         for ref_number in sorted(ref_numbers, key=int):
@@ -275,7 +284,7 @@ class PlotWindow(QMainWindow):
         fig = go.Figure()
         selected_group = self.comboBox.currentText()
         selected_ref_number = self.refNumberComboBox.currentText()
-    
+
         # Determine columns based on the selected suffix
         if selected_group == "All":
             trace_columns = [col for col in self.data.columns if col != 'Time']
@@ -283,14 +292,14 @@ class PlotWindow(QMainWindow):
             trace_columns = [col for col in self.data.columns if re.match(r'SG\d+_\d+$', col)]
         else:
             trace_columns = [col for col in self.data.columns if col.endswith(selected_group)]
-    
+
         # Further filter columns based on the selected reference number
         if selected_ref_number != "-":
             trace_columns = [col for col in trace_columns if col.split('_')[1] == selected_ref_number]
-    
+
         # Debug output
         print(f"Filtered columns: {trace_columns}")
-    
+
         # Assign colors to visible traces based on their new filtered position
         for idx, col in enumerate(trace_columns):
             color_idx = idx % len(my_discrete_color_scheme)
@@ -304,7 +313,7 @@ class PlotWindow(QMainWindow):
                 hoverlabel=dict(font_size=10, bgcolor='rgba(255, 255, 255, 0.5)'),
                 meta=col
             ))
-            
+
         fig.update_layout(
             title_text='SG Calculations - FEA: ' + selected_group,
             title_x=0.5,
@@ -314,30 +323,52 @@ class PlotWindow(QMainWindow):
             xaxis_title='Time [s]',
             yaxis_title='Data',
             font=dict(family="Arial, sans-serif", size=12, color="#0077B6"),
-            xaxis=dict(showline=True, showgrid=True, showticklabels=True, linewidth=2, tickfont=dict(family='Arial, sans-serif', size=12), tickmode='auto', nticks=30),
-            yaxis=dict(showgrid=True, zeroline=False, showline=False, showticklabels=True, linecolor='rgb(204, 204, 204)', tickmode='auto', nticks=30)
+            xaxis=dict(showline=True, showgrid=True, showticklabels=True, linewidth=2,
+                       tickfont=dict(family='Arial, sans-serif', size=12), tickmode='auto', nticks=30),
+            yaxis=dict(showgrid=True, zeroline=False, showline=False, showticklabels=True,
+                       linecolor='rgb(204, 204, 204)', tickmode='auto', nticks=30)
         )
 
-        # Update the viewer's figure with the new figure
-        self.viewer.fig = fig
+        self.viewer.update_plot(fig)
 
-        raw_html = plot(fig, include_plotlyjs='cdn', output_type='div', config={'staticPlot': False})
-        self.viewer.setHtml(raw_html)
-        
     def save_current_plot(self):
         # Retrieve the parent name from the environment for the filename
         parent_name = '''""" + sol_selected_environment.Parent.Name + """'''
         # Construct the filename
         filename = f"SG_Calculations_FEA__{parent_name}.html"
-        
+
         # Debug: Print the figure data to verify its contents
         print("Saving plot with data:")
-        print(self.viewer.fig.data)
-        
+        print(self.viewer.qdash.app.layout.children[0].figure.data)
+
         # Save the current figure to an interactive HTML file
-        plot(self.viewer.fig, filename=os.path.join(self.folder_name, filename), output_type='file', auto_open=False)
-        QMessageBox.information(self, "Plot Saved", f"The plot has been saved as {filename} in the solution directory.")
-# endregion
+        plot(self.viewer.qdash.app.layout.children[0].figure, filename=os.path.join(self.folder_name, filename),
+             output_type='file', auto_open=False)
+        QMessageBox.information(self, "Plot Saved", f"The plot has been saved as {filename} in the solution directory.")# endregion
+
+class QDash(QtCore.QObject):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self._app = dash.Dash(__name__, external_stylesheets=[dbc.themes.BOOTSTRAP])
+        self.app.layout = html.Div()
+
+    @property
+    def app(self):
+        return self._app
+
+    def update_graph(self, fig):
+        self.app.layout = html.Div([
+            dcc.Graph(
+                figure=fig,
+                config={
+                    'displaylogo': False  # Disable the plotly logo
+                },
+                style={'width': '100%', 'height': '100vh'}
+            )
+        ])
+
+    def run(self, **kwargs):
+        threading.Thread(target=self.app.run_server, kwargs=kwargs, daemon=True).start()
 
 # region Engineering Formulas
 def transform_strains_to_global(epsilon_A, epsilon_B, epsilon_C, angles):
@@ -388,10 +419,10 @@ def calculate_biaxiality_ratio(S1, S2):
     # Ensure that sigma_1 is the larger one in absolute terms
     sigma_1 = np.where(np.abs(S1) >= np.abs(S2), S1, S2)
     sigma_2 = np.where(np.abs(S1) >= np.abs(S2), S2, S1)
-    
+
     # Calculate the biaxiality ratio
     biaxiality_ratio = sigma_2 / sigma_1
-    
+
     return biaxiality_ratio
 
 def calculate_von_mises_stress(S1, S2, S3=0):
@@ -405,7 +436,7 @@ def calculate_von_mises_stress(S1, S2, S3=0):
 app_dialog = QApplication(sys.argv)
 
 # File selection for FEA strain data
-file_path_FEA, _ = QFileDialog().getOpenFileName(None, 'Open FEA raw data file for SG rosettes', '', 'All Files (*);;CSV Files (*.csv)')
+file_path_FEA, _ = QFileDialog().getOpenFileName(None, 'Open FEA raw data file for SG rosettes',r'"""+solution_directory_path+"""' , 'All Files (*);;CSV Files (*.csv)')
 
 # Check if a file was selected for FEA data
 if file_path_FEA:
@@ -453,7 +484,7 @@ input_dialog = MaterialPropertiesDialog()
 if input_dialog.exec_() == QDialog.Accepted:
     E = input_dialog.user_input.get('E')
     v = input_dialog.user_input.get('v')
-    
+
     # Convert to numpy column arrays to get individual E and v at each index (therefore, at each time step) later
     E = (np.full(time.shape, E))
     v = (np.full(time.shape, v))
@@ -476,7 +507,7 @@ def process_sg_number(sg_number, strain_gauge_data, E, v):
             principal_strain_orientation = np.array([calculate_principal_strain_orientation(strain[0], strain[1], strain[2]) for strain in global_strains])
             biaxiality_ratios = calculate_biaxiality_ratio(principal_stresses[:, 0], principal_stresses[:, 1])
             von_mises_stresses = np.array([calculate_von_mises_stress(*stress) for stress in principal_stresses])
-            for i, strain_type in enumerate(['epsilon_x [με]', 'epsilon_y [με]', 'gamma_xy [με]']):
+            for i, strain_type in enumerate(['epsilon_x [??]', 'epsilon_y [??]', 'gamma_xy [??]']):
                 new_columns.append(pd.DataFrame({f'SG{sg_number}_{strain_type}': global_strains[:, i]}))
             new_columns.append(pd.DataFrame({f'SG{sg_number}_sigma_1 [MPa]': principal_stresses[:, 0],
                                              f'SG{sg_number}_sigma_2 [MPa]': principal_stresses[:, 1],
@@ -540,7 +571,7 @@ print("Python file created successfully with UTF-8 encoding.")
 # Run the CPython script asynchronously
 process = Process()
 # Configure the process to hide the window and not use the shell execute feature
-#process.StartInfo.CreateNoWindow = True
+# process.StartInfo.CreateNoWindow = True
 
 process.StartInfo.UseShellExecute = True
 # Set the command to run the Python interpreter with your script as the argument
