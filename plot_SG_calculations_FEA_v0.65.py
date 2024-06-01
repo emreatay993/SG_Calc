@@ -32,6 +32,7 @@ try:
     from plotly.offline import plot
     import plotly.express as px
     import plotly.figure_factory as ff
+    from plotly_resampler import FigureResampler
     import os
     import re
     from PyQt5.QtCore import Qt
@@ -44,7 +45,7 @@ try:
     from concurrent.futures import ThreadPoolExecutor
 
     import dash
-    from dash import dcc, html
+    from dash import Dash, Input, Output, callback_context, dcc, html, no_update
     import dash_bootstrap_components as dbc
 except ImportError as e:
 
@@ -56,6 +57,11 @@ except ImportError as e:
 # region Define classes and global functions/variables
 QApplication.setAttribute(Qt.AA_EnableHighDpiScaling, True)
 my_discrete_color_scheme = px.colors.qualitative.Light24
+global selected_group
+selected_group = None
+selected_ref_number = None
+output_data = None
+trace_columns = None
 
 class FlatLineEdit(QLineEdit):
     def __init__(self, placeholder_text=""):
@@ -208,13 +214,14 @@ class PlotWindow(QMainWindow):
         self.setGeometry(100, 100, 800, 600)
         self.folder_name = folder_name
         self.file_name = file_name
-        self.data = None
         self.initUI()
 
     def initUI(self):
         file_path = os.path.join(self.folder_name, self.file_name)
         try:
-            self.data = pd.read_csv(file_path)
+            global output_data
+            output_data = pd.read_csv(file_path)
+            global data_columns
         except Exception as e:
             QMessageBox.critical(self, "File Error", f"Failed to read the file: {str(e)}")
             sys.exit(1)
@@ -267,7 +274,8 @@ class PlotWindow(QMainWindow):
 
     def add_combobox_items(self):
         suffixes = set()
-        for col in self.data.columns:
+        global output_data
+        for col in output_data.columns:
             if '_' in col and not col.split('_')[1].isdigit():
                 suffix = col.split('_', 1)[1]
                 suffixes.add(suffix)
@@ -276,22 +284,27 @@ class PlotWindow(QMainWindow):
             self.comboBox.addItem(suffix)
 
     def add_ref_number_items(self):
-        ref_numbers = set(col.split('_')[1] for col in self.data.columns if '_' in col and col.split('_')[1].isdigit())
+        global output_data
+        ref_numbers = set(col.split('_')[1] for col in output_data.columns if '_' in col and col.split('_')[1].isdigit())
         for ref_number in sorted(ref_numbers, key=int):
             self.refNumberComboBox.addItem(ref_number)
 
     def update_plot(self, index):
-        fig = go.Figure()
+        fig: FigureResampler = FigureResampler()
+        global selected_group 
+        global selected_ref_number
+        global output_data
+        global trace_columns
         selected_group = self.comboBox.currentText()
         selected_ref_number = self.refNumberComboBox.currentText()
 
         # Determine columns based on the selected suffix
         if selected_group == "All":
-            trace_columns = [col for col in self.data.columns if col != 'Time']
+            trace_columns = [col for col in output_data.columns if col != 'Time']
         elif selected_group == "Raw Strain Data":
-            trace_columns = [col for col in self.data.columns if re.match(r'SG\d+_\d+$', col)]
+            trace_columns = [col for col in output_data.columns if re.match(r'SG\d+_\d+$', col)]
         else:
-            trace_columns = [col for col in self.data.columns if col.endswith(selected_group)]
+            trace_columns = [col for col in output_data.columns if col.endswith(selected_group)]
 
         # Further filter columns based on the selected reference number
         if selected_ref_number != "-":
@@ -299,20 +312,6 @@ class PlotWindow(QMainWindow):
 
         # Debug output
         print(f"Filtered columns: {trace_columns}")
-
-        # Assign colors to visible traces based on their new filtered position
-        for idx, col in enumerate(trace_columns):
-            color_idx = idx % len(my_discrete_color_scheme)
-            fig.add_trace(go.Scatter(
-                x=self.data['Time'],
-                y=self.data[col],
-                mode='lines',
-                name=col,
-                line=dict(color=my_discrete_color_scheme[color_idx]),  # Assign color based on position in filtered list
-                hovertemplate='%{meta}<br>Time = %{x:.2f} s<br>Data = %{y:.1f}<extra></extra>',
-                hoverlabel=dict(font_size=10, bgcolor='rgba(255, 255, 255, 0.5)'),
-                meta=col
-            ))
 
         fig.update_layout(
             title_text='SG Calculations - FEA: ' + selected_group,
@@ -339,17 +338,20 @@ class PlotWindow(QMainWindow):
 
         # Debug: Print the figure data to verify its contents
         print("Saving plot with data:")
-        print(self.viewer.qdash.app.layout.children[0].figure.data)
+        print(my_fig.data)
 
         # Save the current figure to an interactive HTML file
-        plot(self.viewer.qdash.app.layout.children[0].figure, filename=os.path.join(self.folder_name, filename),
+        plot(my_fig, filename=os.path.join(self.folder_name, filename),
              output_type='file', auto_open=False)
         QMessageBox.information(self, "Plot Saved", f"The plot has been saved as {filename} in the solution directory.")# endregion
 
+my_dash_app = Dash(__name__, external_stylesheets=[dbc.themes.BOOTSTRAP])
+global my_fig
+my_fig = FigureResampler()
 class QDash(QtCore.QObject):
     def __init__(self, parent=None):
         super().__init__(parent)
-        self._app = dash.Dash(__name__, external_stylesheets=[dbc.themes.BOOTSTRAP])
+        self._app = my_dash_app
         self.app.layout = html.Div()
 
     @property
@@ -359,16 +361,57 @@ class QDash(QtCore.QObject):
     def update_graph(self, fig):
         self.app.layout = html.Div([
             dcc.Graph(
-                figure=fig,
+#               figure=fig,
+                id="graph-id",
                 config={
                     'displaylogo': False  # Disable the plotly logo
                 },
                 style={'width': '100%', 'height': '100vh'}
-            )
+            ),
+            html.Button("plot chart", id="plot-button", n_clicks=0)
         ])
 
     def run(self, **kwargs):
         threading.Thread(target=self.app.run_server, kwargs=kwargs, daemon=True).start()
+
+# region Delete after debugging
+x = np.arange(2_000_000)
+noisy_sin = (3 + np.sin(x / 200) + np.random.randn(len(x)) / 10) * x / 1_000
+# endregion 
+
+ 
+# region The callback used to construct and store the plotly graph data on the serverside
+@my_dash_app.callback(
+    Output("graph-id", "figure"),
+    Input("plot-button", "n_clicks"),
+    prevent_initial_call=False,
+)
+def plot_graph(n_clicks):
+    ctx = callback_context
+    if len(ctx.triggered) and "plot-button" in ctx.triggered[0]["prop_id"]:
+        # Note how the replace method is used here on the global figure object
+        global my_fig
+        global output_data
+        global trace_columns
+        if len(my_fig.data):
+            # Replace the figure with an empty one to clear the graph
+            my_fig.replace(go.Figure())
+        my_fig.add_trace(go.Scattergl(name="log"), hf_x=output_data['Time'], hf_y=output_data['SG1_1'])
+        my_fig.add_trace(go.Scattergl(name="exp"), hf_x=x, hf_y=noisy_sin * 1.000002**x)
+
+        for idx, col in enumerate(trace_columns):
+            # Assign colors to visible traces based on their new filtered position
+            color_idx = idx % len(my_discrete_color_scheme)
+            my_fig.add_trace(go.Scattergl(
+                x=output_data['Time'],
+                y=output_data[col],
+                name=col
+            ))
+            
+        return my_fig
+    else:
+        return no_update
+# endregion
 
 # region Engineering Formulas
 def transform_strains_to_global(epsilon_A, epsilon_B, epsilon_C, angles):
@@ -551,6 +594,10 @@ strain_gauge_data_FEA.to_csv(r'""" + file_path_of_SG_calculations + """')
 try:
     if __name__ == '__main__':
         app_plot = QApplication(sys.argv)
+        
+        # The plotly-resampler callback to update the graph after a relayout event (= zoom/pan)
+        my_fig.register_update_graph_callback(app=my_dash_app, graph_id="graph-id")
+        
         mainWindow = PlotWindow('""" + solution_directory_path + """', '""" + file_name_of_SG_calculations + """')
         mainWindow.show()
         sys.exit(app_plot.exec_())
