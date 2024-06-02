@@ -25,6 +25,7 @@ import warnings
 warnings.filterwarnings("ignore", category=DeprecationWarning)
 try:
     import sys
+    import socket
     import threading
     import pandas as pd
     import numpy as np
@@ -47,6 +48,7 @@ try:
     import dash
     from dash import Dash, Input, Output, callback_context, dcc, html, no_update
     import dash_bootstrap_components as dbc
+    #from dash_extensions.enrich import DashProxy, Serverside, ServersideOutputTransform
 except ImportError as e:
 
     app_messagebox = QApplication(sys.argv)
@@ -58,6 +60,8 @@ except ImportError as e:
 QApplication.setAttribute(Qt.AA_EnableHighDpiScaling, True)
 my_discrete_color_scheme = px.colors.qualitative.Light24
 global selected_group
+global my_fig
+my_fig = FigureResampler()
 selected_group = None
 selected_ref_number = None
 output_data = None
@@ -210,20 +214,46 @@ class PlotWindow(QMainWindow):
     def __init__(self, folder_name, file_name):
         super().__init__()
         self.setWindowTitle('SG Calculations : """ + sol_selected_environment.Parent.Name + """')
-        self.setGeometry(100, 100, 800, 600)
+        self.setGeometry(100, 100, 1000, 550)
         self.folder_name = folder_name
         self.file_name = file_name
         self.initUI()
 
     def initUI(self):
         file_path = os.path.join(self.folder_name, self.file_name)
+        global output_data
         try:
-            global output_data
-            output_data = pd.read_csv(file_path)
-            global data_columns
+            if os.path.exists(file_path):
+                reply = QMessageBox.question(
+                    self,
+                    'File Found',
+                    "An SG_calculations.csv is found inside the solution directory. Would you like to plot the results for it?",
+                    QMessageBox.Yes | QMessageBox.No,
+                    QMessageBox.No
+                )
+                if reply == QMessageBox.Yes:
+                    output_data = pd.read_csv(file_path)
+                else:
+                    output_data = file_path_SG_raw_raw
+                    # Convert time to DataFrame and reset index
+                    time_df = pd.DataFrame(time).reset_index(drop=True)
+                    output_data = pd.concat([time_df, output_data.reset_index(drop=True)], axis=1)
+            else:
+                output_data = file_path_SG_raw_raw
+                # Convert time to DataFrame and reset index
+                time_df = pd.DataFrame(time).reset_index(drop=True)
+                output_data = pd.concat([time_df, output_data.reset_index(drop=True)], axis=1)
+            
+            # Ensure 'Time' is the first column and is sorted
+            output_data = output_data.sort_values(by='Time')
+            
         except Exception as e:
             QMessageBox.critical(self, "File Error", f"Failed to read the file: {str(e)}")
             sys.exit(1)
+    
+        # Ensure 'Time' is the first column
+        cols = ['Time'] + [col for col in output_data if col != 'Time']
+        output_data = output_data[cols]
 
         # Filter Data label setup
         self.label = QLabel("Filter Data:")
@@ -336,33 +366,57 @@ class PlotWindow(QMainWindow):
              output_type='file', auto_open=False)
         QMessageBox.information(self, "Plot Saved", f"The plot has been saved as {filename} in the solution directory.")# endregion
 
-my_dash_app = Dash(__name__)
-global my_fig
-my_fig = FigureResampler()
+# region Add styles for frontend GUI
+tab_style={'width': '25%', 'height': '3vh', 'line-height': '3vh', 'padding': '0', 'margin': '0','font-size': '10px'}
+selected_tab_style={'width': '25%', 'height': '3vh', 'line-height': '3vh', 'padding': '0', 'margin': '0', 'font-size': '10px'}
+# endregion
+
 class QDash(QtCore.QObject):
     def __init__(self, parent=None):
         super().__init__(parent)
         self._app = my_dash_app
-        self.app.layout = html.Div()
+        self.app.layout = html.Div([
+            dcc.Tabs(id="tabs-example", value='tab-1', children=[
+                dcc.Tab(label='Main Data', value='tab-1', style=tab_style, selected_style=selected_tab_style),
+                dcc.Tab(label='Comparison', value='tab-2', style=tab_style, selected_style=selected_tab_style),
+            ], style={'width': '50%', 'height': '3vh', 'line-height': '3vh', 'padding': '0', 'margin': '0'}),
+            html.Div(id='tabs-content-example', style={'padding': '0'})
+        ])
 
     @property
     def app(self):
         return self._app
 
     def update_graph(self, fig):
-        self.app.layout = html.Div([
-            html.Button("plot chart", id="plot-button", n_clicks=0),
+        pass
+# endregion
+ 
+my_dash_app = Dash(__name__)
+# Update the callback to render the content of each tab
+@my_dash_app.callback(
+    Output('tabs-content-example', 'children'),
+    [Input('tabs-example', 'value')],
+    prevent_initial_call=False,
+)
+def render_content(tab):
+    if tab == 'tab-1':
+        return html.Div([
+            html.Button("Click to plot", id="plot-button", n_clicks=0, style={'width': '12%', 'margin': '0.5vh','font-size': '10px'}),
             dcc.Graph(
-#               figure=fig,
                 id="graph-id",
                 config={
                     'displaylogo': False  # Disable the plotly logo
                 },
-                style={'width': '100%', 'height': '100vh'}
+                style={'width': '100%', 'height': 'calc(100vh - 12vh)', 'overflow': 'auto'}
             )
         ])
- 
-# region The callback used to construct and store the plotly graph data on the serverside
+    elif tab == 'tab-2':
+        return html.Div([
+            html.H3('Placeholder content for the second tab')
+        ],
+        style={'width': '100%', 'height': 'calc(100vh - 12vh)', 'overflow': 'auto'})
+
+# Update the callback to plot the graph
 @my_dash_app.callback(
     Output("graph-id", "figure"),
     Input("plot-button", "n_clicks"),
@@ -371,47 +425,47 @@ class QDash(QtCore.QObject):
 def plot_graph(n_clicks):
     ctx = callback_context
     if len(ctx.triggered) and "plot-button" in ctx.triggered[0]["prop_id"]:
-        # Note how the replace method is used here on the global figure object
         global my_fig
         global output_data
         global trace_columns
         if len(my_fig.data):
-            # Replace the figure with an empty one to clear the graph
             my_fig.replace(go.Figure())
 
         for idx, col in enumerate(trace_columns):
-            # Assign colors to visible traces based on their new filtered position
             color_idx = idx % len(my_discrete_color_scheme)
             my_fig.add_trace(go.Scattergl(
                 x=output_data['Time'],
                 y=output_data[col],
                 name=col,
-                line=dict(color=my_discrete_color_scheme[color_idx]),  # Assign color based on position in filtered list
+                line=dict(color=my_discrete_color_scheme[color_idx]),
                 hovertemplate='%{meta}<br>Time = %{x:.2f} s<br>Data = %{y:.1f}<extra></extra>',
                 hoverlabel=dict(font_size=10, bgcolor='rgba(255, 255, 255, 0.5)'),
                 meta=col
             ))
             my_fig.update_layout(
-            title_text='SG Calculations : """+ sol_selected_environment.Parent.Name +""" ' + "( " + selected_group + " )",
-            title_x=0.45,
-            legend_title_text='Result',
-            template="plotly_white",
-            plot_bgcolor='rgba(0,0,0,0.005)',
-            xaxis_title='Time [s]',
-            yaxis_title='Data',
-            font=dict(family="Arial, sans-serif", size=12, color="#0077B6"),
-            xaxis=dict(showline=True, showgrid=True, showticklabels=True, linewidth=2,
-                       tickfont=dict(family='Arial, sans-serif', size=12), tickmode='auto', nticks=30),
-            yaxis=dict(showgrid=True, zeroline=False, showline=False, showticklabels=True,
-                       linecolor='rgb(204, 204, 204)', tickmode='auto', nticks=30)
+                title_text='SG Calculations : All Loads Applied at Once ' + "( " + selected_group + " )",
+                title_x=0.45,
+                title_y=0.95,
+                legend_title_text='Result',
+                template="plotly_white",
+                plot_bgcolor='rgba(0,0,0,0.005)',
+                xaxis_title='Time [s]',
+                yaxis_title='Data',
+                font=dict(family="Arial, sans-serif", size=12, color="#0077B6"),
+                xaxis=dict(showline=True, showgrid=True, showticklabels=True, linewidth=2,
+                           tickfont=dict(family='Arial, sans-serif', size=12), tickmode='auto', nticks=30),
+                yaxis=dict(showgrid=True, zeroline=False, showline=False, showticklabels=True,
+                           linecolor='rgb(204, 204, 204)', tickmode='auto', nticks=30),
+                margin=dict(t=40,b=0)  # Adjust the top margin to bring the graph closer to the title
+                
             )
-            
+
         return my_fig
     else:
         return no_update
 # endregion
 
-# region Selecting the input SG raw channel data (in microstrains) and rosette configuration file via a dialog box
+# region Select the input SG raw channel data (in microstrains) and rosette configuration file via dialog boxes
 # Initialize the QApplication instance
 app_dialog = QApplication(sys.argv)
 
@@ -457,7 +511,6 @@ else:
 print("Selected raw data from directory:   ", file_path_SG_raw_data)
 file_path_SG_raw_raw
 # endregion
-# endregion
 
 # region Define material properties
 input_dialog = MaterialPropertiesDialog()
@@ -470,7 +523,7 @@ if input_dialog.exec_() == QDialog.Accepted:
     v = (np.full(time.shape, v))
 else:
     sys.exit("Material properties input was canceled or failed.")
-# # endregion
+# endregion
 
 # region Functions for main calculation loop
 def process_sg_number(sg_number, strain_gauge_data, E, v):
@@ -566,11 +619,18 @@ if file_path_SG_raw_data:
 # endregion
 
 # region Write the resulting dataframe to a CSV file inside the solution folder
-file_path_SG_raw_raw.to_csv(r'""" + file_path_of_SG_calculations + """')
+#file_path_SG_raw_raw.to_csv(r'""" + file_path_of_SG_calculations + """')
 # endregion
 
 # region Show the results
 try:
+    def find_available_port(port_list):
+        for port in port_list:
+            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+                if s.connect_ex(('localhost', port)) != 0:
+                    return port
+        return None
+    
     if __name__ == '__main__':
         app_plot = QApplication(sys.argv)
         
@@ -579,7 +639,10 @@ try:
         
         mainWindow = PlotWindow('""" + solution_directory_path + """', '""" + file_name_of_SG_calculations + """')
         mainWindow.show()
-        threading.Thread(target=my_dash_app.run_server, kwargs={'debug': True, 'use_reloader': False}, daemon=True).start()
+        available_port = find_available_port([8050, 8051, 8052, 8053])
+        if available_port:
+            threading.Thread(target=my_dash_app.run_server, kwargs={'debug': False, 'use_reloader': False, 'port': available_port}, daemon=True).start()
+            print('Available Port: ' + str(available_port))
         sys.exit(app_plot.exec_())
         # os.remove(cpython_script_path)
 except Exception as e:
