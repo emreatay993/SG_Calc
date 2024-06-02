@@ -231,6 +231,11 @@ class PlotWindow(QMainWindow):
         self.label.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
         self.label.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
 
+        # Channel label setup
+        self.label_channel = QLabel("Rosette Channel:")
+        self.label_channel.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
+        self.label_channel.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
+
         # Combobox setups
         self.comboBox = QComboBox()
         self.comboBox.addItem("All")
@@ -254,6 +259,7 @@ class PlotWindow(QMainWindow):
         filter_layout = QHBoxLayout()
         filter_layout.addWidget(self.label)
         filter_layout.addWidget(self.comboBox)
+        filter_layout.addWidget(self.label_channel)
         filter_layout.addWidget(self.refNumberComboBox)
         filter_layout.addWidget(self.savePlotButton)
         filter_layout.addStretch()  # Add stretch to push everything to the left
@@ -301,10 +307,15 @@ class PlotWindow(QMainWindow):
         # Determine columns based on the selected suffix
         if selected_group == "All":
             trace_columns = [col for col in output_data.columns if col != 'Time']
+            self.refNumberComboBox.setEnabled(False)
+            self.refNumberComboBox.setCurrentIndex(0)
         elif selected_group == "Raw Strain Data":
             trace_columns = [col for col in output_data.columns if re.match(r'SG\d+_\d+$', col)]
+            self.refNumberComboBox.setEnabled(True)
         else:
             trace_columns = [col for col in output_data.columns if col.endswith(selected_group)]
+            self.refNumberComboBox.setEnabled(False)
+            self.refNumberComboBox.setCurrentIndex(0)
 
         # Further filter columns based on the selected reference number
         if selected_ref_number != "-":
@@ -312,21 +323,6 @@ class PlotWindow(QMainWindow):
 
         # Debug output
         print(f"Filtered columns: {trace_columns}")
-
-        fig.update_layout(
-            title_text='SG Calculations - FEA: ' + selected_group,
-            title_x=0.5,
-            legend_title_text='Result',
-            template="plotly_white",
-            plot_bgcolor='rgba(0,0,0,0.005)',
-            xaxis_title='Time [s]',
-            yaxis_title='Data',
-            font=dict(family="Arial, sans-serif", size=12, color="#0077B6"),
-            xaxis=dict(showline=True, showgrid=True, showticklabels=True, linewidth=2,
-                       tickfont=dict(family='Arial, sans-serif', size=12), tickmode='auto', nticks=30),
-            yaxis=dict(showgrid=True, zeroline=False, showline=False, showticklabels=True,
-                       linecolor='rgb(204, 204, 204)', tickmode='auto', nticks=30)
-        )
 
         self.viewer.update_plot(fig)
 
@@ -373,12 +369,6 @@ class QDash(QtCore.QObject):
 
     def run(self, **kwargs):
         threading.Thread(target=self.app.run_server, kwargs=kwargs, daemon=True).start()
-
-# region Delete after debugging
-x = np.arange(2_000_000)
-noisy_sin = (3 + np.sin(x / 200) + np.random.randn(len(x)) / 10) * x / 1_000
-# endregion 
-
  
 # region The callback used to construct and store the plotly graph data on the serverside
 @my_dash_app.callback(
@@ -396,8 +386,6 @@ def plot_graph(n_clicks):
         if len(my_fig.data):
             # Replace the figure with an empty one to clear the graph
             my_fig.replace(go.Figure())
-        my_fig.add_trace(go.Scattergl(name="log"), hf_x=output_data['Time'], hf_y=output_data['SG1_1'])
-        my_fig.add_trace(go.Scattergl(name="exp"), hf_x=x, hf_y=noisy_sin * 1.000002**x)
 
         for idx, col in enumerate(trace_columns):
             # Assign colors to visible traces based on their new filtered position
@@ -411,6 +399,20 @@ def plot_graph(n_clicks):
                 hoverlabel=dict(font_size=10, bgcolor='rgba(255, 255, 255, 0.5)'),
                 meta=col
             ))
+            my_fig.update_layout(
+            title_text='SG Calculations : """+ sol_selected_environment.Parent.Name +""" ' + "( " + selected_group + " )",
+            title_x=0.45,
+            legend_title_text='Result',
+            template="plotly_white",
+            plot_bgcolor='rgba(0,0,0,0.005)',
+            xaxis_title='Time [s]',
+            yaxis_title='Data',
+            font=dict(family="Arial, sans-serif", size=12, color="#0077B6"),
+            xaxis=dict(showline=True, showgrid=True, showticklabels=True, linewidth=2,
+                       tickfont=dict(family='Arial, sans-serif', size=12), tickmode='auto', nticks=30),
+            yaxis=dict(showgrid=True, zeroline=False, showline=False, showticklabels=True,
+                       linecolor='rgb(204, 204, 204)', tickmode='auto', nticks=30)
+            )
             
         return my_fig
     else:
