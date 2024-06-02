@@ -556,7 +556,7 @@ def process_sg_number(sg_number, strain_gauge_data, E, v):
             principal_strain_orientation = np.array([calculate_principal_strain_orientation(strain[0], strain[1], strain[2]) for strain in global_strains])
             biaxiality_ratios = calculate_biaxiality_ratio(principal_stresses[:, 0], principal_stresses[:, 1])
             von_mises_stresses = np.array([calculate_von_mises_stress(*stress) for stress in principal_stresses])
-            for i, strain_type in enumerate(['epsilon_x [??]', 'epsilon_y [??]', 'gamma_xy [??]']):
+            for i, strain_type in enumerate(['epsilon_x [µε]', 'epsilon_y [µε]', 'gamma_xy [µε]']):
                 new_columns.append(pd.DataFrame({f'SG{sg_number}_{strain_type}': global_strains[:, i]}))
             new_columns.append(pd.DataFrame({f'SG{sg_number}_sigma_1 [MPa]': principal_stresses[:, 0],
                                              f'SG{sg_number}_sigma_2 [MPa]': principal_stresses[:, 1],
