@@ -210,7 +210,7 @@ class PlotlyViewer(QWebEngineView):
 class PlotWindow(QMainWindow):
     def __init__(self, folder_name, file_name):
         super().__init__()
-        self.setWindowTitle('SG Calculations - FEA: """ + sol_selected_environment.Parent.Name + """')
+        self.setWindowTitle('SG Calculations : """ + sol_selected_environment.Parent.Name + """')
         self.setGeometry(100, 100, 800, 600)
         self.folder_name = folder_name
         self.file_name = file_name
