@@ -14,10 +14,10 @@ import os
 # region Define the plot function to be run
 solution_directory_path = sol_selected_environment.WorkingDir[:-1]
 solution_directory_path = solution_directory_path.Replace("\\", "\\\\")
-file_name_of_SG_calculations = 'SG_calculations_FEA.csv'
+file_name_of_SG_calculations = 'SG_calculations.csv'
 file_path_of_SG_calculations = os.path.join(solution_directory_path, file_name_of_SG_calculations)
 
-cpython_script_name = "plot_SG_calculations_FEA_cpython_code_only.py"
+cpython_script_name = "plot_SG_calculations_cpython_code_only.py"
 cpython_script_path = sol_selected_environment.WorkingDir + cpython_script_name
 cpython_code ="""
 # region Import necessary modules
@@ -330,18 +330,14 @@ class PlotWindow(QMainWindow):
         # Retrieve the parent name from the environment for the filename
         parent_name = '''""" + sol_selected_environment.Parent.Name + """'''
         # Construct the filename
-        filename = f"SG_Calculations_FEA__{parent_name}.html"
-
-        # Debug: Print the figure data to verify its contents
-        print("Saving plot with data:")
-        print(my_fig.data)
+        filename = f"SG_Calculations__{parent_name}.html"
 
         # Save the current figure to an interactive HTML file
         plot(my_fig, filename=os.path.join(self.folder_name, filename),
              output_type='file', auto_open=False)
         QMessageBox.information(self, "Plot Saved", f"The plot has been saved as {filename} in the solution directory.")# endregion
 
-my_dash_app = Dash(__name__, external_stylesheets=[dbc.themes.BOOTSTRAP])
+my_dash_app = Dash(__name__)
 global my_fig
 my_fig = FigureResampler()
 class QDash(QtCore.QObject):
@@ -480,20 +476,20 @@ def calculate_von_mises_stress(S1, S2, S3=0):
     return sigma_vm
 # endregion
 
-# region Selecting the input SG FEA channel data (in microstrains) and rosette configuration file via a dialog box
+# region Selecting the input SG raw channel data (in microstrains) and rosette configuration file via a dialog box
 # Initialize the QApplication instance
 app_dialog = QApplication(sys.argv)
 
-# File selection for FEA strain data
-file_path_FEA, _ = QFileDialog().getOpenFileName(None, 'Open FEA raw data file for SG rosettes',r'"""+solution_directory_path+"""' , 'All Files (*);;CSV Files (*.csv)')
+# File selection for raw strain data
+file_path_SG_raw_data, _ = QFileDialog().getOpenFileName(None, 'Open raw data file for SG rosettes',r'"""+solution_directory_path+"""' , 'All Files (*);;CSV Files (*.csv)')
 
-# Check if a file was selected for FEA data
-if file_path_FEA:
-    print("Selected FEA data:", file_path_FEA)
+# Check if a file was selected for SG data
+if file_path_SG_raw_data:
+    print("Selected SG data:", file_path_SG_raw_data)
 else:
-    print("No FEA data file selected.")
+    print("No raw SG data file selected.")
     # Handle the case when no file is selected, or set file_path to a default value
-    # file_path = 'default_FEA_data.csv'
+    # file_path = 'default_raw_SG_data.csv'
 
 # File selection for rosette angles data
 angles_file_path, _ = QFileDialog().getOpenFileName(None, 'Open SG rosette angles configuration file', '', 'All Files (*);;CSV Files (*.csv)')
@@ -513,18 +509,18 @@ rosette_angles_df = pd.read_csv(angles_file_path)
 print("Selected rosette angles data:", angles_file_path)
 # endregion
 
-# region Load the CSV file extracted from FEA, using "Strain Gage Toolbox" inside ANSYS Mechanical
-if file_path_FEA:
-    data = pd.read_csv(file_path_FEA)
+# region Load the CSV file extracted from raw SG data in microstrains, using "Strain Gage Toolbox" inside ANSYS Mechanical
+if file_path_SG_raw_data:
+    data = pd.read_csv(file_path_SG_raw_data)
     time = data['Time']
-    strain_gauge_data_FEA = data.iloc[:, 1:].filter(regex='SG')
-    strain_gauge_data_FEA.reset_index(drop=True, inplace=True)
+    file_path_SG_raw_raw = data.iloc[:, 1:].filter(regex='SG')
+    file_path_SG_raw_raw.reset_index(drop=True, inplace=True)
     time.reset_index(drop=True, inplace=True)
 else:
     print("The input file is not read. Check whether it is in the correct directory or has the correct file extension")
 
-print("Selected FEA data from directory:   ", file_path_FEA)
-strain_gauge_data_FEA
+print("Selected raw data from directory:   ", file_path_SG_raw_data)
+file_path_SG_raw_raw
 # endregion
 # endregion
 
@@ -626,16 +622,16 @@ def calculate_all_SG_variables(strain_gauge_data, rosette_angles_df):
     return strain_gauge_data
 # endregion
 
-# region Calculate the SG results (FEA)
-if file_path_FEA:
-    strain_gauge_data_FEA = calculate_all_SG_variables(strain_gauge_data_FEA, rosette_angles_df)
-    strain_gauge_data_FEA.insert(0, 'Time', time)
-    strain_gauge_data_FEA.set_index('Time', inplace=True)
-    strain_gauge_data_FEA
+# region Calculate the SG results
+if file_path_SG_raw_data:
+    file_path_SG_raw_raw = calculate_all_SG_variables(file_path_SG_raw_raw, rosette_angles_df)
+    file_path_SG_raw_raw.insert(0, 'Time', time)
+    file_path_SG_raw_raw.set_index('Time', inplace=True)
+    file_path_SG_raw_raw
 # endregion
 
 # region Write the resulting dataframe to a CSV file inside the solution folder
-strain_gauge_data_FEA.to_csv(r'""" + file_path_of_SG_calculations + """')
+file_path_SG_raw_raw.to_csv(r'""" + file_path_of_SG_calculations + """')
 # endregion
 
 # region Show the results
