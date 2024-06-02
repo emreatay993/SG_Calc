@@ -200,7 +200,6 @@ class PlotlyViewer(QWebEngineView):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.qdash = QDash()
-        self.qdash.run(debug=True, use_reloader=False)
         self.load(QtCore.QUrl("http://127.0.0.1:8050"))
 
     def update_plot(self, fig):
@@ -352,6 +351,7 @@ class QDash(QtCore.QObject):
 
     def update_graph(self, fig):
         self.app.layout = html.Div([
+            html.Button("plot chart", id="plot-button", n_clicks=0),
             dcc.Graph(
 #               figure=fig,
                 id="graph-id",
@@ -359,12 +359,8 @@ class QDash(QtCore.QObject):
                     'displaylogo': False  # Disable the plotly logo
                 },
                 style={'width': '100%', 'height': '100vh'}
-            ),
-            html.Button("plot chart", id="plot-button", n_clicks=0)
+            )
         ])
-
-    def run(self, **kwargs):
-        threading.Thread(target=self.app.run_server, kwargs=kwargs, daemon=True).start()
  
 # region The callback used to construct and store the plotly graph data on the serverside
 @my_dash_app.callback(
@@ -583,6 +579,7 @@ try:
         
         mainWindow = PlotWindow('""" + solution_directory_path + """', '""" + file_name_of_SG_calculations + """')
         mainWindow.show()
+        threading.Thread(target=my_dash_app.run_server, kwargs={'debug': True, 'use_reloader': False}, daemon=True).start()
         sys.exit(app_plot.exec_())
         # os.remove(cpython_script_path)
 except Exception as e:
