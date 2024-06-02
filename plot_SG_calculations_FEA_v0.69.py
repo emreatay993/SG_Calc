@@ -62,6 +62,8 @@ my_discrete_color_scheme = px.colors.qualitative.Light24
 global selected_group
 global my_fig
 my_fig = FigureResampler()
+global current_figure_main
+current_figure_main = None
 selected_group = None
 selected_ref_number = None
 output_data = None
@@ -400,15 +402,18 @@ my_dash_app = Dash(__name__)
 )
 def render_content(tab):
     if tab == 'tab-1':
+        graph = dcc.Graph(
+            id="graph-id",
+            config={
+                'displaylogo': False  # Disable the plotly logo
+            },
+            style={'width': '100%', 'height': 'calc(100vh - 12vh)', 'overflow': 'auto'}
+        )
+        if current_figure_main:
+            graph.figure = current_figure_main  # Set the current figure if it exists
         return html.Div([
             html.Button("Click to plot", id="plot-button", n_clicks=0, style={'width': '12%', 'margin': '0.5vh','font-size': '10px'}),
-            dcc.Graph(
-                id="graph-id",
-                config={
-                    'displaylogo': False  # Disable the plotly logo
-                },
-                style={'width': '100%', 'height': 'calc(100vh - 12vh)', 'overflow': 'auto'}
-            )
+            graph
         ])
     elif tab == 'tab-2':
         return html.Div([
@@ -424,6 +429,7 @@ def render_content(tab):
 )
 def plot_graph(n_clicks):
     ctx = callback_context
+    global current_figure_main  # Declare the global variable
     if len(ctx.triggered) and "plot-button" in ctx.triggered[0]["prop_id"]:
         global my_fig
         global output_data
@@ -457,9 +463,9 @@ def plot_graph(n_clicks):
                 yaxis=dict(showgrid=True, zeroline=False, showline=False, showticklabels=True,
                            linecolor='rgb(204, 204, 204)', tickmode='auto', nticks=30),
                 margin=dict(t=40,b=0)  # Adjust the top margin to bring the graph closer to the title
-                
             )
-
+        
+        current_figure_main = my_fig  # Update the global variable with the new figure
         return my_fig
     else:
         return no_update
