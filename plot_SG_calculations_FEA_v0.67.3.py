@@ -415,67 +415,6 @@ def plot_graph(n_clicks):
         return no_update
 # endregion
 
-# region Engineering Formulas
-def transform_strains_to_global(epsilon_A, epsilon_B, epsilon_C, angles):
-    theta_A, theta_B, theta_C = np.radians(angles)
-    T = np.array([
-        [np.cos(theta_A)**2, np.sin(theta_A)**2, 1 * np.sin(theta_A) * np.cos(theta_A)],
-        [np.cos(theta_B)**2, np.sin(theta_B)**2, 1 * np.sin(theta_B) * np.cos(theta_B)],
-        [np.cos(theta_C)**2, np.sin(theta_C)**2, 1 * np.sin(theta_C) * np.cos(theta_C)]
-    ])
-    T_inv = np.linalg.inv(T)
-    local_strains = np.array([epsilon_A, epsilon_B, epsilon_C])
-    global_strains = T_inv @ local_strains
-    return global_strains
-
-def calculate_principal_strains(epsilon_x, epsilon_y, gamma_xy):
-    C = (epsilon_x + epsilon_y) / 2
-    R = np.sqrt(((epsilon_x - epsilon_y) / 2)**2 + (gamma_xy / 2)**2)
-    epsilon_1 = C + R  # Maximum principal strain
-    epsilon_2 = C - R  # Minimum principal strain
-    return np.array([epsilon_1, epsilon_2])
-
-def calculate_principal_stresses(principal_strains, E, v):
-    #S = np.array([
-    #    [1, v, 0],
-    #    [v, 1, 0],
-    #    [0, 0, (1-v)/2]
-    #]) * E / (1 - v**2)
-    S = np.array([
-        [1, v],
-        [v, 1]
-    ]) * E / (1 - v**2)
-
-    principal_stresses = S @ (principal_strains /1e6)
-    return principal_stresses / 1e6  # Convert Pa to MPa
-
-def calculate_principal_strain_orientation(epsilon_x, epsilon_y, gamma_xy):
-    # Calculate the angle to the maximum principal strain
-    theta_p_rad = 0.5 * np.arctan2(gamma_xy, epsilon_x - epsilon_y)
-    theta_p = np.degrees(theta_p_rad)
-
-    # Adjust the angle to ensure it's within the 0-180 degree range
-    if theta_p < 0:
-        theta_p += 180
-
-    return theta_p
-
-def calculate_biaxiality_ratio(S1, S2):
-    # Ensure that sigma_1 is the larger one in absolute terms
-    sigma_1 = np.where(np.abs(S1) >= np.abs(S2), S1, S2)
-    sigma_2 = np.where(np.abs(S1) >= np.abs(S2), S2, S1)
-
-    # Calculate the biaxiality ratio
-    biaxiality_ratio = sigma_2 / sigma_1
-
-    return biaxiality_ratio
-
-def calculate_von_mises_stress(S1, S2, S3=0):
-    # Calculate the von Mises stress using the principal stresses
-    sigma_vm = np.sqrt(((S1 - S2)**2 + (S1 - S3)**2 + (S2 - S3)**2) / 2)
-    return sigma_vm
-# endregion
-
 # region Selecting the input SG raw channel data (in microstrains) and rosette configuration file via a dialog box
 # Initialize the QApplication instance
 app_dialog = QApplication(sys.argv)
