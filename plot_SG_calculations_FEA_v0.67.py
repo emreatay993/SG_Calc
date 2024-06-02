@@ -550,19 +550,61 @@ def process_sg_number(sg_number, strain_gauge_data, E, v):
         if not rosette_row.empty:
             current_angles = rosette_row.iloc[0, 1:].values
             strains = strain_gauge_data[sg_cols].values.astype(dtype=np.float64)
-            global_strains = np.array([transform_strains_to_global(*strain, current_angles) for strain in strains])
-            principal_strains = np.array([calculate_principal_strains(strain[0], strain[1], strain[2]) for strain in global_strains])
-            principal_stresses = np.array([calculate_principal_stresses(strain, E[i], v[i]) for i, strain in enumerate(principal_strains)])
-            principal_strain_orientation = np.array([calculate_principal_strain_orientation(strain[0], strain[1], strain[2]) for strain in global_strains])
-            biaxiality_ratios = calculate_biaxiality_ratio(principal_stresses[:, 0], principal_stresses[:, 1])
-            von_mises_stresses = np.array([calculate_von_mises_stress(*stress) for stress in principal_stresses])
+            theta_A, theta_B, theta_C = np.radians(current_angles)
+            
+            # Matrix T and its inverse T_inv
+            T = np.array([
+                [np.cos(theta_A)**2, np.sin(theta_A)**2, np.sin(theta_A) * np.cos(theta_A)],
+                [np.cos(theta_B)**2, np.sin(theta_B)**2, np.sin(theta_B) * np.cos(theta_B)],
+                [np.cos(theta_C)**2, np.sin(theta_C)**2, np.sin(theta_C) * np.cos(theta_C)]
+            ])
+            T_inv = np.linalg.inv(T)
+            
+            # Vectorized global strains transformation
+            global_strains = strains @ T_inv.T
+            
+            # Vectorized principal strains calculation
+            # epsilon_x = global_strains[:, 0]
+            # epsilon_y = global_strains[:, 1]
+            C = (global_strains[:, 0] + global_strains[:, 1]) / 2
+            R = np.sqrt(((global_strains[:, 0] - global_strains[:, 1]) / 2)**2 + (global_strains[:, 2] / 2)**2)
+            principal_strains = np.stack((C + R, C - R), axis=-1)
+            
+            # Vectorized principal stresses calculation
+            S = np.array([
+                [1, v[0]],
+                [v[0], 1]
+            ]) * E[0] / (1 - v[0]**2)
+            principal_stresses = (principal_strains / 1e6) @ S.T / 1e6  # Convert to MPa
+            
+            # Vectorized principal strain orientation calculation
+            # gamma_xy  = global_strains[:, 2]
+            # epsilon_x = global_strains[:, 0]
+            # epsilon_y = global_strains[:, 1]
+            theta_p_rad = 0.5 * np.arctan2(global_strains[:, 2], global_strains[:, 0] - global_strains[:, 1])
+            theta_p = np.degrees(theta_p_rad)
+            theta_p[theta_p < 0] += 180
+            
+            # Vectorized biaxiality ratio calculation
+            sigma_1 = np.maximum(np.abs(principal_stresses[:, 0]), np.abs(principal_stresses[:, 1]))
+            sigma_2 = np.minimum(np.abs(principal_stresses[:, 0]), np.abs(principal_stresses[:, 1]))
+            biaxiality_ratios = sigma_2 / sigma_1
+            
+            # Vectorized von Mises stress calculation
+            # S1 = principal_stresses[:, 0]
+            # S2 = principal_stresses[:, 1]
+            von_mises_stresses = np.sqrt(((principal_stresses[:, 0] - principal_stresses[:, 1])**2 + principal_stresses[:, 0]**2 + principal_stresses[:, 1]**2) / 2)
+            
+            # Collect results into new columns
             for i, strain_type in enumerate(['epsilon_x [µε]', 'epsilon_y [µε]', 'gamma_xy [µε]']):
                 new_columns.append(pd.DataFrame({f'SG{sg_number}_{strain_type}': global_strains[:, i]}))
-            new_columns.append(pd.DataFrame({f'SG{sg_number}_sigma_1 [MPa]': principal_stresses[:, 0],
-                                             f'SG{sg_number}_sigma_2 [MPa]': principal_stresses[:, 1],
-                                             f'SG{sg_number}_theta_p [°]': principal_strain_orientation,
-                                             f'SG{sg_number}_Biaxiality_Ratio': biaxiality_ratios,
-                                             f'SG{sg_number}_von_Mises [MPa]': von_mises_stresses}))
+            new_columns.append(pd.DataFrame({
+                f'SG{sg_number}_sigma_1 [MPa]': principal_stresses[:, 0],
+                f'SG{sg_number}_sigma_2 [MPa]': principal_stresses[:, 1],
+                f'SG{sg_number}_theta_p [°]': theta_p,
+                f'SG{sg_number}_Biaxiality_Ratio': biaxiality_ratios,
+                f'SG{sg_number}_von_Mises [MPa]': von_mises_stresses
+            }))
         else:
             print(f'Angles for Rosette {sg_number} not found in angles file.')
     else:
