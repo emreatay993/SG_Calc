@@ -25,6 +25,7 @@ import warnings
 warnings.filterwarnings("ignore", category=DeprecationWarning)
 try:
     import sys
+    import time as time_module
     import socket
     import threading
     import pandas as pd
@@ -236,12 +237,12 @@ class PlotWindow(QMainWindow):
                 if reply == QMessageBox.Yes:
                     output_data = pd.read_csv(file_path)
                 else:
-                    output_data = file_path_SG_raw_raw
+                    output_data = output_SG_data_w_raw
                     # Convert time to DataFrame and reset index
                     time_df = pd.DataFrame(time).reset_index(drop=True)
                     output_data = pd.concat([time_df, output_data.reset_index(drop=True)], axis=1)
             else:
-                output_data = file_path_SG_raw_raw
+                output_data = output_SG_data_w_raw
                 # Convert time to DataFrame and reset index
                 time_df = pd.DataFrame(time).reset_index(drop=True)
                 output_data = pd.concat([time_df, output_data.reset_index(drop=True)], axis=1)
@@ -284,6 +285,12 @@ class PlotWindow(QMainWindow):
         self.savePlotButton = QPushButton("Save current plot as HTML file")
         self.savePlotButton.clicked.connect(self.save_current_plot)
 
+        self.offsetZeroButton = QPushButton("Offset-Zero SG's")
+        self.offsetZeroButton.clicked.connect(self.offset_zero_sgs)  # Connect to the new function
+        
+        self.offsetStartTimeButton = QPushButton("Offset-Zero Start Time")  # New button
+        self.offsetStartTimeButton.clicked.connect(self.offset_start_time)  # Connect to the new function
+
         self.update_plot(0)  # Initialize plot
 
         # Modify the layout setup to add the label and combobox horizontally
@@ -293,6 +300,8 @@ class PlotWindow(QMainWindow):
         filter_layout.addWidget(self.label_channel)
         filter_layout.addWidget(self.refNumberComboBox)
         filter_layout.addWidget(self.savePlotButton)
+        filter_layout.addWidget(self.offsetZeroButton)
+        filter_layout.addWidget(self.offsetStartTimeButton)
         filter_layout.addStretch()  # Add stretch to push everything to the left
 
         # Create the main layout
@@ -368,6 +377,90 @@ class PlotWindow(QMainWindow):
              output_type='file', auto_open=False)
         QMessageBox.information(self, "Plot Saved", f"The plot has been saved as {filename} in the solution directory.")# endregion
 
+    def offset_zero_sgs(self):
+        # Get the unique time points as strings for the combo box
+        time_points = [str(tp) for tp in output_data['Time'].unique()]
+        
+        dialog = OffsetZeroDialog(self, time_points)
+        if dialog.exec_() == QDialog.Accepted:
+            selected_time = dialog.get_selected_time()
+            self.apply_offset_zero(selected_time)
+    
+    def apply_offset_zero(self, selected_time):
+        global output_data, initial_SG_raw_data
+    
+        # Define a small epsilon value
+        epsilon = 1e-10
+        
+        # Make a copy of the raw SG data
+        raw_data_copy = initial_SG_raw_data.copy()
+        
+        # Get the strain columns (assume columns with 'SG' in their name)
+        strain_columns = [col for col in raw_data_copy.columns if 'SG' in col]
+        
+        # Extract strain data 
+        strain_data = raw_data_copy[strain_columns]
+        
+        # Add epsilon to any zero values in the strain columns before the offset calculations
+        strain_data = strain_data.apply(lambda x: x + (x == 0) * epsilon)
+        
+        # Find the index of the selected time
+        selected_time_index = output_data[output_data['Time'] == selected_time].index
+        if selected_time_index.empty:
+            QMessageBox.critical(self, "Error", "Selected time point not found in the data.")
+            return
+        selected_time_index = selected_time_index[0]
+        
+        # Extract the strain values at the selected time point
+        offset_values = strain_data.iloc[selected_time_index]
+        
+        # Subtract the strains at the selected time point from all strain values
+        strain_data = strain_data - offset_values
+        
+        # Set all strain values before the selected time point to zero
+        strain_data[:selected_time_index] = 0
+        
+        # Add epsilon to any zero values again after the offset calculations
+        strain_data = strain_data.apply(lambda x: x + (x == 0) * epsilon)
+        
+        # Recalculate the SG variables
+        output_SG_data_w_raw = calculate_all_SG_variables(strain_data, rosette_angles_df)
+        output_SG_data_w_raw.insert(0, 'Time', output_data['Time'])
+        #output_SG_data_w_raw.set_index('Time', inplace=True)
+    
+        output_data = output_SG_data_w_raw
+    
+        # Update the plot
+        self.update_plot(0)
+
+    def offset_start_time(self):
+        # Get the unique time points as strings for the combo box
+        time_points = [str(tp) for tp in output_data['Time'].unique()]
+        
+        dialog = OffsetZeroDialog(self, time_points)
+        if dialog.exec_() == QDialog.Accepted:
+            selected_time = dialog.get_selected_time()
+            self.apply_offset_start_time(selected_time)
+    
+    def apply_offset_start_time(self, selected_time):
+        global output_data
+    
+        # Find the index of the selected time
+        selected_time_index = output_data[output_data['Time'] == selected_time].index
+        if selected_time_index.empty:
+            QMessageBox.critical(self, "Error", "Selected time point not found in the data.")
+            return
+        selected_time_index = selected_time_index[0]
+    
+        # Drop data before the selected time point
+        output_data = output_data.loc[selected_time_index:].reset_index(drop=True)
+    
+        # Offset the time so that the selected time point becomes the new zero
+        output_data['Time'] = output_data['Time'] - selected_time
+    
+        # Update the plot
+        self.update_plot(0)
+
 # region Add styles for frontend GUI
 tab_style={'width': '25%', 'height': '3vh', 'line-height': '3vh', 'padding': '0', 'margin': '0','font-size': '10px'}
 selected_tab_style={'width': '25%', 'height': '3vh', 'line-height': '3vh', 'padding': '0', 'margin': '0', 'font-size': '10px'}
@@ -391,8 +484,37 @@ class QDash(QtCore.QObject):
 
     def update_graph(self, fig):
         pass
+
+class OffsetZeroDialog(QDialog):
+    def __init__(self, parent=None, time_points=None):
+        super(OffsetZeroDialog, self).__init__(parent)
+        self.setWindowTitle('Select Time Point for Offset-Zero')
+        self.setGeometry(100, 100, 300, 100)
+
+        layout = QVBoxLayout()
+        self.setLayout(layout)
+
+        self.label = QLabel("Select Time Point:")
+        layout.addWidget(self.label)
+
+        self.comboBox = QComboBox()
+        self.comboBox.addItems(time_points)
+        self.comboBox.setEditable(True)
+        layout.addWidget(self.comboBox)
+
+        buttonLayout = QHBoxLayout()
+        self.okButton = QPushButton('OK')
+        self.okButton.clicked.connect(self.accept)
+        cancelButton = QPushButton('Cancel')
+        cancelButton.clicked.connect(self.reject)
+        buttonLayout.addWidget(self.okButton)
+        buttonLayout.addWidget(cancelButton)
+        layout.addLayout(buttonLayout)
+
+    def get_selected_time(self):
+        return float(self.comboBox.currentText())
 # endregion
- 
+
 my_dash_app = Dash(__name__)
 # Update the callback to render the content of each tab
 @my_dash_app.callback(
@@ -508,14 +630,14 @@ print("Selected rosette angles data:", angles_file_path)
 if file_path_SG_raw_data:
     data = pd.read_csv(file_path_SG_raw_data)
     time = data['Time']
-    file_path_SG_raw_raw = data.iloc[:, 1:].filter(regex='SG')
-    file_path_SG_raw_raw.reset_index(drop=True, inplace=True)
+    initial_SG_raw_data = data.iloc[:, 1:].filter(regex='SG')
+    initial_SG_raw_data.reset_index(drop=True, inplace=True)
     time.reset_index(drop=True, inplace=True)
 else:
     print("The input file is not read. Check whether it is in the correct directory or has the correct file extension")
 
 print("Selected raw data from directory:   ", file_path_SG_raw_data)
-file_path_SG_raw_raw
+initial_SG_raw_data
 # endregion
 
 # region Define material properties
@@ -603,6 +725,9 @@ def process_sg_number(sg_number, strain_gauge_data, E, v):
     return new_columns
 
 def calculate_all_SG_variables(strain_gauge_data, rosette_angles_df):
+    # Start the timer
+    start_time = time_module.time()
+    
     matching_columns = [col for col in strain_gauge_data.columns if re.search(r'SG(\d+)_', col)]
     sg_numbers = sorted(set(int(re.search(r'SG(\d+)_', col).group(1)) for col in matching_columns))
 
@@ -612,20 +737,36 @@ def calculate_all_SG_variables(strain_gauge_data, rosette_angles_df):
         for result in results:
             new_columns_list.extend(result)
 
-    strain_gauge_data = pd.concat([strain_gauge_data] + new_columns_list, axis=1)
+    # Ensure the new columns are correctly concatenated
+    if new_columns_list:
+        strain_gauge_data = pd.concat([strain_gauge_data] + new_columns_list, axis=1)
+    else:
+        pass
+        #QMessageBox.information(None, "Info", "No new columns generated during SG variable calculation.")
+
+    # End the timer
+    end_time = time_module.time()
+    
+    # Calculate elapsed time in seconds (two significant digits)
+    elapsed_time = end_time - start_time
+    elapsed_time_formatted = f"{elapsed_time:.2f}"
+    
+    # Show the completion message with the elapsed time
+    QMessageBox.information(None, "Info", f"Calculation is completed in {elapsed_time_formatted} seconds.")
+    
     return strain_gauge_data
 # endregion
 
 # region Calculate the SG results
 if file_path_SG_raw_data:
-    file_path_SG_raw_raw = calculate_all_SG_variables(file_path_SG_raw_raw, rosette_angles_df)
-    file_path_SG_raw_raw.insert(0, 'Time', time)
-    file_path_SG_raw_raw.set_index('Time', inplace=True)
-    file_path_SG_raw_raw
+    output_SG_data_w_raw = calculate_all_SG_variables(initial_SG_raw_data, rosette_angles_df)
+    output_SG_data_w_raw.insert(0, 'Time', time)
+    output_SG_data_w_raw.set_index('Time', inplace=True)
+    output_SG_data_w_raw
 # endregion
 
 # region Write the resulting dataframe to a CSV file inside the solution folder
-#file_path_SG_raw_raw.to_csv(r'""" + file_path_of_SG_calculations + """')
+#output_SG_data_w_raw.to_csv(r'""" + file_path_of_SG_calculations + """')
 # endregion
 
 # region Show the results
