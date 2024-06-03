@@ -48,7 +48,7 @@ try:
     from concurrent.futures import ThreadPoolExecutor
 
     import dash
-    from dash import Dash, Input, Output, callback_context, dcc, html, no_update
+    from dash import Dash, Input, Output, callback_context, dcc, html, no_update, State
     import dash_bootstrap_components as dbc
     #from dash_extensions.enrich import DashProxy, Serverside, ServersideOutputTransform
 except ImportError as e:
@@ -509,7 +509,8 @@ class QDash(QtCore.QObject):
                 dcc.Tab(label='Main Data', value='tab-1', style=tab_style, selected_style=selected_tab_style),
                 dcc.Tab(label='Comparison', value='tab-2', style=tab_style, selected_style=selected_tab_style),
             ], style={'width': '50%', 'height': '3vh', 'line-height': '3vh', 'padding': '0', 'margin': '0'}),
-            html.Div(id='tabs-content-example', style={'padding': '0'})
+            html.Div(id='tabs-content-example', style={'padding': '0'}),
+            html.Div(id='comparison-data-loaded', style={'display': 'none'})
         ])
 
     @property
@@ -554,9 +555,10 @@ my_dash_app = Dash(__name__)
 @my_dash_app.callback(
     Output('tabs-content-example', 'children'),
     [Input('tabs-example', 'value')],
+    [State('comparison-data-loaded', 'children')],
     prevent_initial_call=False,
 )
-def render_content(tab):
+def render_content(tab, comparison_data_loaded):
     if tab == 'tab-1':
         graph = dcc.Graph(
             id="graph-id",
