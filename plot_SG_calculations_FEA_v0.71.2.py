@@ -74,6 +74,8 @@ global comparison_data
 comparison_data = None
 global comparison_trace_columns  
 comparison_trace_columns = None
+global current_comparison_figure
+current_comparison_figure = None
 
 class FlatLineEdit(QLineEdit):
     def __init__(self, placeholder_text=""):
@@ -661,6 +663,58 @@ def load_comparison_csv(n_clicks):
             comparison_data = pd.read_csv(file_path)
             comparison_trace_columns = [col for col in comparison_data.columns if col != 'Time']
             return 'loaded'
+    return no_update
+
+@my_dash_app.callback(
+    Output("graph-comparison-id", "figure"),
+    Input("plot-comparison-button", "n_clicks"),
+    prevent_initial_call=False,
+)
+def plot_comparison_graph(n_clicks):
+    ctx = callback_context
+    global my_fig
+    global comparison_data
+    global comparison_trace_columns
+
+    if len(ctx.triggered) and "plot-comparison-button" in ctx.triggered[0]["prop_id"]:
+        if comparison_data is not None and comparison_trace_columns is not None:
+            my_fig.replace(go.Figure())  # Reset the figure
+
+            time_data_in_x_axis = comparison_data['Time']
+            total_no_of_traces_to_add = len(comparison_trace_columns)
+
+            for idx, col in enumerate(comparison_trace_columns):
+                color_idx = idx % len(my_discrete_color_scheme)
+                my_fig.add_trace(go.Scattergl(
+                    x=time_data_in_x_axis,
+                    y=comparison_data[col],
+                    name=col,
+                    line=dict(color=my_discrete_color_scheme[color_idx]),
+                    hovertemplate='%{meta}<br>Time = %{x:.2f} s<br>Data = %{y:.1f}<extra></extra>',
+                    hoverlabel=dict(font_size=10, bgcolor='rgba(255, 255, 255, 0.5)'),
+                    meta=col
+                ))
+                progress = int((idx + 1) / total_no_of_traces_to_add * 100)
+                mainWindow.plot_progress.emit(progress)  # Emit the plot progress signal
+
+                my_fig.update_layout(
+                    title_text='Comparison Data',
+                    title_x=0.45,
+                    title_y=0.95,
+                    legend_title_text='Result',
+                    template="plotly_white",
+                    plot_bgcolor='rgba(0,0,0,0.005)',
+                    xaxis_title='Time [s]',
+                    yaxis_title='Data',
+                    font=dict(family="Arial, sans-serif", size=12, color="#0077B6"),
+                    xaxis=dict(showline=True, showgrid=True, showticklabels=True, linewidth=2,
+                               tickfont=dict(family='Arial, sans-serif', size=12), tickmode='auto', nticks=30),
+                    yaxis=dict(showgrid=True, zeroline=False, showline=False, showticklabels=True,
+                               linecolor='rgb(204, 204, 204)', tickmode='auto', nticks=30),
+                    margin=dict(t=40, b=0)  # Adjust the top margin to bring the graph closer to the title
+                )
+
+            return my_fig
     return no_update
 
 # region Select the input SG raw channel data (in microstrains) and rosette configuration file via dialog boxes
