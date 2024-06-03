@@ -64,8 +64,6 @@ my_discrete_color_scheme = px.colors.qualitative.Light24
 global selected_group
 global my_fig
 my_fig = FigureResampler()
-global my_fig_comparison
-my_fig_comparison = FigureResampler()
 global current_figure_main
 current_figure_main = None
 selected_group = None
@@ -218,6 +216,10 @@ class PlotlyViewer(QWebEngineView):
         self.qdash = QDash()
         self.load(QtCore.QUrl("http://127.0.0.1:8050"))
 
+    def update_plot(self, fig):
+        self.qdash.update_graph(fig)
+        self.reload()
+
 class PlotWindow(QMainWindow):
     def __init__(self, folder_name, file_name):
         super().__init__()
@@ -239,7 +241,7 @@ class PlotWindow(QMainWindow):
                 reply = QMessageBox.question(
                     self,
                     'File Found',
-                    "An SG_calculations.csv is found inside the solution directory. Would you like to plot the results for it instead?",
+                    "An SG_calculations.csv is found inside the solution directory. Would you like to plot the results for it?",
                     QMessageBox.Yes | QMessageBox.No,
                     QMessageBox.No
                 )
@@ -300,6 +302,9 @@ class PlotWindow(QMainWindow):
         self.offsetStartTimeButton = QPushButton("Offset-Zero Start Time")  # New button
         self.offsetStartTimeButton.clicked.connect(self.offset_start_time)  # Connect to the new function
 
+        self.writeCSVButton = QPushButton("Write Full Data to CSV (Main Data)")
+        self.writeCSVButton.clicked.connect(self.write_full_data_to_csv)
+
         self.update_plot(0)  # Initialize plot
 
         # Modify the layout setup to add the label and combobox horizontally
@@ -311,6 +316,7 @@ class PlotWindow(QMainWindow):
         filter_layout.addWidget(self.savePlotButton)
         filter_layout.addWidget(self.offsetZeroButton)
         filter_layout.addWidget(self.offsetStartTimeButton)
+        filter_layout.addWidget(self.writeCSVButton)
         filter_layout.addStretch()  # Add stretch to push everything to the left
 
         # Create the main layout
@@ -370,6 +376,7 @@ class PlotWindow(QMainWindow):
             self.refNumberComboBox.addItem(ref_number)
 
     def update_plot(self, index):
+        fig: FigureResampler = FigureResampler()
         global selected_group 
         global selected_ref_number
         global output_data
@@ -396,6 +403,8 @@ class PlotWindow(QMainWindow):
 
         # Debug output
         print(f"Filtered columns: {trace_columns}")
+
+        self.viewer.update_plot(fig)
 
     def save_current_plot(self):
         # Retrieve the parent name from the environment for the filename
@@ -492,6 +501,16 @@ class PlotWindow(QMainWindow):
         # Update the plot
         self.update_plot(0)
 
+    def write_full_data_to_csv(self):
+        global output_SG_data_w_raw  # Ensure this references the correct DataFrame
+        file_path = os.path.join(self.folder_name, self.file_name)
+    
+        try:
+            output_SG_data_w_raw.to_csv(file_path, index=False)
+            QMessageBox.information(self, "CSV Saved", f"The full data has been saved as {file_path}")
+        except Exception as e:
+            QMessageBox.critical(self, "Error", f"Failed to write the CSV file: {str(e)}")
+
 # region Add styles for frontend GUI
 tab_style={'width': '25%', 'height': '3vh', 'line-height': '3vh', 'padding': '0', 'margin': '0','font-size': '10px'}
 selected_tab_style={'width': '25%', 'height': '3vh', 'line-height': '3vh', 'padding': '0', 'margin': '0', 'font-size': '10px'}
@@ -513,6 +532,9 @@ class QDash(QtCore.QObject):
     @property
     def app(self):
         return self._app
+
+    def update_graph(self, fig):
+        pass
 
 class OffsetZeroDialog(QDialog):
     def __init__(self, parent=None, time_points=None):
@@ -563,7 +585,6 @@ def render_content(tab, comparison_data_loaded):
         )
         if current_figure_main:
             graph.figure = current_figure_main  # Set the current figure if it exists
-        
         return html.Div([
             html.Button("Click to Plot", id="plot-button", n_clicks=0, style={'width': '12%', 'margin': '0.5vh','font-size': '10px'}),
             graph
@@ -576,9 +597,6 @@ def render_content(tab, comparison_data_loaded):
             },
             style={'width': '100%', 'height': 'calc(100vh - 12vh)', 'overflow': 'auto'}
         )
-        if current_comparison_figure:
-            graph_comparison.figure = current_comparison_figure
-            
         return html.Div([
             html.Button("Click to Plot", id="plot-comparison-button", n_clicks=0, style={'width': '12%', 'margin': '0.5vh','font-size': '10px'}),
             html.Button("Load Comparison CSV", id="load-comparison-csv-button", n_clicks=0, style={'width': '15%', 'margin': '0.5vh','font-size': '10px'}),
@@ -654,35 +672,12 @@ def load_comparison_csv(n_clicks):
     if n_clicks:
         global comparison_data
         global comparison_trace_columns
-        
-        # Open file dialog to select the comparison CSV file
-        file_path_comparison, _ = QFileDialog().getOpenFileName(None, 'Open comparison CSV file', '', 'CSV Files (*.csv)')
-        if not file_path_comparison:
-            return no_update
-
-        # Open file dialog to select the rosette configuration file
-        angles_file_path_comparison, _ = QFileDialog().getOpenFileName(None, 'Open SG rosette angles configuration file', '', 'CSV Files (*.csv)')
-        if not angles_file_path_comparison:
-            return no_update
-        
-        # Load the comparison CSV file
-        try:
-            raw_comparison_data = pd.read_csv(file_path_comparison)
-        except Exception as e:
-            QMessageBox.critical(None, "Error", f"Failed to load the comparison CSV file: {str(e)}")
-            return no_update
-            
-        # Load the rosette configuration file
-        try:
-            comparison_rosette_angles_df = pd.read_csv(angles_file_path_comparison)
-        except Exception as e:
-            QMessageBox.critical(None, "Error", f"Failed to load the rosette angles file: {str(e)}")
-            return no_update
-
-        # Calculate SG variables using the selected rosette configuration file and material properties
-        comparison_data = calculate_all_SG_variables(raw_comparison_data, comparison_rosette_angles_df)
-#        return 'loaded'
-#    return no_update
+        file_path, _ = QFileDialog.getOpenFileName(None, 'Open comparison CSV file', '', 'CSV Files (*.csv)')
+        if file_path:
+            comparison_data = pd.read_csv(file_path)
+            comparison_trace_columns = [col for col in comparison_data.columns if col != 'Time']
+            return 'loaded'
+    return no_update
 
 @my_dash_app.callback(
     Output("graph-comparison-id", "figure"),
@@ -691,61 +686,50 @@ def load_comparison_csv(n_clicks):
 )
 def plot_comparison_graph(n_clicks):
     ctx = callback_context
-    global my_fig_comparison
+    global my_fig
     global comparison_data
     global comparison_trace_columns
-    global current_comparison_figure
-    global selected_groups
-    global selected_ref_number
 
     if len(ctx.triggered) and "plot-comparison-button" in ctx.triggered[0]["prop_id"]:
-        my_fig_comparison.replace(go.Figure())  # Reset the figure
+        if comparison_data is not None and comparison_trace_columns is not None:
+            my_fig.replace(go.Figure())  # Reset the figure
 
-        # Determine columns based on the selected suffix
-        if selected_group == "All":
-            comparison_trace_columns = [col for col in comparison_data.columns if col != 'Time']
-        elif selected_group == "Raw Strain Data":
-            comparison_trace_columns = [col for col in comparison_data.columns if re.match(r'SG\d+_\d+$', col)]
-        else:
-            comparison_trace_columns = [col for col in comparison_data.columns if col.endswith(selected_group)]
+            time_data_in_x_axis = comparison_data['Time']
+            total_no_of_traces_to_add = len(comparison_trace_columns)
 
-        time_data_in_x_axis = comparison_data['Time']
-        total_no_of_traces_to_add = len(comparison_trace_columns)
+            for idx, col in enumerate(comparison_trace_columns):
+                color_idx = idx % len(my_discrete_color_scheme)
+                my_fig.add_trace(go.Scattergl(
+                    x=time_data_in_x_axis,
+                    y=comparison_data[col],
+                    name=col,
+                    line=dict(color=my_discrete_color_scheme[color_idx]),
+                    hovertemplate='%{meta}<br>Time = %{x:.2f} s<br>Data = %{y:.1f}<extra></extra>',
+                    hoverlabel=dict(font_size=10, bgcolor='rgba(255, 255, 255, 0.5)'),
+                    meta=col
+                ))
+                progress = int((idx + 1) / total_no_of_traces_to_add * 100)
+                mainWindow.plot_progress.emit(progress)  # Emit the plot progress signal
 
-        for idx, col in enumerate(comparison_trace_columns):
-            color_idx = idx % len(my_discrete_color_scheme)
-            my_fig_comparison.add_trace(go.Scattergl(
-                x=time_data_in_x_axis,
-                y=comparison_data[col],
-                name=col,
-                line=dict(color=my_discrete_color_scheme[color_idx]),
-                hovertemplate='%{meta}<br>Time = %{x:.2f} s<br>Data = %{y:.1f}<extra></extra>',
-                hoverlabel=dict(font_size=10, bgcolor='rgba(255, 255, 255, 0.5)'),
-                meta=col
-            ))
-            progress = int((idx + 1) / total_no_of_traces_to_add * 100)
-            mainWindow.plot_progress.emit(progress)  # Emit the plot progress signal
+                my_fig.update_layout(
+                    title_text='Comparison Data',
+                    title_x=0.45,
+                    title_y=0.95,
+                    legend_title_text='Result',
+                    template="plotly_white",
+                    plot_bgcolor='rgba(0,0,0,0.005)',
+                    xaxis_title='Time [s]',
+                    yaxis_title='Data',
+                    font=dict(family="Arial, sans-serif", size=12, color="#0077B6"),
+                    xaxis=dict(showline=True, showgrid=True, showticklabels=True, linewidth=2,
+                               tickfont=dict(family='Arial, sans-serif', size=12), tickmode='auto', nticks=30),
+                    yaxis=dict(showgrid=True, zeroline=False, showline=False, showticklabels=True,
+                               linecolor='rgb(204, 204, 204)', tickmode='auto', nticks=30),
+                    margin=dict(t=40, b=0)  # Adjust the top margin to bring the graph closer to the title
+                )
 
-            my_fig_comparison.update_layout(
-                title_text='Comparison Data',
-                title_x=0.45,
-                title_y=0.95,
-                legend_title_text='Result',
-                template="plotly_white",
-                plot_bgcolor='rgba(0,0,0,0.005)',
-                xaxis_title='Time [s]',
-                yaxis_title='Data',
-                font=dict(family="Arial, sans-serif", size=12, color="#0077B6"),
-                xaxis=dict(showline=True, showgrid=True, showticklabels=True, linewidth=2,
-                           tickfont=dict(family='Arial, sans-serif', size=12), tickmode='auto', nticks=30),
-                yaxis=dict(showgrid=True, zeroline=False, showline=False, showticklabels=True,
-                           linecolor='rgb(204, 204, 204)', tickmode='auto', nticks=30),
-                margin=dict(t=40, b=0)  # Adjust the top margin to bring the graph closer to the title
-            )
-        current_comparison_figure = my_fig_comparison
-        return my_fig_comparison
-    else:
-        return no_update
+            return my_fig
+    return no_update
 
 # region Select the input SG raw channel data (in microstrains) and rosette configuration file via dialog boxes
 # Initialize the QApplication instance
@@ -906,7 +890,7 @@ def calculate_all_SG_variables(strain_gauge_data, rosette_angles_df):
     elapsed_time_formatted = f"{elapsed_time:.2f}"
     
     # Show the completion message with the elapsed time
-    print(f"Calculation is completed in {elapsed_time_formatted} seconds.")
+    QMessageBox.information(None, "Info", f"Calculation is completed in {elapsed_time_formatted} seconds.")
     
     return strain_gauge_data
 # endregion
@@ -920,7 +904,7 @@ if file_path_SG_raw_data:
 # endregion
 
 # region Write the resulting dataframe to a CSV file inside the solution folder
-output_SG_data_w_raw.to_csv(r'""" + file_path_of_SG_calculations + """')
+#output_SG_data_w_raw.to_csv(r'""" + file_path_of_SG_calculations + """')
 # endregion
 
 # region Show the results
@@ -937,13 +921,12 @@ try:
         
         # The plotly-resampler callback to update the graph after a relayout event (= zoom/pan)
         my_fig.register_update_graph_callback(app=my_dash_app, graph_id="graph-id")
-        my_fig_comparison.register_update_graph_callback(app=my_dash_app, graph_id="graph-comparison-id")
         
         mainWindow = PlotWindow('""" + solution_directory_path + """', '""" + file_name_of_SG_calculations + """')
         mainWindow.show()
         available_port = find_available_port([8050, 8051, 8052, 8053])
         if available_port:
-            threading.Thread(target=my_dash_app.run_server, kwargs={'debug': True, 'use_reloader': False, 'port': available_port}, daemon=True).start()
+            threading.Thread(target=my_dash_app.run_server, kwargs={'debug': False, 'use_reloader': False, 'port': available_port}, daemon=True).start()
             print('Available Port: ' + str(available_port))
         sys.exit(app_plot.exec_())
         # os.remove(cpython_script_path)
