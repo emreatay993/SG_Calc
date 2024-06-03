@@ -647,6 +647,22 @@ def plot_graph(n_clicks):
         return no_update
 # endregion
 
+@my_dash_app.callback(
+    Output('comparison-data-loaded', 'children'),
+    Input('load-comparison-csv-button', 'n_clicks'),
+    prevent_initial_call=True,
+)
+def load_comparison_csv(n_clicks):
+    if n_clicks:
+        global comparison_data
+        global comparison_trace_columns
+        file_path, _ = QFileDialog.getOpenFileName(None, 'Open comparison CSV file', '', 'CSV Files (*.csv)')
+        if file_path:
+            comparison_data = pd.read_csv(file_path)
+            comparison_trace_columns = [col for col in comparison_data.columns if col != 'Time']
+            return 'loaded'
+    return no_update
+
 # region Select the input SG raw channel data (in microstrains) and rosette configuration file via dialog boxes
 # Initialize the QApplication instance
 app_dialog = QApplication(sys.argv)
