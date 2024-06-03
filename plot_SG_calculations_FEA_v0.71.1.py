@@ -70,6 +70,10 @@ selected_group = None
 selected_ref_number = None
 output_data = None
 trace_columns = None
+global comparison_data
+comparison_data = None
+global comparison_trace_columns  
+comparison_trace_columns = None
 
 class FlatLineEdit(QLineEdit):
     def __init__(self, placeholder_text=""):
@@ -568,10 +572,18 @@ def render_content(tab):
             graph
         ])
     elif tab == 'tab-2':
+        graph_comparison = dcc.Graph(
+            id="graph-comparison-id",
+            config={
+                'displaylogo': False  # Disable the plotly logo
+            },
+            style={'width': '100%', 'height': 'calc(100vh - 12vh)', 'overflow': 'auto'}
+        )
         return html.Div([
-            html.H3('Placeholder content for the second tab')
-        ],
-        style={'width': '100%', 'height': 'calc(100vh - 12vh)', 'overflow': 'auto'})
+            html.Button("Click to Plot", id="plot-comparison-button", n_clicks=0, style={'width': '12%', 'margin': '0.5vh','font-size': '10px'}),
+            html.Button("Load Comparison CSV", id="load-comparison-csv-button", n_clicks=0, style={'width': '15%', 'margin': '0.5vh','font-size': '10px'}),
+            graph_comparison
+        ])
 
 # Update the callback to plot the graph
 @my_dash_app.callback(
