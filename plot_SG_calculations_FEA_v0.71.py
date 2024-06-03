@@ -37,11 +37,12 @@ try:
     from plotly_resampler import FigureResampler
     import os
     import re
-    from PyQt5.QtCore import Qt
+    from PyQt5.QtCore import Qt, QTimer, pyqtSignal, pyqtSlot
     from PyQt5 import QtCore
     from PyQt5.QtWidgets import (QApplication, QMainWindow, QLineEdit, QDialog, QHBoxLayout,
                                  QVBoxLayout, QWidget, QMessageBox, QComboBox, QCheckBox, QFileDialog,
-                                 QLabel, QSizePolicy, QPushButton, QTableWidget, QTableWidgetItem, QHeaderView)
+                                 QLabel, QSizePolicy, QPushButton, QTableWidget, QTableWidgetItem, 
+                                 QHeaderView, QProgressBar)
     from PyQt5.QtWebEngineWidgets import QWebEngineView
     import concurrent.futures
     from concurrent.futures import ThreadPoolExecutor
@@ -220,7 +221,11 @@ class PlotWindow(QMainWindow):
         self.setGeometry(100, 100, 1000, 550)
         self.folder_name = folder_name
         self.file_name = file_name
+        self.initProgressBar()
         self.initUI()
+    plot_started = pyqtSignal()
+    plot_progress = pyqtSignal(int)
+    plot_finished = pyqtSignal()
 
     def initUI(self):
         file_path = os.path.join(self.folder_name, self.file_name)
@@ -312,11 +317,36 @@ class PlotWindow(QMainWindow):
 
         # Add the rest of your widgets to the layout
         layout.addWidget(self.viewer)
+        layout.addWidget(self.progressBar)
 
         # Set the layout to the central widget
         widget = QWidget()
         widget.setLayout(layout)
         self.setCentralWidget(widget)
+
+    def initProgressBar(self):
+        self.progressBar = QProgressBar(self)
+        self.progressBar.setGeometry(30, 40, 300, 25)
+        self.progressBar.setMaximum(100)
+        self.progressBar.setVisible(False)
+
+        self.plot_started.connect(self.on_plot_started)
+        self.plot_progress.connect(self.on_plot_progress)
+        self.plot_finished.connect(self.on_plot_finished)
+
+    def on_plot_started(self):
+        self.progressBar.setVisible(True)
+        self.progressBar.setValue(0)
+
+    def on_plot_progress(self, value):
+        self.progressBar.setValue(value)
+
+    def on_plot_finished(self):
+        self.progressBar.setValue(100)
+        QTimer.singleShot(500, self.hide_progress_bar)
+
+    def hide_progress_bar(self):
+        self.progressBar.setVisible(False)
 
     def add_combobox_items(self):
         suffixes = set()
@@ -534,7 +564,7 @@ def render_content(tab):
         if current_figure_main:
             graph.figure = current_figure_main  # Set the current figure if it exists
         return html.Div([
-            html.Button("Click to plot", id="plot-button", n_clicks=0, style={'width': '12%', 'margin': '0.5vh','font-size': '10px'}),
+            html.Button("Click to Plot", id="plot-button", n_clicks=0, style={'width': '12%', 'margin': '0.5vh','font-size': '10px'}),
             graph
         ])
     elif tab == 'tab-2':
@@ -556,13 +586,19 @@ def plot_graph(n_clicks):
         global my_fig
         global output_data
         global trace_columns
+        
+        mainWindow.plot_started.emit() # Emit the plot started signal
+        
         if len(my_fig.data):
             my_fig.replace(go.Figure())
 
+        time_data_in_x_axis = output_data['Time']
+        total_no_of_traces_to_add = len(trace_columns)
+        
         for idx, col in enumerate(trace_columns):
             color_idx = idx % len(my_discrete_color_scheme)
             my_fig.add_trace(go.Scattergl(
-                x=output_data['Time'],
+                x=time_data_in_x_axis,
                 y=output_data[col],
                 name=col,
                 line=dict(color=my_discrete_color_scheme[color_idx]),
@@ -570,6 +606,9 @@ def plot_graph(n_clicks):
                 hoverlabel=dict(font_size=10, bgcolor='rgba(255, 255, 255, 0.5)'),
                 meta=col
             ))
+            progress = int((idx + 1) / total_no_of_traces_to_add * 100)
+            mainWindow.plot_progress.emit(progress)  # Emit the plot progress signal
+            
             my_fig.update_layout(
                 title_text='SG Calculations : All Loads Applied at Once ' + "( " + selected_group + " )",
                 title_x=0.45,
@@ -588,6 +627,7 @@ def plot_graph(n_clicks):
             )
         
         current_figure_main = my_fig  # Update the global variable with the new figure
+        mainWindow.plot_finished.emit()  # Emit the plot finished signal
         return my_fig
     else:
         return no_update
