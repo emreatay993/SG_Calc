@@ -633,14 +633,14 @@ def plot_graph(n_clicks):
                 name=col,
                 line=dict(color=my_discrete_color_scheme[color_idx]),
                 hovertemplate='%{meta}<br>Time = %{x:.2f} s<br>Data = %{y:.1f}<extra></extra>',
-                hoverlabel=dict(font_size=10, bgcolor='rgba(255, 255, 255, 0.5)'),
+                hoverlabel=dict(font_size=14, bgcolor='rgba(255, 255, 255, 0.5)'),
                 meta=col
             ))
             progress = int((idx + 1) / total_no_of_traces_to_add * 100)
             mainWindow.plot_progress.emit(progress)  # Emit the plot progress signal
             
             my_fig.update_layout(
-                title_text='SG Calculations : """ + sol_selected_environment.Parent.Name + """ ' + "( " + selected_group + " )",
+                title_text='SG Calculations : All Loads Applied at Once ' + "( " + selected_group + " )",
                 title_x=0.45,
                 title_y=0.95,
                 legend_title_text='Result',
@@ -653,6 +653,7 @@ def plot_graph(n_clicks):
                            tickfont=dict(family='Arial, sans-serif', size=12), tickmode='auto', nticks=30),
                 yaxis=dict(showgrid=True, zeroline=False, showline=False, showticklabels=True,
                            linecolor='rgb(204, 204, 204)', tickmode='auto', nticks=30),
+                hovermode='closest',
                 margin=dict(t=40,b=0)  # Adjust the top margin to bring the graph closer to the title
             )
         
@@ -705,7 +706,7 @@ def plot_comparison_graph(n_clicks):
                     name=col,
                     line=dict(color=my_discrete_color_scheme[color_idx]),
                     hovertemplate='%{meta}<br>Time = %{x:.2f} s<br>Data = %{y:.1f}<extra></extra>',
-                    hoverlabel=dict(font_size=10, bgcolor='rgba(255, 255, 255, 0.5)'),
+                    hoverlabel=dict(font_size=14, bgcolor='rgba(255, 255, 255, 0.5)'),
                     meta=col
                 ))
                 progress = int((idx + 1) / total_no_of_traces_to_add * 100)
@@ -725,6 +726,7 @@ def plot_comparison_graph(n_clicks):
                                tickfont=dict(family='Arial, sans-serif', size=12), tickmode='auto', nticks=30),
                     yaxis=dict(showgrid=True, zeroline=False, showline=False, showticklabels=True,
                                linecolor='rgb(204, 204, 204)', tickmode='auto', nticks=30),
+                    hovermode='closest',
                     margin=dict(t=40, b=0)  # Adjust the top margin to bring the graph closer to the title
                 )
 
