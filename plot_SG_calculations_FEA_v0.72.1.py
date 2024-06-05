@@ -79,6 +79,10 @@ global current_comparison_figure
 current_comparison_figure = None
 global compare_data
 compare_data = None
+global selected_group_comparison
+selected_group_comparison = None
+global selected_ref_number_comparison
+selected_ref_number_comparison = None
 
 class FlatLineEdit(QLineEdit):
     def __init__(self, placeholder_text=""):
@@ -679,7 +683,15 @@ def load_comparison_csv(n_clicks):
         file_path, _ = QFileDialog.getOpenFileName(None, 'Open comparison CSV file', '', 'CSV Files (*.csv)')
         if file_path:
             comparison_data = pd.read_csv(file_path)
-            comparison_trace_columns = [col for col in comparison_data.columns if col != 'Time']
+            if selected_group == "All":
+                comparison_trace_columns = [col for col in comparison_data.columns if col != 'Time']
+            elif selected_group == "Raw Strain Data":
+                comparison_trace_columns = [col for col in comparison_data.columns if re.match(r'SG\d+_\d+$', col)]
+            else:
+                comparison_trace_columns = [col for col in comparison_data.columns if col.endswith(selected_group)]
+
+            if selected_ref_number != "-":
+                comparison_trace_columns = [col for col in comparison_trace_columns if col.split('_')[1] == selected_ref_number]
             
             # Ensure the 'Time' column exists in both datasets
             if 'Time' in output_data.columns and 'Time' in comparison_data.columns:
