@@ -299,7 +299,7 @@ class PlotWindow(QMainWindow):
         self.offsetStartTimeButton.clicked.connect(self.offset_start_time)  # Connect to the new function
 
         self.writeCSVButton = QPushButton("Write Full Data to CSV (Main Data)")
-        self.writeCSVButton.setToolTip("Click to save the full output data as a CSV file in the specified location. If any offset operation is applied, the CSV file is written including those effects.")
+        self.writeCSVButton.setToolTip("Click to save the full output data as a CSV file in the specified location. If any offset operation is applied, the CSV file is written with those effects included.")
         self.writeCSVButton.clicked.connect(self.write_full_data_to_csv)
 
         self.update_plot(0)  # Initialize plot
