@@ -253,6 +253,8 @@ class PlotWindow(QMainWindow):
                 output_data = output_SG_data_w_raw
             
             time_df = pd.DataFrame(time).reset_index(drop=True)
+            if 'Time' not in output_data.columns:
+                output_data = pd.concat([time_df, output_data.reset_index(drop=True)], axis=1)
             output_data = pd.concat([time_df, output_data.reset_index(drop=True)], axis=1)
             output_data = output_data.sort_values(by='Time')
             
