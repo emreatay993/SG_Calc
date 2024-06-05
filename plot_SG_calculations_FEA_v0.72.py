@@ -30,6 +30,7 @@ try:
     import threading
     import pandas as pd
     import numpy as np
+    from scipy.interpolate import interp1d
     import plotly.graph_objects as go
     from plotly.offline import plot
     import plotly.express as px
@@ -76,6 +77,8 @@ global comparison_trace_columns
 comparison_trace_columns = None
 global current_comparison_figure
 current_comparison_figure = None
+global compare_data
+compare_data = None
 
 class FlatLineEdit(QLineEdit):
     def __init__(self, placeholder_text=""):
@@ -669,12 +672,44 @@ def plot_graph(n_clicks):
 def load_comparison_csv(n_clicks):
     if n_clicks:
         global comparison_data
+        global compare_data
         global comparison_trace_columns
+        global output_data
+        
         file_path, _ = QFileDialog.getOpenFileName(None, 'Open comparison CSV file', '', 'CSV Files (*.csv)')
         if file_path:
             comparison_data = pd.read_csv(file_path)
             comparison_trace_columns = [col for col in comparison_data.columns if col != 'Time']
-            return 'loaded'
+            
+            # Ensure the 'Time' column exists in both datasets
+            if 'Time' in output_data.columns and 'Time' in comparison_data.columns:
+                # Interpolation function for comparison data
+                comparison_time = comparison_data['Time']
+                main_time = output_data['Time']
+                
+                # Determine which dataset has a lower sample rate
+                if len(main_time) > len(comparison_time):
+                    interp_func = interp1d(comparison_time, comparison_data[comparison_trace_columns], axis=0, fill_value="extrapolate")
+                    interpolated_comparison_data = pd.DataFrame(interp_func(main_time), columns=comparison_trace_columns)
+                    interpolated_comparison_data.insert(0, 'Time', main_time)
+                    
+                    # Calculate the difference
+                    compare_data = output_data[comparison_trace_columns].values - interpolated_comparison_data[comparison_trace_columns].values
+                    compare_data = pd.DataFrame(compare_data, columns=comparison_trace_columns)
+                    compare_data.insert(0, 'Time', main_time)
+                else:
+                    interp_func = interp1d(main_time, output_data[comparison_trace_columns], axis=0, fill_value="extrapolate")
+                    interpolated_main_data = pd.DataFrame(interp_func(comparison_time), columns=comparison_trace_columns)
+                    interpolated_main_data.insert(0, 'Time', comparison_time)
+                    
+                    # Calculate the difference
+                    compare_data = interpolated_main_data[comparison_trace_columns].values - comparison_data[comparison_trace_columns].values
+                    compare_data = pd.DataFrame(compare_data, columns=comparison_trace_columns)
+                    compare_data.insert(0, 'Time', comparison_time)
+                    
+                return 'loaded'
+            else:
+                raise KeyError("'Time' column is missing in one of the DataFrames")
     return no_update
 
 @my_dash_app.callback(
@@ -685,22 +720,22 @@ def load_comparison_csv(n_clicks):
 def plot_comparison_graph(n_clicks):
     ctx = callback_context
     global my_fig
-    global comparison_data
+    global compare_data
     global comparison_trace_columns
 
     if len(ctx.triggered) and "plot-comparison-button" in ctx.triggered[0]["prop_id"]:
-        if comparison_data is not None and comparison_trace_columns is not None:
+        if compare_data is not None and comparison_trace_columns is not None:
             my_fig.replace(go.Figure())  # Reset the figure
 
-            time_data_in_x_axis = comparison_data['Time']
+            time_data_in_x_axis = compare_data['Time']
             total_no_of_traces_to_add = len(comparison_trace_columns)
 
             for idx, col in enumerate(comparison_trace_columns):
                 color_idx = idx % len(my_discrete_color_scheme)
                 my_fig.add_trace(go.Scattergl(
                     x=time_data_in_x_axis,
-                    y=comparison_data[col],
-                    name=col,
+                    y=compare_data[col],
+                    name="Δ"+col,
                     line=dict(color=my_discrete_color_scheme[color_idx]),
                     hovertemplate='%{meta}<br>Time = %{x:.2f} s<br>Data = %{y:.1f}<extra></extra>',
                     hoverlabel=dict(font_size=14, bgcolor='rgba(255, 255, 255, 0.5)'),
