@@ -255,7 +255,6 @@ class PlotWindow(QMainWindow):
             time_df = pd.DataFrame(time).reset_index(drop=True)
             if 'Time' not in output_data.columns:
                 output_data = pd.concat([time_df, output_data.reset_index(drop=True)], axis=1)
-            output_data = pd.concat([time_df, output_data.reset_index(drop=True)], axis=1)
             output_data = output_data.sort_values(by='Time')
             
         except Exception as e:
@@ -300,6 +299,7 @@ class PlotWindow(QMainWindow):
         self.offsetStartTimeButton.clicked.connect(self.offset_start_time)  # Connect to the new function
 
         self.writeCSVButton = QPushButton("Write Full Data to CSV (Main Data)")
+        self.writeCSVButton.setToolTip("Click to save the full output data as a CSV file in the specified location. If any offset operation is applied, the CSV file is written including those effects.")
         self.writeCSVButton.clicked.connect(self.write_full_data_to_csv)
 
         self.update_plot(0)  # Initialize plot
