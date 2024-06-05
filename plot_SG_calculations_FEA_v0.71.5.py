@@ -410,7 +410,7 @@ class PlotWindow(QMainWindow):
         # Retrieve the parent name from the environment for the filename
         parent_name = '''""" + sol_selected_environment.Parent.Name + """'''
         # Construct the filename
-        filename = f"SG_Calculations__{parent_name}.html"
+        filename = f"SG_Calculations__{parent_name}__{selected_group}.html"
 
         # Save the current figure to an interactive HTML file
         plot(my_fig, filename=os.path.join(self.folder_name, filename),
