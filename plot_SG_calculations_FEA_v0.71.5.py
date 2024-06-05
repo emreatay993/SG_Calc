@@ -249,16 +249,11 @@ class PlotWindow(QMainWindow):
                     output_data = pd.read_csv(file_path)
                 else:
                     output_data = output_SG_data_w_raw
-                    # Convert time to DataFrame and reset index
-                    time_df = pd.DataFrame(time).reset_index(drop=True)
-                    output_data = pd.concat([time_df, output_data.reset_index(drop=True)], axis=1)
             else:
                 output_data = output_SG_data_w_raw
-                # Convert time to DataFrame and reset index
-                time_df = pd.DataFrame(time).reset_index(drop=True)
-                output_data = pd.concat([time_df, output_data.reset_index(drop=True)], axis=1)
             
-            # Ensure 'Time' is the first column and is sorted
+            time_df = pd.DataFrame(time).reset_index(drop=True)
+            output_data = pd.concat([time_df, output_data.reset_index(drop=True)], axis=1)
             output_data = output_data.sort_values(by='Time')
             
         except Exception as e:
@@ -502,11 +497,11 @@ class PlotWindow(QMainWindow):
         self.update_plot(0)
 
     def write_full_data_to_csv(self):
-        global output_SG_data_w_raw  # Ensure this references the correct DataFrame
+        global output_data  # Ensure this references the correct DataFrame
         file_path = os.path.join(self.folder_name, self.file_name)
     
         try:
-            output_SG_data_w_raw.to_csv(file_path, index=False)
+            output_data.to_csv(file_path, index=False)
             QMessageBox.information(self, "CSV Saved", f"The full data has been saved as {file_path}")
         except Exception as e:
             QMessageBox.critical(self, "Error", f"Failed to write the CSV file: {str(e)}")
