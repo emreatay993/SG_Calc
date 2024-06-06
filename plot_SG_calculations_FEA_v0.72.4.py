@@ -225,7 +225,7 @@ class PlotlyViewer(QWebEngineView):
 
     def update_plot(self, fig):
         self.qdash.update_graph(fig)
-        self.reload()
+#        self.reload()
 
 class PlotWindow(QMainWindow):
     def __init__(self, folder_name, file_name):
@@ -732,8 +732,43 @@ def load_comparison_csv(n_clicks):
 def plot_comparison_graph(n_clicks):
     ctx = callback_context
     global my_fig
+    global output_data
     global compare_data
     global comparison_trace_columns
+    global output_data
+
+    if selected_group == "All":
+        comparison_trace_columns = [col for col in comparison_data.columns if col != 'Time']
+    elif selected_group == "Raw Strain Data":
+        comparison_trace_columns = [col for col in comparison_data.columns if re.match(r'SG\d+_\d+$', col)]
+    else:
+        comparison_trace_columns = [col for col in comparison_data.columns if col.endswith(selected_group)]
+
+    if selected_ref_number != "-":
+        comparison_trace_columns = [col for col in comparison_trace_columns if col.split('_')[1] == selected_ref_number]
+    
+    comparison_time = comparison_data['Time']
+    main_time = output_data['Time']
+    
+    # Determine which dataset has a lower sample rate
+    if len(main_time) > len(comparison_time):
+        interp_func = interp1d(comparison_time, comparison_data[comparison_trace_columns], axis=0, fill_value="extrapolate")
+        interpolated_comparison_data = pd.DataFrame(interp_func(main_time), columns=comparison_trace_columns)
+        interpolated_comparison_data.insert(0, 'Time', main_time)
+        
+        # Calculate the difference
+        compare_data = output_data[comparison_trace_columns].values - interpolated_comparison_data[comparison_trace_columns].values
+        compare_data = pd.DataFrame(compare_data, columns=comparison_trace_columns)
+        compare_data.insert(0, 'Time', main_time)
+    else:
+        interp_func = interp1d(main_time, output_data[comparison_trace_columns], axis=0, fill_value="extrapolate")
+        interpolated_main_data = pd.DataFrame(interp_func(comparison_time), columns=comparison_trace_columns)
+        interpolated_main_data.insert(0, 'Time', comparison_time)
+        
+        # Calculate the difference
+        compare_data = interpolated_main_data[comparison_trace_columns].values - comparison_data[comparison_trace_columns].values
+        compare_data = pd.DataFrame(compare_data, columns=comparison_trace_columns)
+        compare_data.insert(0, 'Time', comparison_time)
 
     if len(ctx.triggered) and "plot-comparison-button" in ctx.triggered[0]["prop_id"]:
         if compare_data is not None and comparison_trace_columns is not None:
