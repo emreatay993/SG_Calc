@@ -757,7 +757,7 @@ def plot_comparison_graph(n_clicks):
                 mainWindow.plot_progress.emit(progress)  # Emit the plot progress signal
 
                 my_fig.update_layout(
-                    title_text='Comparison Data',
+                    title_text='Comparison : """ + sol_selected_environment.Parent.Name + """ ' + " (" + selected_group + ")",
                     title_x=0.45,
                     title_y=0.95,
                     legend_title_text='Result',
