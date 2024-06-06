@@ -296,7 +296,7 @@ class PlotWindow(QMainWindow):
         self.comboBox.currentIndexChanged.connect(self.update_plot)
         self.refNumberComboBox.currentIndexChanged.connect(self.update_plot)
         self.viewer = PlotlyViewer()
-        self.savePlotButton = QPushButton("Save current plot as HTML file")
+        self.savePlotButton = QPushButton("Save Main Data Plot as HTML")
         self.savePlotButton.clicked.connect(self.save_current_plot)
 
         self.offsetZeroButton = QPushButton("Offset-Zero SG's")
