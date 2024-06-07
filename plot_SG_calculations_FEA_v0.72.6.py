@@ -607,8 +607,8 @@ def render_content(tab, comparison_data_loaded):
             },
             style={'width': '100%', 'height': 'calc(100vh - 12vh)', 'overflow': 'auto'}
         )
-        #if current_figure_main:
-        #    graph.figure = current_figure_main  # Set the current figure if it exists
+        if current_figure_comparison:
+            graph_comparison.figure = current_figure_comparison  # Set the current figure if it exists
         return html.Div([
             html.Button("Click to Plot", id="plot-comparison-button", n_clicks=0, style={'width': '12%', 'margin': '0.5vh','font-size': '10px'}),
             html.Button("Load Comparison CSV", id="load-comparison-csv-button", n_clicks=0, style={'width': '15%', 'margin': '0.5vh','font-size': '10px'}),
@@ -739,7 +739,8 @@ def load_comparison_csv(n_clicks):
 )
 def plot_comparison_graph(n_clicks):
     ctx = callback_context
-    global my_fig_main
+    global current_figure_comparison
+    global my_fig_comparison
     global output_data
     global compare_data
     global comparison_trace_columns
@@ -780,7 +781,7 @@ def plot_comparison_graph(n_clicks):
 
     if len(ctx.triggered) and "plot-comparison-button" in ctx.triggered[0]["prop_id"]:
         if compare_data is not None and comparison_trace_columns is not None:
-            my_fig_main.replace(go.Figure())  # Reset the figure
+            my_fig_comparison.replace(go.Figure())  # Reset the figure
 
             time_data_in_x_axis = compare_data['Time']
             total_no_of_traces_to_add = len(comparison_trace_columns)
@@ -789,7 +790,7 @@ def plot_comparison_graph(n_clicks):
 
             for idx, col in enumerate(comparison_trace_columns):
                 color_idx = idx % len(my_discrete_color_scheme)
-                my_fig_main.add_trace(go.Scattergl(
+                my_fig_comparison.add_trace(go.Scattergl(
                     x=time_data_in_x_axis,
                     y=compare_data[col],
                     name="Δ"+col,
@@ -801,7 +802,7 @@ def plot_comparison_graph(n_clicks):
                 progress = int((idx + 1) / total_no_of_traces_to_add * 100)
                 mainWindow.plot_progress.emit(progress)  # Emit the plot progress signal
 
-                my_fig_main.update_layout(
+                my_fig_comparison.update_layout(
                     title_text='Comparison : """ + sol_selected_environment.Parent.Name + """ ' + " (" + selected_group + ")",
                     title_x=0.45,
                     title_y=0.95,
@@ -818,8 +819,9 @@ def plot_comparison_graph(n_clicks):
                     hovermode='closest',
                     margin=dict(t=40, b=0)  # Adjust the top margin to bring the graph closer to the title
                 )
+            current_figure_comparison = my_fig_comparison
             mainWindow.plot_finished.emit()
-            return my_fig_main
+            return my_fig_comparison
     return no_update
 
 # region Select the input SG raw channel data (in microstrains) and rosette configuration file via dialog boxes
