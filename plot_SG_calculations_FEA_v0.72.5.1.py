@@ -63,8 +63,8 @@ except ImportError as e:
 QApplication.setAttribute(Qt.AA_EnableHighDpiScaling, True)
 my_discrete_color_scheme = px.colors.qualitative.Light24
 global selected_group
-global my_fig
-my_fig = FigureResampler()
+global my_fig_main
+my_fig_main = FigureResampler()
 global current_figure_main
 current_figure_main = None
 selected_group = None
@@ -75,8 +75,8 @@ global comparison_data
 comparison_data = None
 global comparison_trace_columns  
 comparison_trace_columns = None
-global current_comparison_figure
-current_comparison_figure = None
+global current_figure_comparison
+current_figure_comparison = None
 global compare_data
 compare_data = None
 global selected_group_comparison
@@ -417,7 +417,7 @@ class PlotWindow(QMainWindow):
         filename = f"SG_Calculations__{parent_name}__{selected_group}.html"
 
         # Save the current figure to an interactive HTML file
-        plot(my_fig, filename=os.path.join(self.folder_name, filename),
+        plot(my_fig_main, filename=os.path.join(self.folder_name, filename),
              output_type='file', auto_open=False)
         QMessageBox.information(self, "Plot Saved", f"The plot has been saved as {filename} in the solution directory.")# endregion
 
@@ -601,6 +601,8 @@ def render_content(tab, comparison_data_loaded):
             },
             style={'width': '100%', 'height': 'calc(100vh - 12vh)', 'overflow': 'auto'}
         )
+        #if current_figure_main:
+        #    graph.figure = current_figure_main  # Set the current figure if it exists
         return html.Div([
             html.Button("Click to Plot", id="plot-comparison-button", n_clicks=0, style={'width': '12%', 'margin': '0.5vh','font-size': '10px'}),
             html.Button("Load Comparison CSV", id="load-comparison-csv-button", n_clicks=0, style={'width': '15%', 'margin': '0.5vh','font-size': '10px'}),
@@ -617,21 +619,21 @@ def plot_graph(n_clicks):
     ctx = callback_context
     global current_figure_main  # Declare the global variable
     if len(ctx.triggered) and "plot-button" in ctx.triggered[0]["prop_id"]:
-        global my_fig
+        global my_fig_main
         global output_data
         global trace_columns
         
         mainWindow.plot_started.emit() # Emit the plot started signal
         
-        if len(my_fig.data):
-            my_fig.replace(go.Figure())
+        if len(my_fig_main.data):
+            my_fig_main.replace(go.Figure())
 
         time_data_in_x_axis = output_data['Time']
         total_no_of_traces_to_add = len(trace_columns)
         
         for idx, col in enumerate(trace_columns):
             color_idx = idx % len(my_discrete_color_scheme)
-            my_fig.add_trace(go.Scattergl(
+            my_fig_main.add_trace(go.Scattergl(
                 x=time_data_in_x_axis,
                 y=output_data[col],
                 name=col,
@@ -643,7 +645,7 @@ def plot_graph(n_clicks):
             progress = int((idx + 1) / total_no_of_traces_to_add * 100)
             mainWindow.plot_progress.emit(progress)  # Emit the plot progress signal
             
-            my_fig.update_layout(
+            my_fig_main.update_layout(
                 title_text='SG Calculations : """ + sol_selected_environment.Parent.Name + """ ' + "( " + selected_group + " )",
                 title_x=0.45,
                 title_y=0.95,
@@ -661,9 +663,9 @@ def plot_graph(n_clicks):
                 margin=dict(t=40,b=0)  # Adjust the top margin to bring the graph closer to the title
             )
         
-        current_figure_main = my_fig  # Update the global variable with the new figure
+        current_figure_main = my_fig_main  # Update the global variable with the new figure
         mainWindow.plot_finished.emit()  # Emit the plot finished signal
-        return my_fig
+        return my_fig_main
     else:
         return no_update
 # endregion
@@ -731,7 +733,7 @@ def load_comparison_csv(n_clicks):
 )
 def plot_comparison_graph(n_clicks):
     ctx = callback_context
-    global my_fig
+    global my_fig_main
     global output_data
     global compare_data
     global comparison_trace_columns
@@ -772,7 +774,7 @@ def plot_comparison_graph(n_clicks):
 
     if len(ctx.triggered) and "plot-comparison-button" in ctx.triggered[0]["prop_id"]:
         if compare_data is not None and comparison_trace_columns is not None:
-            my_fig.replace(go.Figure())  # Reset the figure
+            my_fig_main.replace(go.Figure())  # Reset the figure
 
             time_data_in_x_axis = compare_data['Time']
             total_no_of_traces_to_add = len(comparison_trace_columns)
@@ -781,7 +783,7 @@ def plot_comparison_graph(n_clicks):
 
             for idx, col in enumerate(comparison_trace_columns):
                 color_idx = idx % len(my_discrete_color_scheme)
-                my_fig.add_trace(go.Scattergl(
+                my_fig_main.add_trace(go.Scattergl(
                     x=time_data_in_x_axis,
                     y=compare_data[col],
                     name="Δ"+col,
@@ -793,7 +795,7 @@ def plot_comparison_graph(n_clicks):
                 progress = int((idx + 1) / total_no_of_traces_to_add * 100)
                 mainWindow.plot_progress.emit(progress)  # Emit the plot progress signal
 
-                my_fig.update_layout(
+                my_fig_main.update_layout(
                     title_text='Comparison : """ + sol_selected_environment.Parent.Name + """ ' + " (" + selected_group + ")",
                     title_x=0.45,
                     title_y=0.95,
@@ -811,7 +813,7 @@ def plot_comparison_graph(n_clicks):
                     margin=dict(t=40, b=0)  # Adjust the top margin to bring the graph closer to the title
                 )
             mainWindow.plot_finished.emit()
-            return my_fig
+            return my_fig_main
     return no_update
 
 # region Select the input SG raw channel data (in microstrains) and rosette configuration file via dialog boxes
@@ -1003,7 +1005,7 @@ try:
         app_plot = QApplication(sys.argv)
         
         # The plotly-resampler callback to update the graph after a relayout event (= zoom/pan)
-        my_fig.register_update_graph_callback(app=my_dash_app, graph_id="graph-id")
+        my_fig_main.register_update_graph_callback(app=my_dash_app, graph_id="graph-id")
         
         mainWindow = PlotWindow('""" + solution_directory_path + """', '""" + file_name_of_SG_calculations + """')
         mainWindow.show()
