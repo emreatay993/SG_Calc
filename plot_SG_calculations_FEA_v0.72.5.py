@@ -735,7 +735,40 @@ def plot_comparison_graph(n_clicks):
     global output_data
     global compare_data
     global comparison_trace_columns
-    global mainWindow  # Ensure to use mainWindow for emitting signals
+    global output_data
+
+    if selected_group == "All":
+        comparison_trace_columns = [col for col in comparison_data.columns if col != 'Time']
+    elif selected_group == "Raw Strain Data":
+        comparison_trace_columns = [col for col in comparison_data.columns if re.match(r'SG\d+_\d+$', col)]
+    else:
+        comparison_trace_columns = [col for col in comparison_data.columns if col.endswith(selected_group)]
+
+    if selected_ref_number != "-":
+        comparison_trace_columns = [col for col in comparison_trace_columns if col.split('_')[1] == selected_ref_number]
+    
+    comparison_time = comparison_data['Time']
+    main_time = output_data['Time']
+    
+    # Determine which dataset has a lower sample rate
+    if len(main_time) > len(comparison_time):
+        interp_func = interp1d(comparison_time, comparison_data[comparison_trace_columns], axis=0, fill_value="extrapolate")
+        interpolated_comparison_data = pd.DataFrame(interp_func(main_time), columns=comparison_trace_columns)
+        interpolated_comparison_data.insert(0, 'Time', main_time)
+        
+        # Calculate the difference
+        compare_data = output_data[comparison_trace_columns].values - interpolated_comparison_data[comparison_trace_columns].values
+        compare_data = pd.DataFrame(compare_data, columns=comparison_trace_columns)
+        compare_data.insert(0, 'Time', main_time)
+    else:
+        interp_func = interp1d(main_time, output_data[comparison_trace_columns], axis=0, fill_value="extrapolate")
+        interpolated_main_data = pd.DataFrame(interp_func(comparison_time), columns=comparison_trace_columns)
+        interpolated_main_data.insert(0, 'Time', comparison_time)
+        
+        # Calculate the difference
+        compare_data = interpolated_main_data[comparison_trace_columns].values - comparison_data[comparison_trace_columns].values
+        compare_data = pd.DataFrame(compare_data, columns=comparison_trace_columns)
+        compare_data.insert(0, 'Time', comparison_time)
 
     if len(ctx.triggered) and "plot-comparison-button" in ctx.triggered[0]["prop_id"]:
         if compare_data is not None and comparison_trace_columns is not None:
@@ -744,8 +777,8 @@ def plot_comparison_graph(n_clicks):
             time_data_in_x_axis = compare_data['Time']
             total_no_of_traces_to_add = len(comparison_trace_columns)
 
-            mainWindow.plot_started.emit()  # Emit the plot started signal
-            
+            mainWindow.plot_started.emit()
+
             for idx, col in enumerate(comparison_trace_columns):
                 color_idx = idx % len(my_discrete_color_scheme)
                 my_fig.add_trace(go.Scattergl(
@@ -760,25 +793,24 @@ def plot_comparison_graph(n_clicks):
                 progress = int((idx + 1) / total_no_of_traces_to_add * 100)
                 mainWindow.plot_progress.emit(progress)  # Emit the plot progress signal
 
-            my_fig.update_layout(
-                title_text='Comparison : """ + sol_selected_environment.Parent.Name + """ ' + " (" + selected_group + ")",
-                title_x=0.45,
-                title_y=0.95,
-                legend_title_text='Result',
-                template="plotly_white",
-                plot_bgcolor='rgba(0,0,0,0.005)',
-                xaxis_title='Time [s]',
-                yaxis_title='Data',
-                font=dict(family="Arial, sans-serif", size=12, color="#0077B6"),
-                xaxis=dict(showline=True, showgrid=True, showticklabels=True, linewidth=2,
-                           tickfont=dict(family='Arial, sans-serif', size=12), tickmode='auto', nticks=30),
-                yaxis=dict(showgrid=True, zeroline=False, showline=False, showticklabels=True,
-                           linecolor='rgb(204, 204, 204)', tickmode='auto', nticks=30),
-                hovermode='closest',
-                margin=dict(t=40, b=0)  # Adjust the top margin to bring the graph closer to the title
-            )
-
-            mainWindow.plot_finished.emit()  # Emit the plot finished signal
+                my_fig.update_layout(
+                    title_text='Comparison : """ + sol_selected_environment.Parent.Name + """ ' + " (" + selected_group + ")",
+                    title_x=0.45,
+                    title_y=0.95,
+                    legend_title_text='Result',
+                    template="plotly_white",
+                    plot_bgcolor='rgba(0,0,0,0.005)',
+                    xaxis_title='Time [s]',
+                    yaxis_title='Data',
+                    font=dict(family="Arial, sans-serif", size=12, color="#0077B6"),
+                    xaxis=dict(showline=True, showgrid=True, showticklabels=True, linewidth=2,
+                               tickfont=dict(family='Arial, sans-serif', size=12), tickmode='auto', nticks=30),
+                    yaxis=dict(showgrid=True, zeroline=False, showline=False, showticklabels=True,
+                               linecolor='rgb(204, 204, 204)', tickmode='auto', nticks=30),
+                    hovermode='closest',
+                    margin=dict(t=40, b=0)  # Adjust the top margin to bring the graph closer to the title
+                )
+            mainWindow.plot_finished.emit()
             return my_fig
     return no_update
 
