@@ -63,20 +63,26 @@ except ImportError as e:
 QApplication.setAttribute(Qt.AA_EnableHighDpiScaling, True)
 my_discrete_color_scheme = px.colors.qualitative.Light24
 global selected_group
+
 global my_fig_main
 my_fig_main = FigureResampler()
 global current_figure_main
 current_figure_main = None
+
+global my_fig_comparison
+my_fig_comparison = FigureResampler()
+global current_figure_comparison
+current_figure_comparison = None
+
 selected_group = None
 selected_ref_number = None
 output_data = None
 trace_columns = None
+
 global comparison_data
 comparison_data = None
 global comparison_trace_columns  
 comparison_trace_columns = None
-global current_figure_comparison
-current_figure_comparison = None
 global compare_data
 compare_data = None
 global selected_group_comparison
