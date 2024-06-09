@@ -273,7 +273,7 @@ label_manager.LabelObscureStyle = MechanicalEnums.Graphics.ObscuredLabelStyle.eH
 # region Try to read the SG calculation results from solution folder path, if there is any file
 solution_directory_path = sol_selected_environment.WorkingDir[:-1]
 solution_directory_path = solution_directory_path.Replace("\\", "\\\\")
-file_name_of_SG_calculations = 'SG_calculations_FEA.csv'
+file_name_of_SG_calculations = 'SG_calculations.csv'
 file_path_of_SG_calculations = os.path.join(solution_directory_path,file_name_of_SG_calculations)
 
 if os.path.exists(file_path_of_SG_calculations):
