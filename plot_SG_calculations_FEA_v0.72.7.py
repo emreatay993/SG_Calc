@@ -585,6 +585,18 @@ my_dash_app = Dash(__name__)
     prevent_initial_call=False,
 )
 def render_content(tab, comparison_data_loaded):
+    button_style  = {
+    'width': '12%', 'margin': '0.5vh',
+    'font-size': '10px','background-color': '#87CEFA',
+    'border': 'none','border-radius': '8px',
+    'cursor': 'pointer','transition': 'background-color 0.3s ease'
+}
+    
+    button_success_style = {
+    **button_style,
+    'background-color': 'green',  # Change to green on success
+}
+
     if tab == 'tab-1':
         graph = dcc.Graph(
             id="graph-id",
@@ -596,7 +608,7 @@ def render_content(tab, comparison_data_loaded):
         if current_figure_main:
             graph.figure = current_figure_main  # Set the current figure if it exists
         return html.Div([
-            html.Button("Click to Plot", id="plot-button", n_clicks=0, style={'width': '12%', 'margin': '0.5vh','font-size': '10px'}),
+            html.Button("Click to Plot", id="plot-button", n_clicks=0, style=button_style),
             graph
         ])
     elif tab == 'tab-2':
@@ -610,8 +622,8 @@ def render_content(tab, comparison_data_loaded):
         if current_figure_comparison:
             graph_comparison.figure = current_figure_comparison  # Set the current figure if it exists
         return html.Div([
-            html.Button("Click to Plot", id="plot-comparison-button", n_clicks=0, style={'width': '12%', 'margin': '0.5vh','font-size': '10px'}),
-            html.Button("Load Comparison CSV", id="load-comparison-csv-button", n_clicks=0, style={'width': '15%', 'margin': '0.5vh','font-size': '10px'}),
+            html.Button("Click to Plot", id="plot-comparison-button", n_clicks=0, style=button_style),
+            html.Button("Load Comparison CSV", id="load-comparison-csv-button", n_clicks=0, style=button_style),
             graph_comparison
         ])
 
