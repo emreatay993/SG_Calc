@@ -262,6 +262,10 @@ class PlotWindow(QMainWindow):
                 )
                 if reply == QMessageBox.Yes:
                     output_data = pd.read_csv(file_path)
+                    # Drop columns starting with uppercase delta symbol (Δ)
+                    output_data = output_data.loc[:, ~output_data.columns.str.startswith('Δ')]
+                    if 'Time' in output_data.columns:
+                        output_data = output_data.drop(columns=['Time'])
                 else:
                     output_data = output_SG_data_w_raw
             else:
@@ -523,7 +527,6 @@ class PlotWindow(QMainWindow):
                 # Include all columns from compare_data_full
                 combined_data = pd.concat([output_data, compare_data_full], axis=1)
             else:
-                print('-------------------DEBUG---------------------')
                 combined_data = output_data
             
             combined_data.to_csv(file_path, index=False, encoding='utf-8-sig')
@@ -742,7 +745,7 @@ def load_comparison_csv(n_clicks):
                     compare_data = pd.DataFrame(compare_data, columns=common_columns)
 
                     compare_data_full = output_data[common_columns].values - interpolated_comparison_data[common_columns].values
-                    compare_data_full = pd.DataFrame(compare_data_full, columns=common_columns)
+                    compare_data_full = pd.DataFrame(compare_data_full, columns=['Δ' + col for col in comparison_trace_columns_all])
                     compare_data_full.insert(0, 'Time', main_time)
 
                     compare_data.insert(0, 'Time', main_time)
@@ -755,7 +758,7 @@ def load_comparison_csv(n_clicks):
                     compare_data = pd.DataFrame(compare_data, columns=common_columns)
 
                     compare_data_full = interpolated_main_data[common_columns].values - comparison_data[common_columns].values
-                    compare_data_full = pd.DataFrame(compare_data_full, columns=common_columns)
+                    compare_data_full = pd.DataFrame(compare_data_full, columns=['Δ' + col for col in comparison_trace_columns_all])
                     compare_data_full.insert(0, 'Time', comparison_time)
 
                     compare_data.insert(0, 'Time', comparison_time)
