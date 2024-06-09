@@ -85,6 +85,8 @@ global comparison_trace_columns
 comparison_trace_columns = None
 global compare_data
 compare_data = None
+global compare_data_full
+compare_data_full = None
 global selected_group_comparison
 selected_group_comparison = None
 global selected_ref_number_comparison
@@ -254,7 +256,7 @@ class PlotWindow(QMainWindow):
                 reply = QMessageBox.question(
                     self,
                     'File Found',
-                    "An SG_calculations.csv is found inside the solution directory. Would you like to plot the results for it?",
+                    "An SG_calculations.csv is found inside the solution directory. Would you like to plot the results for it instead?",
                     QMessageBox.Yes | QMessageBox.No,
                     QMessageBox.No
                 )
@@ -425,7 +427,7 @@ class PlotWindow(QMainWindow):
         # Save the current figure to an interactive HTML file
         plot(my_fig_main, filename=os.path.join(self.folder_name, filename),
              output_type='file', auto_open=False)
-        QMessageBox.information(self, "Plot Saved", f"The plot has been saved as {filename} in the solution directory.")# endregion
+        QMessageBox.information(self, "Plot Saved", f"The plot has been saved to: {filename} in the solution directory.")# endregion
 
     def offset_zero_sgs(self):
         # Get the unique time points as strings for the combo box
@@ -512,11 +514,19 @@ class PlotWindow(QMainWindow):
         self.update_plot(0)
 
     def write_full_data_to_csv(self):
-        global output_data  # Ensure this references the correct DataFrame
+        global output_data
+        global compare_data_full
         file_path = os.path.join(self.folder_name, self.file_name)
-    
+        
         try:
-            output_data.to_csv(file_path, index=False)
+            if compare_data_full is not None:
+                # Include all columns from compare_data_full
+                combined_data = pd.concat([output_data, compare_data_full], axis=1)
+            else:
+                print('-------------------DEBUG---------------------')
+                combined_data = output_data
+            
+            combined_data.to_csv(file_path, index=False, encoding='utf-8-sig')
             QMessageBox.information(self, "CSV Saved", f"The full data has been saved as {file_path}")
         except Exception as e:
             QMessageBox.critical(self, "Error", f"Failed to write the CSV file: {str(e)}")
@@ -697,14 +707,17 @@ def load_comparison_csv(n_clicks):
     if n_clicks:
         global comparison_data
         global compare_data
+        global compare_data_full
         global comparison_trace_columns
         global output_data
-        
+
         file_path, _ = QFileDialog.getOpenFileName(None, 'Open comparison CSV file', '', 'CSV Files (*.csv)')
         if file_path:
             comparison_data = pd.read_csv(file_path)
+
+            comparison_trace_columns_all = [col for col in comparison_data.columns if col != 'Time']
             if selected_group == "All":
-                comparison_trace_columns = [col for col in comparison_data.columns if col != 'Time']
+                comparison_trace_columns = comparison_trace_columns_all
             elif selected_group == "Raw Strain Data":
                 comparison_trace_columns = [col for col in comparison_data.columns if re.match(r'SG\d+_\d+$', col)]
             else:
@@ -712,33 +725,41 @@ def load_comparison_csv(n_clicks):
 
             if selected_ref_number != "-":
                 comparison_trace_columns = [col for col in comparison_trace_columns if col.split('_')[1] == selected_ref_number]
-            
-            # Ensure the 'Time' column exists in both datasets
+
             if 'Time' in output_data.columns and 'Time' in comparison_data.columns:
-                # Interpolation function for comparison data
                 comparison_time = comparison_data['Time']
                 main_time = output_data['Time']
-                
-                # Determine which dataset has a lower sample rate
+
+                common_columns = [col for col in comparison_trace_columns_all if col in comparison_data.columns and col in output_data.columns]
+                print(f"Common columns: {common_columns}")
+
                 if len(main_time) > len(comparison_time):
-                    interp_func = interp1d(comparison_time, comparison_data[comparison_trace_columns], axis=0, fill_value="extrapolate")
-                    interpolated_comparison_data = pd.DataFrame(interp_func(main_time), columns=comparison_trace_columns)
+                    interp_func = interp1d(comparison_time, comparison_data[common_columns], axis=0, fill_value="extrapolate")
+                    interpolated_comparison_data = pd.DataFrame(interp_func(main_time), columns=common_columns)
                     interpolated_comparison_data.insert(0, 'Time', main_time)
-                    
-                    # Calculate the difference
-                    compare_data = output_data[comparison_trace_columns].values - interpolated_comparison_data[comparison_trace_columns].values
-                    compare_data = pd.DataFrame(compare_data, columns=comparison_trace_columns)
+
+                    compare_data = output_data[common_columns].values - interpolated_comparison_data[common_columns].values
+                    compare_data = pd.DataFrame(compare_data, columns=common_columns)
+
+                    compare_data_full = output_data[common_columns].values - interpolated_comparison_data[common_columns].values
+                    compare_data_full = pd.DataFrame(compare_data_full, columns=common_columns)
+                    compare_data_full.insert(0, 'Time', main_time)
+
                     compare_data.insert(0, 'Time', main_time)
                 else:
-                    interp_func = interp1d(main_time, output_data[comparison_trace_columns], axis=0, fill_value="extrapolate")
-                    interpolated_main_data = pd.DataFrame(interp_func(comparison_time), columns=comparison_trace_columns)
+                    interp_func = interp1d(main_time, output_data[common_columns], axis=0, fill_value="extrapolate")
+                    interpolated_main_data = pd.DataFrame(interp_func(comparison_time), columns=common_columns)
                     interpolated_main_data.insert(0, 'Time', comparison_time)
-                    
-                    # Calculate the difference
-                    compare_data = interpolated_main_data[comparison_trace_columns].values - comparison_data[comparison_trace_columns].values
-                    compare_data = pd.DataFrame(compare_data, columns=comparison_trace_columns)
+
+                    compare_data = interpolated_main_data[common_columns].values - comparison_data[common_columns].values
+                    compare_data = pd.DataFrame(compare_data, columns=common_columns)
+
+                    compare_data_full = interpolated_main_data[common_columns].values - comparison_data[common_columns].values
+                    compare_data_full = pd.DataFrame(compare_data_full, columns=common_columns)
+                    compare_data_full.insert(0, 'Time', comparison_time)
+
                     compare_data.insert(0, 'Time', comparison_time)
-                    
+
                 return 'loaded'
             else:
                 raise KeyError("'Time' column is missing in one of the DataFrames")
