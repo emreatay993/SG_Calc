@@ -78,6 +78,9 @@ class DataSelectionForm(Form):
 
         # Handle key down events on the form
         self.KeyDown += self.form_key_down
+        
+        # Handle form closing event
+        self.FormClosing += self.on_form_closing
 
     def button_clicked(self, sender, args):
         # Actions to perform when OK button is clicked
@@ -100,7 +103,50 @@ class DataSelectionForm(Form):
         print("Selected Time:", time_value)
         print("Selected Measurement Type:", measurement_type)
         print("Measurement Suffix:", measurement_suffix)
-        self.Close()
+        # Perform the main processing logic
+        list_of_requested_SG_label_result = read_row_based_on_time_and_measurement(file_path_of_SG_calculations, time_value, measurement_type)
+        list_of_requested_SG_label_result = [round(num, 2) for num in list_of_requested_SG_label_result]  # round off the results to two significant digits
+        # Determine the color scheme of labels based on calculated SG data
+        color_list = numbers_to_rainbow_colors(list_of_requested_SG_label_result)
+        # Create SG labels on the screen
+        self.create_labels(list_of_requested_SG_label_result, color_list)
+        # Keep the GUI open and set focus back to the ComboBox
+        self.timeCombo.Focus()
+
+    def create_labels(self, results, colors):
+        # Define whether labels will always stay on the screen
+        global list_of_obj_of_SG_label_calculation
+        if list_of_filtered_names_of_CS_SG_channels:
+            message = 'Would you like the SG labels to always stay on the screen?'
+            title = 'Select an option'
+            result = MessageBox.Show(message, title, MessageBoxButtons.YesNo, MessageBoxIcon.Warning)
+            yes_no_choice_is_labels_always_on_screen = result == DialogResult.Yes
+
+        # Refractoring collector list for a better readability of the code
+        xyz_list = list_of_coordinates_of_all_filtered_names_of_CS_SG_channels
+        # Initialize list of label objects
+        list_of_obj_of_SG_label_calculation = []
+
+        with Graphics.Suspend():
+            with Transaction():
+                # Assign a background color for each numerical value
+                for i in range(len(xyz_list)):
+                    obj_of_SG_label_calculation = label_manager.CreateLabel(sol_selected_environment)
+                    obj_of_SG_label_calculation.Note = ("SG_" 
+                                                        + str(list_of_SG_reference_numbers[i]) 
+                                                        + ": "
+                                                        + str(results[i])
+                                                        + " , " + measurement_suffix)
+                    obj_of_SG_label_calculation.Scoping.XYZ = Point((xyz_list[i][0], xyz_list[i][1], xyz_list[i][2]), 'm')
+                    obj_of_SG_label_calculation.ShowAlways = yes_no_choice_is_labels_always_on_screen
+                    obj_of_SG_label_calculation.Color = Ansys.ACT.Common.Graphics.Color(red=colors[i][0], 
+                                                                                        green=colors[i][1], 
+                                                                                        blue=colors[i][2], 
+                                                                                        alpha=0)
+                    list_of_obj_of_SG_label_calculation.append(obj_of_SG_label_calculation)
+
+    def on_form_closing(self, sender, args):
+        Application.Exit()
 # endregion
 
 #--------------------------------------------------------------------------------------------
@@ -155,7 +201,7 @@ def get_rainbow_color(value, min_val, max_val):
     # Determine the fraction between the two colors
     segment_fraction = scaled_value - first_color_index
     
-    # Interpolate between the two colors
+  # Interpolate between the two colors
     return interpolate_segment(colors[first_color_index], colors[second_color_index], segment_fraction)
 
 def numbers_to_rainbow_colors(numbers):
@@ -316,10 +362,6 @@ if os.path.exists(file_path_of_SG_calculations):
     times, measurements = prepare_data(file_path_of_SG_calculations)
     form = DataSelectionForm(times, measurements)
     Application.Run(form)
-    list_of_requested_SG_label_result = read_row_based_on_time_and_measurement(file_path_of_SG_calculations, time_value, measurement_type)
-    list_of_requested_SG_label_result = [round(num, 2) for num in list_of_requested_SG_label_result]  # round off the results to two significant digits
-    # Determine the color scheme of labels based on calculated SG data
-    color_list = numbers_to_rainbow_colors(list_of_requested_SG_label_result)
 else:
     message = '"SG_calculations_FEA.csv" file is not found in the solution directory. Would you like to manually specify this file?'
     title = 'File Not Found'
@@ -334,53 +376,12 @@ else:
             times, measurements = prepare_data(file_path_of_SG_calculations)
             form = DataSelectionForm(times, measurements)
             Application.Run(form)
-            list_of_requested_SG_label_result = read_row_based_on_time_and_measurement(file_path_of_SG_calculations, time_value, measurement_type)
-            list_of_requested_SG_label_result = [round(num, 2) for num in list_of_requested_SG_label_result]
-            # Determine the color scheme of labels based on calculated SG data
-            color_list = numbers_to_rainbow_colors(list_of_requested_SG_label_result)
-    else:
-        print("No files are selected. Only labels will be generated")
-        list_of_requested_SG_label_result = [""] * len(list_of_coordinates_of_all_filtered_names_of_CS_SG_channels)
-        # Determine the color scheme of labels based on SG numbers
-        color_list = numbers_to_rainbow_colors(list_of_SG_reference_numbers)
-# endregion
-
-#--------------------------------------------------------------------------------------------
-
-# region Create SG labels on the screen
-# Define whether labels will always stay on the screen
-if list_of_filtered_names_of_CS_SG_channels:
-    message = 'Would you like the SG labels to always stay on the screen?'
-    title = 'Select an option'
-    result = MessageBox.Show(message, title, MessageBoxButtons.YesNo, MessageBoxIcon.Warning)
-    if result == DialogResult.Yes:
-        yes_no_choice_is_labels_always_on_screen = True
-    elif result == DialogResult.No:
-        yes_no_choice_is_labels_always_on_screen = False
-
-# Refractoring collector list for a better readability of the code
-xyz_list = None
-xyz_list = list_of_coordinates_of_all_filtered_names_of_CS_SG_channels
-# Initialize list of label objects
-list_of_obj_of_SG_label_calculation = []
-
-with Graphics.Suspend():
-    with Transaction():
-        # Assign a background color for each numerical value
-        for i in range(len(xyz_list)):
-            obj_of_SG_label_calculation = label_manager.CreateLabel(sol_selected_environment)
-            obj_of_SG_label_calculation.Note = ("SG_" 
-                                                + str(list_of_SG_reference_numbers[i]) 
-                                                + ": "
-                                                + str(list_of_requested_SG_label_result[i])
-                                                + " , " + measurement_suffix)
-            obj_of_SG_label_calculation.Scoping.XYZ = Point((xyz_list[i][0], xyz_list[i][1], xyz_list[i][2]), 'm')
-            obj_of_SG_label_calculation.ShowAlways = yes_no_choice_is_labels_always_on_screen
-            obj_of_SG_label_calculation.Color = Ansys.ACT.Common.Graphics.Color(red=color_list[i][0], 
-                                                                                green=color_list[i][1], 
-                                                                                blue=color_list[i][2], 
-                                                                                alpha=0)
-            list_of_obj_of_SG_label_calculation.append(obj_of_SG_label_calculation)
+        else:
+            print("No files are selected. Only labels will be generated")
+            list_of_requested_SG_label_result = [""] * len(list_of_coordinates_of_all_filtered_names_of_CS_SG_channels)
+            # Determine the color scheme of labels based on SG numbers
+            color_list = numbers_to_rainbow_colors(list_of_SG_reference_numbers)
+            form.create_labels(list_of_requested_SG_label_result, color_list)
 # endregion
 
 ExtAPI.Application.ActiveUnitSystem = MechanicalUnitSystem.StandardNMM  # Revert the unit system back to 'mm,kg,N'
