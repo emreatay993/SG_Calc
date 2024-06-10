@@ -146,7 +146,8 @@ class DataSelectionForm(Form):
                     list_of_obj_of_SG_label_calculation.append(obj_of_SG_label_calculation)
 
     def on_form_closing(self, sender, args):
-        Application.Exit()
+        global form_closed
+        form_closed = True
 # endregion
 
 #--------------------------------------------------------------------------------------------
@@ -274,6 +275,9 @@ def prepare_data(file_path):
     measurement_types = sorted(set(measurement for measurement in measurements.keys() if measurement != 'Time'))
     
     return sorted(times), measurement_types
+
+# Global flag to stop the program once GUI is closed
+form_closed = False
 # endregion
 
 measurement_suffixes = {
@@ -362,6 +366,17 @@ if os.path.exists(file_path_of_SG_calculations):
     times, measurements = prepare_data(file_path_of_SG_calculations)
     form = DataSelectionForm(times, measurements)
     Application.Run(form)
+
+    while True:
+        Application.DoEvents()  # Process all Windows messages currently in the message queue
+        if 'time_value' in globals() and 'measurement_type' in globals():
+            list_of_requested_SG_label_result = read_row_based_on_time_and_measurement(file_path_of_SG_calculations, time_value, measurement_type)
+            list_of_requested_SG_label_result = [round(num, 2) for num in list_of_requested_SG_label_result]  # round off the results to two significant digits
+            # Determine the color scheme of labels based on calculated SG data
+            color_list = numbers_to_rainbow_colors(list_of_requested_SG_label_result)
+            break  # Exit the loop once the values are set
+        if form_closed:
+            break  # Exit the loop if the form is closed
 else:
     message = '"SG_calculations_FEA.csv" file is not found in the solution directory. Would you like to manually specify this file?'
     title = 'File Not Found'
@@ -376,12 +391,14 @@ else:
             times, measurements = prepare_data(file_path_of_SG_calculations)
             form = DataSelectionForm(times, measurements)
             Application.Run(form)
-        else:
-            print("No files are selected. Only labels will be generated")
-            list_of_requested_SG_label_result = [""] * len(list_of_coordinates_of_all_filtered_names_of_CS_SG_channels)
-            # Determine the color scheme of labels based on SG numbers
-            color_list = numbers_to_rainbow_colors(list_of_SG_reference_numbers)
-            form.create_labels(list_of_requested_SG_label_result, color_list)
-# endregion
+            list_of_requested_SG_label_result = read_row_based_on_time_and_measurement(file_path_of_SG_calculations, time_value, measurement_type)
+            list_of_requested_SG_label_result = [round(num, 2) for num in list_of_requested_SG_label_result]
+            # Determine the color scheme of labels based on calculated SG data
+            color_list = numbers_to_rainbow_colors(list_of_requested_SG_label_result)
+    else:
+        print("No files are selected. Only labels will be generated")
+        list_of_requested_SG_label_result = [""] * len(list_of_coordinates_of_all_filtered_names_of_CS_SG_channels)
+        # Determine the color scheme of labels based on SG numbers
+        color_list = numbers_to_rainbow_colors(list_of_SG_reference_numbers)
 
 ExtAPI.Application.ActiveUnitSystem = MechanicalUnitSystem.StandardNMM  # Revert the unit system back to 'mm,kg,N'
