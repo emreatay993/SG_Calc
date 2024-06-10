@@ -93,17 +93,19 @@ class DataSelectionForm(Form):
 
     def perform_actions(self):
         # Common actions to perform (previously in button_clicked)
-        global time_value, measurement_type
+        global time_value, measurement_type, measurement_suffix
         time_value = float(self.timeCombo.SelectedItem)
         measurement_type = self.measurementCombo.SelectedItem
+        measurement_suffix = measurement_suffixes.get(measurement_type, '')
         print("Selected Time:", time_value)
         print("Selected Measurement Type:", measurement_type)
+        print("Measurement Suffix:", measurement_suffix)
         self.Close()
 # endregion
 
 #--------------------------------------------------------------------------------------------
 
-# region Global function definitions
+# region Global function and variable definitions
 # Extract the number from the channel name for sorting
 def extract_number(channel_name):
     match = re.search(r'CS_SG_Ch_(\d+)_2', channel_name)
@@ -136,6 +138,10 @@ def get_rainbow_color(value, min_val, max_val):
     # Reverse the color order so that colors go from violet-blue to red as they increase
     colors.reverse()
     
+    # Handle the case where min_val and max_val are equal to avoid division by zero
+    if min_val == max_val:
+        return colors[0]  # Return the last color in the gradient
+    
     # Determine how many segments there are
     num_segments = len(colors) - 1
     
@@ -163,6 +169,7 @@ def numbers_to_rainbow_colors(numbers):
     rgb_colors = [(int(r), int(g), int(b)) for r, g, b in colors]
     
     return rgb_colors
+
 # Function to classify headers based on measurement types
 def classify_headers_by_measurement(file_path):
     with open(file_path, 'r') as file:
@@ -170,20 +177,25 @@ def classify_headers_by_measurement(file_path):
         headers = next(reader)  # Read the header row
         measurements = {}  # Dictionary to store measurement types and indices
 
-        # Regex to extract measurement types from header names
-        pattern_measurement = re.compile(r'SG\d+_(\w+)')
+        # Regex to extract measurement types from header names, including delta symbol
+        pattern_measurement = re.compile(r'(Δ?SG\d+_(\w+))')
 
         for index, header in enumerate(headers):
             match = pattern_measurement.search(header)
             if match:
-                measurement = match.group(1)
+                measurement = match.group(2)  # Extracts the measurement type without the SG identifier
+                if match.group(1).startswith('Δ'):
+                    measurement = 'Δ' + measurement
                 if measurement not in measurements:
                     measurements[measurement] = []
                 measurements[measurement].append(index)
             elif "Time" in header:
-                measurements["Time"] = [index]
+                if "Time" not in measurements:
+                    measurements["Time"] = []
+                measurements["Time"].append(index)
 
     return measurements
+
 # Function to read a specific row based on "Time" and optionally filter by measurement type
 def read_row_based_on_time_and_measurement(file_path, time_value, measurement_type=None):
     measurements = classify_headers_by_measurement(file_path)  # Get measurement groups
@@ -201,17 +213,41 @@ def read_row_based_on_time_and_measurement(file_path, time_value, measurement_ty
                 else:
                     # Return all values converted to float
                     return [float(value) for value in row]
+                    
 # Function to classify headers and find unique time values
 def prepare_data(file_path):
     times = set()
+    measurements = classify_headers_by_measurement(file_path)  # Get measurement types dynamically
     with open(file_path, 'r') as file:
         reader = csv.reader(file)
         header = next(reader)  # Skip the header
         for row in reader:
             times.add(row[0])  # Assuming time values are in the first column
-    return sorted(times), ['epsilon_x', 'epsilon_y', 'von_Mises', 'gamma_xy', 'sigma_1', 'sigma_2', 'theta_p', 'Biaxiality_Ratio']
+
+    # Extract unique measurement types and sort them
+    measurement_types = sorted(set(measurement for measurement in measurements.keys() if measurement != 'Time'))
+    
+    return sorted(times), measurement_types
 # endregion
 
+measurement_suffixes = {
+    'epsilon_x': 'εx',
+    'epsilon_y': 'εy',
+    'gamma_xy': 'γxy',
+    'sigma_1': 'σ1',
+    'sigma_2': 'σ2',
+    'theta_p': 'θp',
+    'Biaxiality_Ratio': 'BR',
+    'von_Mises': 'VM',
+    'Δepsilon_x': 'Δεx',
+    'Δepsilon_y': 'Δεy',
+    'Δgamma_xy': 'Δγxy',
+    'Δsigma_1': 'Δσ1',
+    'Δsigma_2': 'Δσ2',
+    'Δtheta_p': 'Δθp',
+    'ΔBiaxiality_Ratio': 'ΔBR',
+    'Δvon_Mises': 'ΔVM'
+}
 #--------------------------------------------------------------------------------------------
 
 # region Filter the list of name of reference channels (in this case Ch_2) from each CS_SG_Ch object
@@ -281,10 +317,10 @@ if os.path.exists(file_path_of_SG_calculations):
     form = DataSelectionForm(times, measurements)
     Application.Run(form)
     list_of_requested_SG_label_result = read_row_based_on_time_and_measurement(file_path_of_SG_calculations, time_value, measurement_type)
-    list_of_requested_SG_label_result = [round(num, 2) for num in list_of_requested_SG_label_result] # round off the results to two significant digits
+    list_of_requested_SG_label_result = [round(num, 2) for num in list_of_requested_SG_label_result]  # round off the results to two significant digits
     # Determine the color scheme of labels based on calculated SG data
     color_list = numbers_to_rainbow_colors(list_of_requested_SG_label_result)
-if not os.path.exists(file_path_of_SG_calculations):
+else:
     message = '"SG_calculations_FEA.csv" file is not found in the solution directory. Would you like to manually specify this file?'
     title = 'File Not Found'
     result = MessageBox.Show(message, title, MessageBoxButtons.YesNo, MessageBoxIcon.Warning)
@@ -304,16 +340,15 @@ if not os.path.exists(file_path_of_SG_calculations):
             color_list = numbers_to_rainbow_colors(list_of_requested_SG_label_result)
     else:
         print("No files are selected. Only labels will be generated")
-        list_of_requested_SG_label_result = [""]*len(list_of_coordinates_of_all_filtered_names_of_CS_SG_channels)
+        list_of_requested_SG_label_result = [""] * len(list_of_coordinates_of_all_filtered_names_of_CS_SG_channels)
         # Determine the color scheme of labels based on SG numbers
         color_list = numbers_to_rainbow_colors(list_of_SG_reference_numbers)
-
 # endregion
 
 #--------------------------------------------------------------------------------------------
 
 # region Create SG labels on the screen
-#Define whether labels will always stay on the screen
+# Define whether labels will always stay on the screen
 if list_of_filtered_names_of_CS_SG_channels:
     message = 'Would you like the SG labels to always stay on the screen?'
     title = 'Select an option'
@@ -337,7 +372,8 @@ with Graphics.Suspend():
             obj_of_SG_label_calculation.Note = ("SG_" 
                                                 + str(list_of_SG_reference_numbers[i]) 
                                                 + ": "
-                                                + str(list_of_requested_SG_label_result[i]))
+                                                + str(list_of_requested_SG_label_result[i])
+                                                + " , " + measurement_suffix)
             obj_of_SG_label_calculation.Scoping.XYZ = Point((xyz_list[i][0], xyz_list[i][1], xyz_list[i][2]), 'm')
             obj_of_SG_label_calculation.ShowAlways = yes_no_choice_is_labels_always_on_screen
             obj_of_SG_label_calculation.Color = Ansys.ACT.Common.Graphics.Color(red=color_list[i][0], 
