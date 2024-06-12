@@ -74,6 +74,11 @@ my_fig_comparison = FigureResampler()
 global current_figure_comparison
 current_figure_comparison = None
 
+global my_fig_compared_data
+my_fig_compared_data = FigureResampler()
+global current_figure_compared_data
+current_figure_compared_data = None
+
 selected_group = None
 selected_ref_number = None
 output_data = None
@@ -544,9 +549,10 @@ class QDash(QtCore.QObject):
         super().__init__(parent)
         self._app = my_dash_app
         self.app.layout = html.Div([
-            dcc.Tabs(id="tabs-example", value='tab-1', children=[
-                dcc.Tab(label='Main Data', value='tab-1', style=tab_style, selected_style=selected_tab_style),
-                dcc.Tab(label='Comparison', value='tab-2', style=tab_style, selected_style=selected_tab_style),
+            dcc.Tabs(id="tabs-example", value='tab-main', children=[
+                dcc.Tab(label='Main Data', value='tab-main', style=tab_style, selected_style=selected_tab_style),
+                dcc.Tab(label='Compared Data', value='tab-compared-data', style=tab_style, selected_style=selected_tab_style),
+                dcc.Tab(label='Comparison', value='tab-comparison', style=tab_style, selected_style=selected_tab_style),
             ], style={'width': '50%', 'height': '3vh', 'line-height': '3vh', 'padding': '0', 'margin': '0'}),
             html.Div(id='tabs-content-example', style={'padding': '0'}),
             html.Div(id='comparison-data-loaded', style={'display': 'none'})
@@ -610,7 +616,7 @@ def render_content(tab, comparison_data_loaded):
     'background-color': 'green',  # Change to green on success
 }
 
-    if tab == 'tab-1':
+    if tab == 'tab-main':
         graph = dcc.Graph(
             id="graph-id",
             config={
@@ -624,7 +630,23 @@ def render_content(tab, comparison_data_loaded):
             html.Button("Click to Plot", id="plot-button", n_clicks=0, style=button_style),
             graph
         ])
-    elif tab == 'tab-2':
+        
+    elif tab == 'tab-compared-data':
+        graph_compared_data = dcc.Graph(
+            id="graph-compared-data-id",
+            config={
+                'displaylogo': False  # Disable the plotly logo
+            },
+            style={'width': '100%', 'height': 'calc(100vh - 12vh)', 'overflow': 'auto'}
+        )
+        if current_figure_compared_data:
+            graph_compared_data.figure = current_figure_compared_data  # Set the current figure if it exists
+        return html.Div([
+            html.Button("Click to Plot", id="plot-compared-data-button", n_clicks=0, style=button_style),
+            graph_compared_data
+        ])
+        
+    elif tab == 'tab-comparison':
         graph_comparison = dcc.Graph(
             id="graph-comparison-id",
             config={
@@ -766,6 +788,91 @@ def load_comparison_csv(n_clicks):
                 return 'loaded'
             else:
                 raise KeyError("'Time' column is missing in one of the DataFrames")
+    return no_update
+
+@my_dash_app.callback(
+    Output("graph-compared-data-id", "figure"),
+    Input("plot-compared-data-button", "n_clicks"),
+    prevent_initial_call=False,
+)
+def plot_compared_data_graph(n_clicks):
+    ctx = callback_context
+    global current_figure_compared_data
+    global my_fig_compared_data
+    global output_data
+    global compare_data
+    global compared_data_trace_columns
+    global output_data
+
+    if selected_group == "All":
+        compared_data_trace_columns = [col for col in comparison_data.columns if col != 'Time']
+    elif selected_group == "Raw Strain Data":
+        compared_data_trace_columns = [col for col in comparison_data.columns if re.match(r'SG\d+_\d+$', col)]
+    else:
+        compared_data_trace_columns = [col for col in comparison_data.columns if col.endswith(selected_group)]
+
+    if selected_ref_number != "-":
+        compared_data_trace_columns = [col for col in compared_data_trace_columns if col.split('_')[1] == selected_ref_number]
+    
+    comparison_time = comparison_data['Time']
+    main_time = output_data['Time']
+    
+    # Determine which dataset has a lower sample rate
+    if len(main_time) > len(comparison_time):
+        interp_func = interp1d(comparison_time, comparison_data[compared_data_trace_columns], axis=0, fill_value="extrapolate")
+        interpolated_comparison_data = pd.DataFrame(interp_func(main_time), columns=compared_data_trace_columns)
+        interpolated_comparison_data.insert(0, 'Time', main_time)
+        compared_data = interpolated_comparison_data
+    else:
+        interp_func = interp1d(main_time, output_data[compared_data_trace_columns], axis=0, fill_value="extrapolate")
+        interpolated_main_data = pd.DataFrame(interp_func(comparison_time), columns=compared_data_trace_columns)
+        interpolated_main_data.insert(0, 'Time', comparison_time)
+        
+        compared_data = comparison_data
+
+    if len(ctx.triggered) and "plot-compared-data-button" in ctx.triggered[0]["prop_id"]:
+        if compared_data is not None and compared_data_trace_columns is not None:
+            my_fig_compared_data.replace(go.Figure())  # Reset the figure
+
+            time_data_in_x_axis = compared_data['Time']
+            total_no_of_traces_to_add = len(compared_data_trace_columns)
+
+            mainWindow.plot_started.emit()
+
+            for idx, col in enumerate(compared_data_trace_columns):
+                color_idx = idx % len(my_discrete_color_scheme)
+                my_fig_compared_data.add_trace(go.Scattergl(
+                    x=time_data_in_x_axis,
+                    y=compared_data[col],
+                    name="Δ"+col,
+                    line=dict(color=my_discrete_color_scheme[color_idx]),
+                    hovertemplate='%{meta}<br>Time = %{x:.2f} s<br>Data = %{y:.1f}<extra></extra>',
+                    hoverlabel=dict(font_size=14, bgcolor='rgba(255, 255, 255, 0.5)'),
+                    meta=col
+                ))
+                progress = int((idx + 1) / total_no_of_traces_to_add * 100)
+                mainWindow.plot_progress.emit(progress)  # Emit the plot progress signal
+
+                my_fig_compared_data.update_layout(
+                    title_text='Compared Data : """ + sol_selected_environment.Parent.Name + """ ' + " (" + selected_group + ")",
+                    title_x=0.45,
+                    title_y=0.95,
+                    legend_title_text='Result',
+                    template="plotly_white",
+                    plot_bgcolor='rgba(0,0,0,0.005)',
+                    xaxis_title='Time [s]',
+                    yaxis_title='Data',
+                    font=dict(family="Arial, sans-serif", size=12, color="#0077B6"),
+                    xaxis=dict(showline=True, showgrid=True, showticklabels=True, linewidth=2,
+                               tickfont=dict(family='Arial, sans-serif', size=12), tickmode='auto', nticks=30),
+                    yaxis=dict(showgrid=True, zeroline=False, showline=False, showticklabels=True,
+                               linecolor='rgb(204, 204, 204)', tickmode='auto', nticks=30),
+                    hovermode='closest',
+                    margin=dict(t=40, b=0)  # Adjust the top margin to bring the graph closer to the title
+                )
+            current_figure_compared_data = my_fig_compared_data
+            mainWindow.plot_finished.emit()
+            return my_fig_compared_data
     return no_update
 
 @my_dash_app.callback(
