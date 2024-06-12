@@ -59,7 +59,7 @@ except ImportError as e:
     sys.exit(1)
 # endregion
 
-# region Define classes and global functions/variables
+# region Define global variables
 QApplication.setAttribute(Qt.AA_EnableHighDpiScaling, True)
 my_discrete_color_scheme = px.colors.qualitative.Light24
 global selected_group
@@ -102,6 +102,11 @@ selected_group_comparison = None
 global selected_ref_number_comparison
 selected_ref_number_comparison = None
 
+global common_columns
+common_columns = None
+# endregion
+
+# region Define global functions and classes
 class FlatLineEdit(QLineEdit):
     def __init__(self, placeholder_text=""):
         super(FlatLineEdit, self).__init__()
@@ -601,7 +606,12 @@ class OffsetZeroDialog(QDialog):
         return float(self.comboBox.currentText())
 # endregion
 
+# region Initialization of main dash app
 my_dash_app = Dash(__name__)
+# endregion
+
+# region Definition of callback functions required for main dash app
+
 # Update the callback to render the content of each tab
 @my_dash_app.callback(
     Output('tabs-content-example', 'children'),
@@ -742,7 +752,6 @@ def plot_graph(n_clicks):
         return my_fig_main
     else:
         return no_update
-# endregion
 
 @my_dash_app.callback(
     Output('comparison-data-loaded', 'children'),
@@ -755,6 +764,7 @@ def load_comparison_csv(n_clicks):
         global compare_data
         global compare_data_full
         global comparison_trace_columns
+        global common_columns
         global output_data
 
         file_path, _ = QFileDialog.getOpenFileName(None, 'Open comparison CSV file', '', 'CSV Files (*.csv)')
@@ -907,48 +917,51 @@ def plot_main_and_compared_data_graph(n_clicks):
     global my_fig_main_and_compared_data
     global output_data
     global compare_data
-    global compared_data_trace_columns
+    #global compared_data_trace_columns
     global output_data
 
+
     if selected_group == "All":
-        compared_data_trace_columns = [col for col in comparison_data.columns if col != 'Time']
+        main_and_compared_data_trace_columns = [col for col in comparison_data.columns if col != 'Time']
     elif selected_group == "Raw Strain Data":
-        compared_data_trace_columns = [col for col in comparison_data.columns if re.match(r'SG\d+_\d+$', col)]
+        main_and_compared_data_trace_columns = [col for col in comparison_data.columns if re.match(r'SG\d+_\d+$', col)]
     else:
-        compared_data_trace_columns = [col for col in comparison_data.columns if col.endswith(selected_group)]
+        main_and_compared_data_trace_columns = [col for col in comparison_data.columns if col.endswith(selected_group)]
 
     if selected_ref_number != "-":
-        compared_data_trace_columns = [col for col in compared_data_trace_columns if col.split('_')[1] == selected_ref_number]
+        main_and_compared_data_trace_columns = [col for col in main_and_compared_data_trace_columns if col.split('_')[1] == selected_ref_number]
     
     comparison_time = comparison_data['Time']
     main_time = output_data['Time']
     
+    common_columns = [col for col in main_and_compared_data_trace_columns if col in comparison_data.columns and col in output_data.columns]
+    
     # Determine which dataset has a lower sample rate
     if len(main_time) > len(comparison_time):
-        interp_func = interp1d(comparison_time, comparison_data[compared_data_trace_columns], axis=0, fill_value="extrapolate")
-        interpolated_comparison_data = pd.DataFrame(interp_func(main_time), columns=compared_data_trace_columns)
+        interp_func = interp1d(comparison_time, comparison_data[common_columns], axis=0, fill_value="extrapolate")
+        interpolated_comparison_data = pd.DataFrame(interp_func(main_time), columns=common_columns)
         interpolated_comparison_data.insert(0, 'Time', main_time)
         
         compared_data = interpolated_comparison_data
         main_data = output_data
     else:
-        interp_func = interp1d(main_time, output_data[compared_data_trace_columns], axis=0, fill_value="extrapolate")
-        interpolated_main_data = pd.DataFrame(interp_func(comparison_time), columns=compared_data_trace_columns)
+        interp_func = interp1d(main_time, output_data[common_columns], axis=0, fill_value="extrapolate")
+        interpolated_main_data = pd.DataFrame(interp_func(comparison_time), columns=common_columns)
         interpolated_main_data.insert(0, 'Time', comparison_time)
         
         compared_data = comparison_data
         main_data = interpolated_main_data
 
     if len(ctx.triggered) and "plot-main-and-compared-data-button" in ctx.triggered[0]["prop_id"]:
-        if compared_data is not None and compared_data_trace_columns is not None:
+        if compared_data is not None and main_and_compared_data_trace_columns is not None:
             my_fig_main_and_compared_data.replace(go.Figure())  # Reset the figure
 
             time_data_in_x_axis = compared_data['Time']
-            total_no_of_traces_to_add = len(compared_data_trace_columns)
+            total_no_of_traces_to_add = len(main_and_compared_data_trace_columns)
 
             mainWindow.plot_started.emit()
 
-            for idx, col in enumerate(compared_data_trace_columns):
+            for idx, col in enumerate(main_and_compared_data_trace_columns):
                 color_idx = idx % len(my_discrete_color_scheme)
                 my_fig_main_and_compared_data.add_trace(go.Scattergl(
                     x=time_data_in_x_axis,
@@ -1086,6 +1099,7 @@ def plot_comparison_graph(n_clicks):
             mainWindow.plot_finished.emit()
             return my_fig_comparison
     return no_update
+# endregion
 
 # region Select the input SG raw channel data (in microstrains) and rosette configuration file via dialog boxes
 # Initialize the QApplication instance
