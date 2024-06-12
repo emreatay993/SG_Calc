@@ -74,6 +74,11 @@ my_fig_comparison = FigureResampler()
 global current_figure_comparison
 current_figure_comparison = None
 
+global my_fig_comparison_percent
+my_fig_comparison_percent = FigureResampler()
+global current_figure_comparison_percent
+current_figure_comparison_percent = None
+
 global my_fig_compared_data
 my_fig_compared_data = FigureResampler()
 global current_figure_compared_data
@@ -97,6 +102,8 @@ global compare_data
 compare_data = None
 global compare_data_full
 compare_data_full = None
+global compare_data_percent_full
+compare_data_percent_full = None
 global selected_group_comparison
 selected_group_comparison = None
 global selected_ref_number_comparison
@@ -535,14 +542,17 @@ class PlotWindow(QMainWindow):
     def write_full_data_to_csv(self):
         global output_data
         global compare_data_full
+        global compare_data_percent_full
         file_path = os.path.join(self.folder_name, self.file_name)
+        
+        combined_data = output_data
         
         try:
             if compare_data_full is not None:
-                # Include all columns from compare_data_full
-                combined_data = pd.concat([output_data, compare_data_full], axis=1)
-            else:
-                combined_data = output_data
+                combined_data = pd.concat([combined_data, compare_data_full], axis=1)
+            
+            if compare_data_percent_full is not None:
+                combined_data = pd.concat([combined_data, compare_data_percent_full], axis=1)
             
             combined_data.to_csv(file_path, index=False, encoding='utf-8-sig')
             QMessageBox.information(self, "CSV Saved", f"The full data has been saved as {file_path}")
@@ -550,8 +560,8 @@ class PlotWindow(QMainWindow):
             QMessageBox.critical(self, "Error", f"Failed to write the CSV file: {str(e)}")
 
 # region Add styles for frontend GUI
-tab_style={'width': '25%', 'height': '3vh', 'line-height': '3vh', 'padding': '0', 'margin': '0','font-size': '10px'}
-selected_tab_style={'width': '25%', 'height': '3vh', 'line-height': '3vh', 'padding': '0', 'margin': '0', 'font-size': '10px'}
+tab_style={'width': '40%', 'height': '3vh', 'line-height': '3vh', 'padding': '0', 'margin': '0','font-size': '10px'}
+selected_tab_style={'width': '40%', 'height': '3vh', 'line-height': '3vh', 'padding': '0', 'margin': '0', 'font-size': '10px'}
 # endregion
 
 class QDash(QtCore.QObject):
@@ -563,8 +573,9 @@ class QDash(QtCore.QObject):
                 dcc.Tab(label='Main Data', value='tab-main', style=tab_style, selected_style=selected_tab_style),
                 dcc.Tab(label='Compared Data', value='tab-compared-data', style=tab_style, selected_style=selected_tab_style),
                 dcc.Tab(label='Main & Compared Data', value='tab-main-and-compared-data', style=tab_style, selected_style=selected_tab_style),
-                dcc.Tab(label='Comparison', value='tab-comparison', style=tab_style, selected_style=selected_tab_style),
-            ], style={'width': '50%', 'height': '3vh', 'line-height': '3vh', 'padding': '0', 'margin': '0'}),
+                dcc.Tab(label='Comparison(Δ)', value='tab-comparison', style=tab_style, selected_style=selected_tab_style),
+                dcc.Tab(label='Comparison(%)', value='tab-comparison-percent', style=tab_style, selected_style=selected_tab_style),
+            ], style={'width': '60%', 'height': '3vh', 'line-height': '3vh', 'padding': '0', 'margin': '0'}),
             html.Div(id='tabs-content-example', style={'padding': '0'}),
             html.Div(id='comparison-data-loaded', style={'display': 'none'})
         ])
@@ -659,6 +670,7 @@ def render_content(tab, comparison_data_loaded):
             graph_compared_data.figure = current_figure_compared_data  # Set the current figure if it exists
         return html.Div([
             html.Button("Click to Plot", id="plot-compared-data-button", n_clicks=0, style=button_style),
+            html.Button("Load Comparison CSV", id="load-comparison-csv-button", n_clicks=0, style=button_style),
             graph_compared_data
         ])
         
@@ -689,8 +701,22 @@ def render_content(tab, comparison_data_loaded):
             graph_comparison.figure = current_figure_comparison  # Set the current figure if it exists
         return html.Div([
             html.Button("Click to Plot", id="plot-comparison-button", n_clicks=0, style=button_style),
-            html.Button("Load Comparison CSV", id="load-comparison-csv-button", n_clicks=0, style=button_style),
             graph_comparison
+        ])
+        
+    elif tab == 'tab-comparison-percent':
+        graph_comparison_percent = dcc.Graph(
+            id="graph-comparison-percent-id",
+            config={
+                'displaylogo': False  # Disable the plotly logo
+            },
+            style={'width': '100%', 'height': 'calc(100vh - 12vh)', 'overflow': 'auto'}
+        )
+        if current_figure_comparison_percent:
+            graph_comparison_percent.figure = current_figure_comparison_percent  # Set the current figure if it exists
+        return html.Div([
+            html.Button("Click to Plot", id="plot-comparison-percent-button", n_clicks=0, style=button_style),
+            graph_comparison_percent
         ])
 
 # Update the callback to plot the graph
@@ -763,6 +789,7 @@ def load_comparison_csv(n_clicks):
         global comparison_data
         global compare_data
         global compare_data_full
+        global compare_data_percent_full
         global comparison_trace_columns
         global common_columns
         global output_data
@@ -800,6 +827,10 @@ def load_comparison_csv(n_clicks):
                     compare_data_full = output_data[common_columns].values - interpolated_comparison_data[common_columns].values
                     compare_data_full = pd.DataFrame(compare_data_full, columns=['Δ' + col for col in comparison_trace_columns_all])
                     compare_data_full.insert(0, 'Time', main_time)
+                    
+                    compare_data_percent_full = ((output_data[common_columns].values / interpolated_comparison_data[common_columns].values) -1)*100
+                    compare_data_percent_full = pd.DataFrame(compare_data_full, columns=['%' + col for col in comparison_trace_columns_all])
+                    compare_data_percent_full.insert(0, 'Time', main_time)
 
                     compare_data.insert(0, 'Time', main_time)
                 else:
@@ -810,8 +841,8 @@ def load_comparison_csv(n_clicks):
                     compare_data = interpolated_main_data[common_columns].values - comparison_data[common_columns].values
                     compare_data = pd.DataFrame(compare_data, columns=common_columns)
 
-                    compare_data_full = interpolated_main_data[common_columns].values - comparison_data[common_columns].values
-                    compare_data_full = pd.DataFrame(compare_data_full, columns=['Δ' + col for col in comparison_trace_columns_all])
+                    compare_data_full = ((interpolated_main_data[common_columns].values / comparison_data[common_columns].values) -1)*100
+                    compare_data_full = pd.DataFrame(compare_data_full, columns=['%' + col for col in comparison_trace_columns_all])
                     compare_data_full.insert(0, 'Time', comparison_time)
 
                     compare_data.insert(0, 'Time', comparison_time)
@@ -879,7 +910,7 @@ def plot_compared_data_graph(n_clicks):
                     line=dict(color=my_discrete_color_scheme[color_idx]),
                     hovertemplate='%{meta}<br>Time = %{x:.2f} s<br>Data = %{y:.1f}<extra></extra>',
                     hoverlabel=dict(font_size=14, bgcolor='rgba(255, 255, 255, 0.5)'),
-                    meta=col
+                    meta="Δ"+col
                 ))
                 progress = int((idx + 1) / total_no_of_traces_to_add * 100)
                 mainWindow.plot_progress.emit(progress)  # Emit the plot progress signal
@@ -1098,6 +1129,97 @@ def plot_comparison_graph(n_clicks):
             current_figure_comparison = my_fig_comparison
             mainWindow.plot_finished.emit()
             return my_fig_comparison
+    return no_update
+# endregion
+
+@my_dash_app.callback(
+    Output("graph-comparison-percent-id", "figure"),
+    Input("plot-comparison-percent-button", "n_clicks"),
+    prevent_initial_call=False,
+)
+def plot_comparison_percent_graph(n_clicks):
+    ctx = callback_context
+    global current_figure_comparison_percent
+    global my_fig_comparison_percent
+    global comparison_trace_columns_percent
+    global output_data
+
+    if selected_group == "All":
+        comparison_trace_columns_percent = [col for col in comparison_data.columns if col != 'Time']
+    elif selected_group == "Raw Strain Data":
+        comparison_trace_columns_percent = [col for col in comparison_data.columns if re.match(r'SG\d+_\d+$', col)]
+    else:
+        comparison_trace_columns_percent = [col for col in comparison_data.columns if col.endswith(selected_group)]
+
+    if selected_ref_number != "-":
+        comparison_trace_columns_percent = [col for col in comparison_trace_columns_percent if col.split('_')[1] == selected_ref_number]
+    
+    comparison_time = comparison_data['Time']
+    main_time = output_data['Time']
+    
+    # Determine which dataset has a lower sample rate
+    if len(main_time) > len(comparison_time):
+        interp_func = interp1d(comparison_time, comparison_data[comparison_trace_columns_percent], axis=0, fill_value="extrapolate")
+        interpolated_comparison_data = pd.DataFrame(interp_func(main_time), columns=comparison_trace_columns_percent)
+        interpolated_comparison_data.insert(0, 'Time', main_time)
+        
+        # Calculate the difference
+        compare_data_percent = ((output_data[comparison_trace_columns_percent].values / interpolated_comparison_data[comparison_trace_columns_percent].values) -1)*100
+        compare_data_percent = pd.DataFrame(compare_data_percent, columns=comparison_trace_columns_percent)
+        compare_data_percent.insert(0, 'Time', main_time)
+    else:
+        interp_func = interp1d(main_time, output_data[comparison_trace_columns_percent], axis=0, fill_value="extrapolate")
+        interpolated_main_data = pd.DataFrame(interp_func(comparison_time), columns=comparison_trace_columns_percent)
+        interpolated_main_data.insert(0, 'Time', comparison_time)
+        
+        # Calculate the difference
+        compare_data_percent = ((interpolated_main_data[comparison_trace_columns_percent].values / comparison_data[comparison_trace_columns_percent].values) -1)*100
+        compare_data_percent = pd.DataFrame(compare_data_percent, columns=comparison_trace_columns_percent)
+        compare_data_percent.insert(0, 'Time', comparison_time)
+
+    if len(ctx.triggered) and "plot-comparison-percent-button" in ctx.triggered[0]["prop_id"]:
+        if compare_data_percent is not None and comparison_trace_columns_percent is not None:
+            my_fig_comparison_percent.replace(go.Figure())  # Reset the figure
+
+            time_data_in_x_axis = compare_data_percent['Time']
+            total_no_of_traces_to_add = len(comparison_trace_columns_percent)
+
+            mainWindow.plot_started.emit()
+
+            for idx, col in enumerate(comparison_trace_columns_percent):
+                color_idx = idx % len(my_discrete_color_scheme)
+                my_fig_comparison_percent.add_trace(go.Scattergl(
+                    x=time_data_in_x_axis,
+                    y=compare_data_percent[col],
+                    name="%"+col,
+                    line=dict(color=my_discrete_color_scheme[color_idx]),
+                    hovertemplate='%{meta}<br>Time = %{x:.2f} s<br>Data = %{y:.1f}%<extra></extra>',
+                    hoverlabel=dict(font_size=14, bgcolor='rgba(255, 255, 255, 0.5)'),
+                    meta="%"+col
+                ))
+                progress = int((idx + 1) / total_no_of_traces_to_add * 100)
+                mainWindow.plot_progress.emit(progress)  # Emit the plot progress signal
+
+                my_fig_comparison_percent.update_layout(
+                    title_text='Comparison : """ + sol_selected_environment.Parent.Name + """ ' + " (" + selected_group + ")",
+                    title_x=0.45,
+                    title_y=0.95,
+                    legend_title_text='Result',
+                    template="plotly_white",
+                    plot_bgcolor='rgba(0,0,0,0.005)',
+                    xaxis_title='Time [s]',
+                    yaxis_title='Data',
+                    font=dict(family="Arial, sans-serif", size=12, color="#0077B6"),
+                    xaxis=dict(showline=True, showgrid=True, showticklabels=True, linewidth=2,
+                               tickfont=dict(family='Arial, sans-serif', size=12), tickmode='auto', nticks=30),
+                    yaxis=dict(showgrid=True, zeroline=False, showline=False, showticklabels=True,
+                               linecolor='rgb(204, 204, 204)', tickmode='auto', nticks=30),
+                    hovermode='closest',
+                    margin=dict(t=40, b=0)  # Adjust the top margin to bring the graph closer to the title
+                )
+            current_figure_comparison_percent = my_fig_comparison_percent
+            mainWindow.plot_finished.emit()
+            return my_fig_comparison_percent
     return no_update
 # endregion
 
