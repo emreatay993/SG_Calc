@@ -5,7 +5,8 @@ import os
 import System
 from System.Windows.Forms import (Form, ComboBox, Button, Label, 
                                   Application, MessageBox, MessageBoxButtons, 
-                                  MessageBoxIcon, DialogResult, OpenFileDialog, Keys)
+                                  MessageBoxIcon, DialogResult, OpenFileDialog, 
+                                  Keys, TextBox, CheckBox)
 from System.Drawing import Font, FontStyle, Color, Size
 from System.Drawing import Point as GUI_Point
 # endregion
@@ -17,7 +18,7 @@ class DataSelectionForm(Form):
     def __init__(self, times, measurements):
         self.Text = "Data Selection"
         self.Width = 300
-        self.Height = 220
+        self.Height = 380
         self.BackColor = Color.White
 
         # Define GUI fonts
@@ -62,13 +63,55 @@ class DataSelectionForm(Form):
         [self.measurementCombo.Items.Add(m) for m in measurements]
         self.measurementCombo.SelectedIndex = 0
 
+        # Checkbox for deleting existing labels
+        self.deleteCheckbox = CheckBox()
+        self.deleteCheckbox.Text = "Delete existing labels"
+        self.deleteCheckbox.Location = GUI_Point(30, 140)
+        self.deleteCheckbox.Size = Size(240, 20)
+        self.deleteCheckbox.Font = combobox_font
+        self.deleteCheckbox.Parent = self
+        
+        # Checkbox for setting the same color for all labels
+        self.sameColorCheckbox = CheckBox()
+        self.sameColorCheckbox.Text = "Set same color for all labels"
+        self.sameColorCheckbox.Location = GUI_Point(30, 170)
+        self.sameColorCheckbox.Size = Size(240, 20)
+        self.sameColorCheckbox.Font = combobox_font
+        self.sameColorCheckbox.Parent = self
+
+        # Checkbox for labels always stay on screen
+        self.alwaysOnScreenCheckbox = CheckBox()
+        self.alwaysOnScreenCheckbox.Text = "Labels always stay on the screen"
+        self.alwaysOnScreenCheckbox.Location = GUI_Point(30, 200)
+        self.alwaysOnScreenCheckbox.Size = Size(240, 20)
+        self.alwaysOnScreenCheckbox.Font = combobox_font
+        self.alwaysOnScreenCheckbox.ForeColor = Color.Black
+        self.alwaysOnScreenCheckbox.Parent = self
+
+        # Checkbox for appending time value to the label note
+        self.appendTimeCheckbox = CheckBox()
+        self.appendTimeCheckbox.Text = "Append time value to label note"
+        self.appendTimeCheckbox.Location = GUI_Point(30, 230)
+        self.appendTimeCheckbox.Size = Size(240, 20)
+        self.appendTimeCheckbox.Font = combobox_font
+        self.appendTimeCheckbox.ForeColor = Color.Black
+        self.appendTimeCheckbox.Parent = self
+
+        # Checkbox for adding a custom note all label notes
+        self.customLabelCheckbox = CheckBox()
+        self.customLabelCheckbox.Text = "Add a custom note to each label"
+        self.customLabelCheckbox.Location = GUI_Point(30, 260)
+        self.customLabelCheckbox.Size = Size(240, 20)
+        self.customLabelCheckbox.Font = combobox_font
+        self.customLabelCheckbox.Parent = self
+
         # OK Button
         self.okButton = Button()
         self.okButton.Text = "OK"
         self.okButton.Font = label_font
         self.okButton.ForeColor = Color.Black
         self.okButton.BackColor = Color.LightSkyBlue
-        self.okButton.Location = GUI_Point(100, 140)
+        self.okButton.Location = GUI_Point(100, 290)
         self.okButton.Size = Size(100, 30)
         self.okButton.Parent = self
         self.okButton.Click += self.button_clicked
@@ -78,7 +121,7 @@ class DataSelectionForm(Form):
 
         # Handle key down events on the form
         self.KeyDown += self.form_key_down
-        
+
         # Handle form closing event
         self.FormClosing += self.on_form_closing
 
@@ -96,13 +139,28 @@ class DataSelectionForm(Form):
 
     def perform_actions(self):
         # Common actions to perform (previously in button_clicked)
-        global time_value, measurement_type, measurement_suffix
+        global time_value, measurement_type, measurement_suffix, labels_always_on_screen, append_time, list_of_requested_SG_label_result, custom_label, color_list
         time_value = float(self.timeCombo.SelectedItem)
         measurement_type = self.measurementCombo.SelectedItem
         measurement_suffix = measurement_suffixes.get(measurement_type, '')
-        print("Selected Time:", time_value)
-        print("Selected Measurement Type:", measurement_type)
-        print("Measurement Suffix:", measurement_suffix)
+        
+        # Check if the deleteCheckbox is checked and delete existing labels if true
+        if self.deleteCheckbox.Checked:
+            list_of_obj_of_SG_label_calculation = [
+                label_manager.Labels[i]
+                for i in range(len(label_manager.Labels))
+                if label_manager.Labels[i].Note.Contains("SG_")
+            ]
+            label_manager.DeleteLabels(list_of_obj_of_SG_label_calculation)
+        
+        labels_always_on_screen = self.alwaysOnScreenCheckbox.Checked
+        append_time = self.appendTimeCheckbox.Checked
+        
+        custom_label = ""
+        if self.customLabelCheckbox.Checked:
+            inputDialog = InputDialog()
+            custom_label = inputDialog.getInput()
+
         # Perform the main processing logic
         list_of_requested_SG_label_result = read_row_based_on_time_and_measurement(file_path_of_SG_calculations, time_value, measurement_type)
         list_of_requested_SG_label_result = [round(num, 2) for num in list_of_requested_SG_label_result]  # round off the results to two significant digits
@@ -116,11 +174,6 @@ class DataSelectionForm(Form):
     def create_labels(self, results, colors):
         # Define whether labels will always stay on the screen
         global list_of_obj_of_SG_label_calculation
-        if list_of_filtered_names_of_CS_SG_channels:
-            message = 'Would you like the SG labels to always stay on the screen?'
-            title = 'Select an option'
-            result = MessageBox.Show(message, title, MessageBoxButtons.YesNo, MessageBoxIcon.Warning)
-            yes_no_choice_is_labels_always_on_screen = result == DialogResult.Yes
 
         # Refractoring collector list for a better readability of the code
         xyz_list = list_of_coordinates_of_all_filtered_names_of_CS_SG_channels
@@ -129,30 +182,80 @@ class DataSelectionForm(Form):
 
         with Graphics.Suspend():
             with Transaction():
-                # Assign a background color for each numerical value
                 for i in range(len(xyz_list)):
                     obj_of_SG_label_calculation = label_manager.CreateLabel(sol_selected_environment)
-                    obj_of_SG_label_calculation.Note = ("SG_" 
-                                                        + str(list_of_SG_reference_numbers[i]) 
-                                                        + ": "
-                                                        + str(results[i])
-                                                        + " , " + measurement_suffix)
+                    note_text = "SG_" + str(list_of_SG_reference_numbers[i]) + ": " + str(list_of_requested_SG_label_result[i]) + measurement_suffix
+                    
+                    # Append the time value to the label note if the checkbox is checked
+                    if append_time:
+                        note_text += " @" + str(time_value) + "s"
+                    
+                    # Append the string suffix to the label note if the checkbox is checked
+                    if custom_label:
+                        note_text += " " + custom_label
+                    
+                    obj_of_SG_label_calculation.Note = note_text
                     obj_of_SG_label_calculation.Scoping.XYZ = Point((xyz_list[i][0], xyz_list[i][1], xyz_list[i][2]), 'm')
-                    obj_of_SG_label_calculation.ShowAlways = yes_no_choice_is_labels_always_on_screen
-                    obj_of_SG_label_calculation.Color = Ansys.ACT.Common.Graphics.Color(red=colors[i][0], 
-                                                                                        green=colors[i][1], 
-                                                                                        blue=colors[i][2], 
+                    
+                    # Check if labels should always stay on the screen
+                    obj_of_SG_label_calculation.ShowAlways = labels_always_on_screen
+                    
+                    # Set the color for the label
+                    if form.sameColorCheckbox.Checked:
+                        label_color = (255, 253, 208)  # Light beige paper-like color
+                    else:
+                        label_color = color_list[i]
+                    
+                    obj_of_SG_label_calculation.Color = Ansys.ACT.Common.Graphics.Color(red=label_color[0], 
+                                                                                        green=label_color[1], 
+                                                                                        blue=label_color[2], 
                                                                                         alpha=0)
                     list_of_obj_of_SG_label_calculation.append(obj_of_SG_label_calculation)
 
     def on_form_closing(self, sender, args):
         global form_closed
         form_closed = True
+
+class InputDialog(Form):
+    def __init__(self):
+        self.Text = "Enter String Suffix"
+        self.Width = 300
+        self.Height = 150
+        self.BackColor = Color.White
+
+        label = Label()
+        label.Text = "String Suffix:"
+        label.Location = GUI_Point(10, 20)
+        label.Size = Size(260, 20)
+        label.Font = Font("Segoe UI", 10, FontStyle.Regular)
+        label.Parent = self
+
+        self.inputBox = TextBox()
+        self.inputBox.Location = GUI_Point(10, 50)
+        self.inputBox.Size = Size(260, 20)
+        self.inputBox.Font = Font("Segoe UI", 10, FontStyle.Regular)
+        self.inputBox.Parent = self
+
+        okButton = Button()
+        okButton.Text = "OK"
+        okButton.Location = GUI_Point(100, 80)
+        okButton.Size = Size(75, 30)
+        okButton.Click += self.okButton_clicked
+        okButton.Parent = self
+
+    def okButton_clicked(self, sender, args):
+        self.Close()
+
+    def getInput(self):
+        Application.Run(self)
+        return self.inputBox.Text
 # endregion
 
 #--------------------------------------------------------------------------------------------
 
 # region Global function and variable definitions
+form_closed = False
+
 # Extract the number from the channel name for sorting
 def extract_number(channel_name):
     match = re.search(r'CS_SG_Ch_(\d+)_2', channel_name)
@@ -202,9 +305,9 @@ def get_rainbow_color(value, min_val, max_val):
     # Determine the fraction between the two colors
     segment_fraction = scaled_value - first_color_index
     
-  # Interpolate between the two colors
+    # Interpolate between the two colors
     return interpolate_segment(colors[first_color_index], colors[second_color_index], segment_fraction)
-
+    
 def numbers_to_rainbow_colors(numbers):
     min_val = min(numbers)
     max_val = max(numbers)
@@ -275,28 +378,25 @@ def prepare_data(file_path):
     measurement_types = sorted(set(measurement for measurement in measurements.keys() if measurement != 'Time'))
     
     return sorted(times), measurement_types
-
-# Global flag to stop the program once GUI is closed
-form_closed = False
 # endregion
 
 measurement_suffixes = {
-    'epsilon_x': 'εx',
-    'epsilon_y': 'εy',
-    'gamma_xy': 'γxy',
-    'sigma_1': 'σ1',
-    'sigma_2': 'σ2',
-    'theta_p': 'θp',
-    'Biaxiality_Ratio': 'BR',
-    'von_Mises': 'VM',
-    'Δepsilon_x': 'Δεx',
-    'Δepsilon_y': 'Δεy',
-    'Δgamma_xy': 'Δγxy',
-    'Δsigma_1': 'Δσ1',
-    'Δsigma_2': 'Δσ2',
-    'Δtheta_p': 'Δθp',
-    'ΔBiaxiality_Ratio': 'ΔBR',
-    'Δvon_Mises': 'ΔVM'
+    'epsilon_x': ', εx',
+    'epsilon_y': ' , εy',
+    'gamma_xy': ' , γxy',
+    'sigma_1': ' , σ1',
+    'sigma_2': ' , σ2',
+    'theta_p': ' , θp',
+    'Biaxiality_Ratio': ' , BR',
+    'von_Mises': ' , VM',
+    'Δepsilon_x': ' , Δεx',
+    'Δepsilon_y': ' , Δεy',
+    'Δgamma_xy': ' , Δγxy',
+    'Δsigma_1': ' , Δσ1',
+    'Δsigma_2': ' , Δσ2',
+    'Δtheta_p': ' , Δθp',
+    'ΔBiaxiality_Ratio': ' , ΔBR',
+    'Δvon_Mises': ' , ΔVM'
 }
 #--------------------------------------------------------------------------------------------
 
@@ -366,17 +466,18 @@ if os.path.exists(file_path_of_SG_calculations):
     times, measurements = prepare_data(file_path_of_SG_calculations)
     form = DataSelectionForm(times, measurements)
     Application.Run(form)
-
+    
     while True:
         Application.DoEvents()  # Process all Windows messages currently in the message queue
-        if 'time_value' in globals() and 'measurement_type' in globals():
-            list_of_requested_SG_label_result = read_row_based_on_time_and_measurement(file_path_of_SG_calculations, time_value, measurement_type)
-            list_of_requested_SG_label_result = [round(num, 2) for num in list_of_requested_SG_label_result]  # round off the results to two significant digits
-            # Determine the color scheme of labels based on calculated SG data
-            color_list = numbers_to_rainbow_colors(list_of_requested_SG_label_result)
-            break  # Exit the loop once the values are set
+        # if 'time_value' in globals() and 'measurement_type' in globals():
+        #     list_of_requested_SG_label_result = read_row_based_on_time_and_measurement(file_path_of_SG_calculations, time_value, measurement_type)
+        #     list_of_requested_SG_label_result = [round(num, 2) for num in list_of_requested_SG_label_result]  # round off the results to two significant digits
+        #     # Determine the color scheme of labels based on calculated SG data
+        #     color_list = numbers_to_rainbow_colors(list_of_requested_SG_label_result)
+        #     break  # Exit the loop once the values are set
         if form_closed:
             break  # Exit the loop if the form is closed
+        
 else:
     message = '"SG_calculations_FEA.csv" file is not found in the solution directory. Would you like to manually specify this file?'
     title = 'File Not Found'
@@ -391,14 +492,12 @@ else:
             times, measurements = prepare_data(file_path_of_SG_calculations)
             form = DataSelectionForm(times, measurements)
             Application.Run(form)
-            list_of_requested_SG_label_result = read_row_based_on_time_and_measurement(file_path_of_SG_calculations, time_value, measurement_type)
-            list_of_requested_SG_label_result = [round(num, 2) for num in list_of_requested_SG_label_result]
-            # Determine the color scheme of labels based on calculated SG data
-            color_list = numbers_to_rainbow_colors(list_of_requested_SG_label_result)
-    else:
-        print("No files are selected. Only labels will be generated")
-        list_of_requested_SG_label_result = [""] * len(list_of_coordinates_of_all_filtered_names_of_CS_SG_channels)
-        # Determine the color scheme of labels based on SG numbers
-        color_list = numbers_to_rainbow_colors(list_of_SG_reference_numbers)
+        else:
+            print("No files are selected. Only labels will be generated")
+            list_of_requested_SG_label_result = [""] * len(list_of_coordinates_of_all_filtered_names_of_CS_SG_channels)
+            # Determine the color scheme of labels based on SG numbers
+            color_list = numbers_to_rainbow_colors(list_of_SG_reference_numbers)
+            form.create_labels(list_of_requested_SG_label_result, color_list)
+# endregion
 
 ExtAPI.Application.ActiveUnitSystem = MechanicalUnitSystem.StandardNMM  # Revert the unit system back to 'mm,kg,N'
