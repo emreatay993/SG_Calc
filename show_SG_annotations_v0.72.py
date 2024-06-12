@@ -241,9 +241,20 @@ class InputBox(Form):
         self.okButton.Parent = self
         self.okButton.Click += self.on_ok_click
 
+        self.KeyPreview = True  # Enable KeyPreview to capture key events
+        self.KeyDown += self.input_form_key_down  # Handle key down events on the form
+
     def on_ok_click(self, sender, args):
         self.DialogResult = DialogResult.OK
         self.Close()
+
+    def input_form_key_down(self, sender, args):
+        # Check if the Enter key was pressed
+        if args.KeyCode == Keys.Enter:
+            # Prevent further processing of the key event
+            args.Handled = True
+            # Perform the same actions as clicking the OK button
+            self.on_ok_click(sender, args)
 
     @staticmethod
     def show(prompt):
