@@ -6,7 +6,7 @@ import System
 from System.Windows.Forms import (Form, ComboBox, Button, Label, 
                                   Application, MessageBox, MessageBoxButtons, 
                                   MessageBoxIcon, DialogResult, OpenFileDialog, 
-                                  Keys, TextBox, CheckBox)
+                                  Keys, TextBox, CheckBox, FormStartPosition)
 from System.Drawing import Font, FontStyle, Color, Size
 from System.Drawing import Point as GUI_Point
 # endregion
@@ -156,10 +156,10 @@ class DataSelectionForm(Form):
         labels_always_on_screen = self.alwaysOnScreenCheckbox.Checked
         append_time = self.appendTimeCheckbox.Checked
         
-        custom_label = ""
+        # Check if the customLabelCheckbox is checked and prompt for the suffix if true
+        custom_label = ''
         if self.customLabelCheckbox.Checked:
-            inputDialog = InputDialog()
-            custom_label = inputDialog.getInput()
+            custom_label = InputBox.show("Enter a custom note for all labels:")
 
         # Perform the main processing logic
         list_of_requested_SG_label_result = read_row_based_on_time_and_measurement(file_path_of_SG_calculations, time_value, measurement_type)
@@ -192,7 +192,7 @@ class DataSelectionForm(Form):
                     
                     # Append the string suffix to the label note if the checkbox is checked
                     if custom_label:
-                        note_text += " " + custom_label
+                        note_text += " " + '"'+ custom_label + '"'
                     
                     obj_of_SG_label_calculation.Note = note_text
                     obj_of_SG_label_calculation.Scoping.XYZ = Point((xyz_list[i][0], xyz_list[i][1], xyz_list[i][2]), 'm')
@@ -216,39 +216,41 @@ class DataSelectionForm(Form):
         global form_closed
         form_closed = True
 
-class InputDialog(Form):
-    def __init__(self):
-        self.Text = "Enter String Suffix"
+class InputBox(Form):
+    def __init__(self, prompt):
+        self.Text = "Input Box"
         self.Width = 300
         self.Height = 150
-        self.BackColor = Color.White
+        self.StartPosition = FormStartPosition.CenterParent
 
-        label = Label()
-        label.Text = "String Suffix:"
-        label.Location = GUI_Point(10, 20)
-        label.Size = Size(260, 20)
-        label.Font = Font("Segoe UI", 10, FontStyle.Regular)
-        label.Parent = self
+        self.promptLabel = Label()
+        self.promptLabel.Text = prompt
+        self.promptLabel.Location = GUI_Point(10, 10)
+        self.promptLabel.Size = Size(260, 20)
+        self.promptLabel.Parent = self
 
-        self.inputBox = TextBox()
-        self.inputBox.Location = GUI_Point(10, 50)
-        self.inputBox.Size = Size(260, 20)
-        self.inputBox.Font = Font("Segoe UI", 10, FontStyle.Regular)
-        self.inputBox.Parent = self
+        self.inputTextBox = TextBox()
+        self.inputTextBox.Location = GUI_Point(10, 40)
+        self.inputTextBox.Size = Size(260, 20)
+        self.inputTextBox.Parent = self
 
-        okButton = Button()
-        okButton.Text = "OK"
-        okButton.Location = GUI_Point(100, 80)
-        okButton.Size = Size(75, 30)
-        okButton.Click += self.okButton_clicked
-        okButton.Parent = self
+        self.okButton = Button()
+        self.okButton.Text = "OK"
+        self.okButton.Location = GUI_Point(100, 70)
+        self.okButton.Size = Size(100, 30)
+        self.okButton.Parent = self
+        self.okButton.Click += self.on_ok_click
 
-    def okButton_clicked(self, sender, args):
+    def on_ok_click(self, sender, args):
+        self.DialogResult = DialogResult.OK
         self.Close()
 
-    def getInput(self):
-        Application.Run(self)
-        return self.inputBox.Text
+    @staticmethod
+    def show(prompt):
+        input_box = InputBox(prompt)
+        if input_box.ShowDialog() == DialogResult.OK:
+            return input_box.inputTextBox.Text
+        return None
 # endregion
 
 #--------------------------------------------------------------------------------------------
