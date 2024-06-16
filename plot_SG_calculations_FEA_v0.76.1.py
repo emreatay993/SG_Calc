@@ -798,6 +798,9 @@ def load_comparison_csv(n_clicks):
         if file_path:
             comparison_data = pd.read_csv(file_path)
 
+            # Drop columns starting with "%" or "Δ"
+            comparison_data = comparison_data.loc[:, ~comparison_data.columns.str.startswith(('%', 'Δ'))]
+
             comparison_trace_columns_all = [col for col in comparison_data.columns if col != 'Time']
             if selected_group == "All":
                 comparison_trace_columns = comparison_trace_columns_all
@@ -807,29 +810,37 @@ def load_comparison_csv(n_clicks):
                 comparison_trace_columns = [col for col in comparison_data.columns if col.endswith(selected_group)]
 
             if selected_ref_number != "-":
-                comparison_trace_columns = [col for col in comparison_trace_columns if col.split('_')[1] == selected_ref_number]
+                comparison_trace_columns = [col for col in comparison_trace_columns if
+                                            col.split('_')[1] == selected_ref_number]
 
             if 'Time' in output_data.columns and 'Time' in comparison_data.columns:
                 comparison_time = comparison_data['Time']
                 main_time = output_data['Time']
 
-                common_columns = [col for col in comparison_trace_columns_all if col in comparison_data.columns and col in output_data.columns]
+                common_columns = [col for col in comparison_trace_columns_all if
+                                  col in comparison_data.columns and col in output_data.columns]
                 print(f"Common columns: {common_columns}")
 
                 if len(main_time) > len(comparison_time):
-                    interp_func = interp1d(comparison_time, comparison_data[common_columns], axis=0, fill_value="extrapolate")
+                    interp_func = interp1d(comparison_time, comparison_data[common_columns], axis=0,
+                                           fill_value="extrapolate")
                     interpolated_comparison_data = pd.DataFrame(interp_func(main_time), columns=common_columns)
                     interpolated_comparison_data.insert(0, 'Time', main_time)
 
-                    compare_data = output_data[common_columns].values - interpolated_comparison_data[common_columns].values
+                    compare_data = output_data[common_columns].values - interpolated_comparison_data[
+                        common_columns].values
                     compare_data = pd.DataFrame(compare_data, columns=common_columns)
 
-                    compare_data_full = output_data[common_columns].values - interpolated_comparison_data[common_columns].values
-                    compare_data_full = pd.DataFrame(compare_data_full, columns=['Δ' + col for col in comparison_trace_columns_all])
+                    compare_data_full = output_data[common_columns].values - interpolated_comparison_data[
+                        common_columns].values
+                    compare_data_full = pd.DataFrame(compare_data_full,
+                                                     columns=['Δ' + col for col in comparison_trace_columns_all])
                     compare_data_full.insert(0, 'Time', main_time)
-                    
-                    compare_data_percent_full = ((output_data[common_columns].values / interpolated_comparison_data[common_columns].values) -1)*100
-                    compare_data_percent_full = pd.DataFrame(compare_data_full, columns=['%' + col for col in comparison_trace_columns_all])
+
+                    compare_data_percent_full = ((output_data[common_columns].values / interpolated_comparison_data[
+                        common_columns].values) - 1) * 100
+                    compare_data_percent_full = pd.DataFrame(compare_data_full, columns=['%' + col for col in
+                                                                                         comparison_trace_columns_all])
                     compare_data_percent_full.insert(0, 'Time', main_time)
 
                     compare_data.insert(0, 'Time', main_time)
@@ -838,12 +849,21 @@ def load_comparison_csv(n_clicks):
                     interpolated_main_data = pd.DataFrame(interp_func(comparison_time), columns=common_columns)
                     interpolated_main_data.insert(0, 'Time', comparison_time)
 
-                    compare_data = interpolated_main_data[common_columns].values - comparison_data[common_columns].values
+                    compare_data = interpolated_main_data[common_columns].values - comparison_data[
+                        common_columns].values
                     compare_data = pd.DataFrame(compare_data, columns=common_columns)
 
-                    compare_data_full = ((interpolated_main_data[common_columns].values / comparison_data[common_columns].values) -1)*100
-                    compare_data_full = pd.DataFrame(compare_data_full, columns=['%' + col for col in comparison_trace_columns_all])
+                    compare_data_full = interpolated_main_data[common_columns].values - comparison_data[
+                        common_columns].values
+                    compare_data_full = pd.DataFrame(compare_data_full,
+                                                     columns=['Δ' + col for col in comparison_trace_columns_all])
                     compare_data_full.insert(0, 'Time', comparison_time)
+
+                    compare_data_percent_full = ((interpolated_main_data[common_columns].values / comparison_data[
+                        common_columns].values) - 1) * 100
+                    compare_data_percent_full = pd.DataFrame(compare_data_percent_full,
+                                                     columns=['%' + col for col in comparison_trace_columns_all])
+                    compare_data_percent_full.insert(0, 'Time', comparison_time)
 
                     compare_data.insert(0, 'Time', comparison_time)
 
