@@ -1,4 +1,4 @@
-# region Import libraries
+"# region Import libraries
 import csv
 import context_menu
 import clr
@@ -330,7 +330,7 @@ class PlotWindow(QMainWindow):
         self.comboBox.currentIndexChanged.connect(self.update_plot)
         self.refNumberComboBox.currentIndexChanged.connect(self.update_plot)
         self.viewer = PlotlyViewer()
-        self.savePlotButton = QPushButton("Save Main Data Plot as HTML")
+        self.savePlotButton = QPushButton("Save Plot on the Screen as HTML")
         self.savePlotButton.clicked.connect(self.save_current_plot)
 
         self.offsetZeroButton = QPushButton("Offset-Zero SG's")
@@ -444,17 +444,41 @@ class PlotWindow(QMainWindow):
 
         self.viewer.update_plot(fig)
 
+    def get_active_tab(self):
+        global active_tab_value
+        return active_tab_value
+
     def save_current_plot(self):
         # Retrieve the parent name from the environment for the filename
         parent_name = '''""" + sol_selected_environment.Parent.Name + """'''
-        # Construct the filename
-        filename = f"SG_Calculations__{parent_name}__{selected_group}.html"
-
-        # Save the current figure to an interactive HTML file
-        plot(my_fig_main, filename=os.path.join(self.folder_name, filename),
-             output_type='file', auto_open=False)
-        QMessageBox.information(self, "Plot Saved", f"The plot has been saved to: {filename} in the solution directory.")# endregion
-
+        active_tab = self.get_active_tab()
+    
+        if active_tab == 'tab-main':
+            filename = f"SG_Calculations__{parent_name}__{selected_group}__main.html"
+            plot(current_figure_main, filename=os.path.join(self.folder_name, filename),
+                 output_type='file', auto_open=False)
+        elif active_tab == 'tab-compared-data':
+            filename = f"SG_Calculations__{parent_name}__{selected_group}__compared_data.html"
+            plot(current_figure_compared_data, filename=os.path.join(self.folder_name, filename),
+                 output_type='file', auto_open=False)
+        elif active_tab == 'tab-main-and-compared-data':
+            filename = f"SG_Calculations__{parent_name}__{selected_group}__main_and_compared_data.html"
+            plot(current_figure_main_and_compared_data, filename=os.path.join(self.folder_name, filename),
+                 output_type='file', auto_open=False)
+        elif active_tab == 'tab-comparison':
+            filename = f"SG_Calculations__{parent_name}__{selected_group}__comparison.html"
+            plot(current_figure_comparison, filename=os.path.join(self.folder_name, filename),
+                 output_type='file', auto_open=False)
+        elif active_tab == 'tab-comparison-percent':
+            filename = f"SG_Calculations__{parent_name}__{selected_group}__comparison_percent.html"
+            plot(current_figure_comparison_percent, filename=os.path.join(self.folder_name, filename),
+                 output_type='file', auto_open=False)
+        else:
+            QMessageBox.warning(self, "Save Plot", "No active plot found to save.")
+            return
+    
+        QMessageBox.information(self, "Plot Saved", f"The plot has been saved to: {filename} in the solution directory.")
+    
     def offset_zero_sgs(self):
         # Get the unique time points as strings for the combo box
         time_points = [str(tp) for tp in output_data['Time'].unique()]
@@ -510,7 +534,7 @@ class PlotWindow(QMainWindow):
     
         # Update the plot
         self.update_plot(0)
-
+        
     def offset_start_time(self):
         # Get the unique time points as strings for the combo box
         time_points = [str(tp) for tp in output_data['Time'].unique()]
@@ -577,7 +601,8 @@ class QDash(QtCore.QObject):
                 dcc.Tab(label='Comparison(%)', value='tab-comparison-percent', style=tab_style, selected_style=selected_tab_style),
             ], style={'width': '60%', 'height': '3vh', 'line-height': '3vh', 'padding': '0', 'margin': '0'}),
             html.Div(id='tabs-content-example', style={'padding': '0'}),
-            html.Div(id='comparison-data-loaded', style={'display': 'none'})
+            html.Div(id='comparison-data-loaded', style={'display': 'none'}),
+            html.Div(id='dummy-output', style={'display': 'none'})
         ])
 
     @property
@@ -635,8 +660,7 @@ def render_content(tab, comparison_data_loaded):
     'width': '12%', 'margin': '0.5vh',
     'font-size': '10px','background-color': '#87CEFA',
     'border': 'none','border-radius': '8px',
-    'cursor': 'pointer','transition': 'background-color 0.3s ease'
-}
+    'cursor': 'pointer','transition': 'background-color 0.3s ease'}
     
     button_success_style = {
     **button_style,
@@ -1241,6 +1265,17 @@ def plot_comparison_percent_graph(n_clicks):
             mainWindow.plot_finished.emit()
             return my_fig_comparison_percent
     return no_update
+
+# Callback to update the active tab
+@my_dash_app.callback(
+    Output('dummy-output', 'children'),  # Dummy output to trigger the callback
+    [Input('tabs-example', 'value')]
+)
+def update_active_tab(tab):
+    global active_tab_value
+    active_tab_value = tab
+    return no_update
+
 # endregion
 
 # region Select the input SG raw channel data (in microstrains) and rosette configuration file via dialog boxes
@@ -1467,4 +1502,4 @@ process.StartInfo.FileName = "cmd.exe"  # Use cmd.exe to allow window manipulati
 process.StartInfo.Arguments = '/c python "' + cpython_script_path + '"'
 # Start the process
 process.Start()
-# endregion
+# endregion"
