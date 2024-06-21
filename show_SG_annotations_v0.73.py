@@ -340,15 +340,15 @@ def classify_headers_by_measurement(file_path):
         headers = next(reader)  # Read the header row
         measurements = {}  # Dictionary to store measurement types and indices
 
-        # Regex to extract measurement types from header names, including delta symbol
-        pattern_measurement = re.compile(r'(Δ?SG\d+_(\w+))')
+        # Updated regex to include optional delta and percent symbols
+        pattern_measurement = re.compile(r'([Δ%]?SG\d+_(\w+))')
 
         for index, header in enumerate(headers):
             match = pattern_measurement.search(header)
             if match:
                 measurement = match.group(2)  # Extracts the measurement type without the SG identifier
-                if match.group(1).startswith('Δ'):
-                    measurement = 'Δ' + measurement
+                if match.group(1).startswith(('Δ', '%')):
+                    measurement = match.group(1)[0] + measurement
                 if measurement not in measurements:
                     measurements[measurement] = []
                 measurements[measurement].append(index)
@@ -409,7 +409,15 @@ measurement_suffixes = {
     'Δsigma_2': ' , Δσ2',
     'Δtheta_p': ' , Δθp',
     'ΔBiaxiality_Ratio': ' , ΔBR',
-    'Δvon_Mises': ' , ΔVM'
+    'Δvon_Mises': ' , ΔVM',
+    '%epsilon_x': ' , %εx',
+    '%epsilon_y': ' , %εy',
+    '%gamma_xy': ' , %γxy',
+    '%sigma_1': ' , %σ1',
+    '%sigma_2': ' , %σ2',
+    '%theta_p': ' , %θp',
+    '%Biaxiality_Ratio': ' , %BR',
+    '%von_Mises': ' , %VM'
 }
 #--------------------------------------------------------------------------------------------
 
@@ -452,14 +460,14 @@ for i in range(len(list_of_filtered_names_of_CS_SG_channels)):
 
 #--------------------------------------------------------------------------------------------
 
-# region Check if SG labels already exist within the memory, if they do, delete and re-create them
-label_manager = Graphics.LabelManager
-list_of_obj_of_SG_label_calculation = \
-    [label_manager.Labels[i]
-     for i in range(len(label_manager.Labels))
-     if label_manager.Labels[i].Note.Contains("SG_")]
-label_manager.DeleteLabels(list_of_obj_of_SG_label_calculation)
-# endregion
+# # region Check if SG labels already exist within the memory, if they do, delete and re-create them
+# label_manager = Graphics.LabelManager
+# list_of_obj_of_SG_label_calculation = \
+#     [label_manager.Labels[i]
+#      for i in range(len(label_manager.Labels))
+#      if label_manager.Labels[i].Note.Contains("SG_")]
+# label_manager.DeleteLabels(list_of_obj_of_SG_label_calculation)
+# # endregion
 
 #--------------------------------------------------------------------------------------------
 
