@@ -1,4 +1,4 @@
-"# region Import libraries
+# region Import libraries
 import csv
 import context_menu
 import clr
@@ -863,7 +863,7 @@ def load_comparison_csv(n_clicks):
 
                     compare_data_percent_full = ((output_data[common_columns].values / interpolated_comparison_data[
                         common_columns].values) - 1) * 100
-                    compare_data_percent_full = pd.DataFrame(compare_data_full, columns=['%' + col for col in
+                    compare_data_percent_full = pd.DataFrame(compare_data_percent_full, columns=['%' + col for col in
                                                                                          comparison_trace_columns_all])
                     compare_data_percent_full.insert(0, 'Time', main_time)
 
@@ -1502,4 +1502,4 @@ process.StartInfo.FileName = "cmd.exe"  # Use cmd.exe to allow window manipulati
 process.StartInfo.Arguments = '/c python "' + cpython_script_path + '"'
 # Start the process
 process.Start()
-# endregion"
+# endregion
