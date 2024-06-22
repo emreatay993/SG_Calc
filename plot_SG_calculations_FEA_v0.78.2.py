@@ -129,6 +129,8 @@ class MaterialPropertiesDialog(QDialog):
     def __init__(self, parent=None):
         super(MaterialPropertiesDialog, self).__init__(parent)
         self.is_temperature_dependent_properties_checked = False
+        self.material_data_df = pd.DataFrame()
+        self.temperature_measurement_data_df = pd.DataFrame()
         self.initUI()
 
     def initUI(self):
@@ -278,22 +280,46 @@ class MaterialPropertiesDialog(QDialog):
     def load_data(self, file_path, table, tab_index):
         try:
             data = pd.read_csv(file_path, encoding='ISO-8859-1')
-            self.populate_table(data, table, tab_index)
+            self.populate_table_and_dataframes(data, table, tab_index)
         except Exception as e:
             QMessageBox.critical(self, "Error", f"Failed to load the file: {str(e)}")
 
-    def populate_table(self, data, table, tab_index):
+    def populate_table_and_dataframes(self, data, table, tab_index):
         if tab_index == 1:
             table.setColumnCount(3)
             table.setHorizontalHeaderLabels(["Temperature [°C]", "Young's Modulus [GPa]", "Poisson's Ratio"])
+            
+            # Create a DataFrame for the temperature-dependent material data
+            self.material_data_df = pd.DataFrame(columns=["Temperature [°C]", "Young's Modulus [GPa]", "Poisson's Ratio"])
         elif tab_index == 2:
             table.setColumnCount(len(data.columns))
             table.setHorizontalHeaderLabels(data.columns)
+            
+            # Create a DataFrame for the temperature measurement data
+            self.temperature_measurement_data_df = pd.DataFrame(columns=data.columns)
         
         table.setRowCount(len(data))
         for i, (index, row) in enumerate(data.iterrows()):
             for j in range(len(row)):
                 table.setItem(i, j, QTableWidgetItem(str(row[j])))
+        
+        if tab_index == 1:
+            self.material_data_df = data
+        elif tab_index == 2:
+            self.temperature_measurement_data_df = data
+
+        # Check if any temperature measurement is outside the bounds of material data
+        min_temp_material = self.material_data_df["Temperature [°C]"].min()
+        max_temp_material = self.material_data_df["Temperature [°C]"].max()
+
+        out_of_bounds_temps = self.temperature_measurement_data_df.apply(
+            lambda row: any(row < min_temp_material) or any(row > max_temp_material), axis=1
+        )
+
+        if out_of_bounds_temps.any():
+            QMessageBox.critical(self, "Error", "Some temperature measurements are outside the bounds of material data.")
+            return
+
         table.setVisible(True)
 
     def acceptInputs(self):
