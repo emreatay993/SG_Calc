@@ -128,7 +128,7 @@ import sys
 class MaterialPropertiesDialog(QDialog):
     def __init__(self, parent=None):
         super(MaterialPropertiesDialog, self).__init__(parent)
-        self.is_checked = False
+        self.is_temperature_dependent_properties_checked = False
         self.initUI()
 
     def initUI(self):
@@ -241,29 +241,29 @@ class MaterialPropertiesDialog(QDialog):
         self.resize(self.reducedWidth, self.reducedHeight+100)
 
     def toggle_time_dependent_input(self, state):
-        self.is_checked = state == Qt.Checked
-        if self.is_checked:
+        self.is_temperature_dependent_properties_checked = state == Qt.Checked
+        if self.is_temperature_dependent_properties_checked:
             self.resize(self.fullWidth, self.fullHeight)
             self.lineEditE.clear()
             self.lineEditV.clear()
             self.lineEditE.setStyleSheet("background-color: #e0e0e0;")  # Light grey background
             self.lineEditV.setStyleSheet("background-color: #e0e0e0;")  # Light grey background
-            self.tabs.setVisible(self.is_checked)
+            self.tabs.setVisible(self.is_temperature_dependent_properties_checked)
         else:
             self.resize(self.reducedWidth, self.reducedHeight)
             self.lineEditE.setStyleSheet("background-color: #ffffff;")  # White background
             self.lineEditV.setStyleSheet("background-color: #ffffff;")  # White background
-            self.tabs.setVisible(self.is_checked)
-        self.lineEditE.setDisabled(self.is_checked)
-        self.lineEditV.setDisabled(self.is_checked)
-        self.fileLabel1.setVisible(self.is_checked)
-        self.selectFileButton1.setVisible(self.is_checked)
-        self.filePathLineEdit1.setVisible(self.is_checked)
-        self.dataTable1.setVisible(self.is_checked)
-        self.fileLabel2.setVisible(self.is_checked)
-        self.selectFileButton2.setVisible(self.is_checked)
-        self.filePathLineEdit2.setVisible(self.is_checked)
-        self.dataTable2.setVisible(self.is_checked)
+            self.tabs.setVisible(self.is_temperature_dependent_properties_checked)
+        self.lineEditE.setDisabled(self.is_temperature_dependent_properties_checked)
+        self.lineEditV.setDisabled(self.is_temperature_dependent_properties_checked)
+        self.fileLabel1.setVisible(self.is_temperature_dependent_properties_checked)
+        self.selectFileButton1.setVisible(self.is_temperature_dependent_properties_checked)
+        self.filePathLineEdit1.setVisible(self.is_temperature_dependent_properties_checked)
+        self.dataTable1.setVisible(self.is_temperature_dependent_properties_checked)
+        self.fileLabel2.setVisible(self.is_temperature_dependent_properties_checked)
+        self.selectFileButton2.setVisible(self.is_temperature_dependent_properties_checked)
+        self.filePathLineEdit2.setVisible(self.is_temperature_dependent_properties_checked)
+        self.dataTable2.setVisible(self.is_temperature_dependent_properties_checked)
 
     def select_file(self, tab_index):
         file_path, _ = QFileDialog.getOpenFileName(self, "Open File", "", "CSV Files (*.csv);;All Files (*)")
@@ -297,7 +297,7 @@ class MaterialPropertiesDialog(QDialog):
         table.setVisible(True)
 
     def acceptInputs(self):
-        if self.is_checked == False:   # If "Time and Temperature Dependent-Input" is NOT checked
+        if self.is_temperature_dependent_properties_checked == False:
             try:
                 E = float(self.lineEditE.text())
                 E = E*1e9  # Convert the [GPa] to SI units [Pa]
