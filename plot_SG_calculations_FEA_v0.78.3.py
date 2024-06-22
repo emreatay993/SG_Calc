@@ -1462,11 +1462,31 @@ def process_sg_number(sg_number, strain_gauge_data, E, v):
             principal_strains = np.stack((C + R, C - R), axis=-1)
 
             # Vectorized principal stresses calculation
-            S = np.array([
-                [1, v[0]],
-                [v[0], 1]
-            ]) * E[0] / (1 - v[0]**2)
-            principal_stresses = (principal_strains / 1e6) @ S.T / 1e6  # Convert to MPa
+            if material_input_dialog.is_temperature_dependent_properties_checked == False:
+                S = np.array([
+                    [1, v[0]],
+                    [v[0], 1]
+                ]) * E[0] / (1 - v[0]**2)
+                principal_stresses = (principal_strains / 1e6) @ S.T / 1e6  # Convert to MPa
+
+            # if material_input_dialog.is_temperature_dependent_properties_checked == True:
+            
+            #     # Method 1
+            #     principal_stresses = np.zeros_like(principal_strains)
+            #     for i in range(principal_strains.shape[0]):
+            #         S = np.array([
+            #             [1, v[i]],
+            #             [v[i], 1]
+            #         ]) * E[i] / (1 - v[i]**2)
+            #         principal_stresses[i, :] = (principal_strains[i, :] / 1e6) @ S.T / 1e6  # Convert to MPa
+                    
+            #     # Method 2
+            #     S = np.array([
+            #         [1, v],
+            #         [v, 1]
+            #     ]).transpose((2, 0, 1)) * E[:, np.newaxis, np.newaxis] / (1 - v[:, np.newaxis]**2)
+            #     principal_stresses = (principal_strains / 1e6)[:, np.newaxis, :] @ S
+            #     principal_stresses = principal_stresses[:, 0, :] / 1e6  # Convert to MPa
 
             # Vectorized principal strain orientation calculation
             # gamma_xy  = global_strains[:, 2]
