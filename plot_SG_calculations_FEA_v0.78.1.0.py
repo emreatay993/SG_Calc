@@ -308,7 +308,10 @@ class MaterialPropertiesDialog(QDialog):
                 self.user_input = {'E': E, 'v': v}
                 self.accept()  # Close the dialog and return success
             except ValueError as ve:
-                QMessageBox.critical
+                QMessageBox.critical(self, "Input Error", str(ve))
+                
+        if self.is_temperature_dependent_properties_checked == True:
+            QMessageBox.critical(None, "Error", "Temperature and time dependent SG calculation algorithm is not yet implemented.")
 
 class PlotlyViewer(QWebEngineView):
     def __init__(self, parent=None):
@@ -1391,12 +1394,14 @@ initial_SG_raw_data
 # region Define material properties
 material_input_dialog = MaterialPropertiesDialog()
 if material_input_dialog.exec_() == QDialog.Accepted:
-    E = material_input_dialog.user_input.get('E')
-    v = material_input_dialog.user_input.get('v')
+    if material_input_dialog.is_temperature_dependent_properties_checked == False:
+        E = material_input_dialog.user_input.get('E')
+        v = material_input_dialog.user_input.get('v')
+    
+        # Convert to numpy column arrays to get individual E and v at each index (therefore, at each time step) later
+        E = (np.full(time.shape, E))
+        v = (np.full(time.shape, v))
 
-    # Convert to numpy column arrays to get individual E and v at each index (therefore, at each time step) later
-    E = (np.full(time.shape, E))
-    v = (np.full(time.shape, v))
 else:
     sys.exit("Material properties input was canceled or failed.")
 # endregion
