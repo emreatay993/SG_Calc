@@ -19,7 +19,7 @@ file_path_of_SG_calculations = os.path.join(solution_directory_path, file_name_o
 
 cpython_script_name = "plot_SG_calculations_cpython_code_only.py"
 cpython_script_path = sol_selected_environment.WorkingDir + cpython_script_name
-cpython_code ="""
+cpython_code = """
 # region Import necessary modules
 import warnings
 warnings.filterwarnings("ignore", category=DeprecationWarning)
@@ -43,7 +43,7 @@ try:
     from PyQt5.QtWidgets import (QApplication, QMainWindow, QLineEdit, QDialog, QHBoxLayout,
                                  QVBoxLayout, QWidget, QMessageBox, QComboBox, QCheckBox, QFileDialog,
                                  QLabel, QSizePolicy, QPushButton, QTableWidget, QTableWidgetItem, 
-                                 QHeaderView, QProgressBar)
+                                 QHeaderView, QProgressBar, QTabWidget)
     from PyQt5.QtWebEngineWidgets import QWebEngineView
     import concurrent.futures
     from concurrent.futures import ThreadPoolExecutor
@@ -120,9 +120,15 @@ class FlatLineEdit(QLineEdit):
         self.setPlaceholderText(placeholder_text)
         self.setStyleSheet("QLineEdit {border: 1px solid #bfbfbf; border-radius: 5px; padding: 5px; background-color: #ffffff;} QLineEdit:focus {border: 2px solid #0077B6;}")
 
+from PyQt5.QtWidgets import (QApplication, QDialog, QVBoxLayout, QLabel, QLineEdit, QCheckBox, QHBoxLayout,
+                             QPushButton, QFileDialog, QTableWidget, QTableWidgetItem, QHeaderView, QTabWidget, QWidget, QMessageBox)
+import pandas as pd
+import sys
+
 class MaterialPropertiesDialog(QDialog):
     def __init__(self, parent=None):
         super(MaterialPropertiesDialog, self).__init__(parent)
+        self.is_checked = False
         self.initUI()
 
     def initUI(self):
@@ -154,33 +160,73 @@ class MaterialPropertiesDialog(QDialog):
         layout.addLayout(formLayout)
 
         # Checkbox for time-dependent input
-        self.checkbox = QCheckBox("Time Dependent Input:")
+        self.checkbox = QCheckBox("Time and Temperature-Dependent Input:")
         self.checkbox.stateChanged.connect(self.toggle_time_dependent_input)
         layout.addWidget(self.checkbox)
 
-        # File selection and data table visibility
-        fileLayout = QHBoxLayout()
-        self.fileLabel = QLabel("Select a directory for 'T vs. E, v' data:")
-        self.fileLabel.setVisible(False)
-        self.selectFileButton = QPushButton("Select File")
-        self.selectFileButton.clicked.connect(self.select_file)
-        self.selectFileButton.setVisible(False)
-        fileLayout.addWidget(self.fileLabel)
-        fileLayout.addWidget(self.selectFileButton)
-        layout.addLayout(fileLayout)
+        # Tab widgets to contain the tables
+        self.tabs = QTabWidget()
+        self.tab1 = QWidget()
+        self.tab2 = QWidget()
+        self.tabs.addTab(self.tab1, "Material Properties")
+        self.tabs.addTab(self.tab2, "Temperature Measurement")
+        self.tabs.setVisible(False)
+        
+        # Layout for the first tab
+        self.tab1_layout = QVBoxLayout()
+        self.tab1.setLayout(self.tab1_layout)
 
-        self.filePathLineEdit = QLineEdit(self)
-        self.filePathLineEdit.setReadOnly(True)
-        self.filePathLineEdit.setVisible(False)
-        layout.addWidget(self.filePathLineEdit)
+        # File selection and data table visibility for the first tab
+        fileLayout1 = QHBoxLayout()
+        self.fileLabel1 = QLabel("Select a directory for 'T vs. E, v' data:")
+        self.fileLabel1.setVisible(False)
+        self.selectFileButton1 = QPushButton("Select File")
+        self.selectFileButton1.clicked.connect(lambda: self.select_file(1))
+        self.selectFileButton1.setVisible(False)
+        fileLayout1.addWidget(self.fileLabel1)
+        fileLayout1.addWidget(self.selectFileButton1)
+        self.tab1_layout.addLayout(fileLayout1)
 
-        # Table to display the data
-        self.dataTable = QTableWidget(self)
-        self.dataTable.setColumnCount(3)
-        self.dataTable.setHorizontalHeaderLabels(["Temperature [°C]", "Young's Modulus [GPa]", "Poisson's Ratio"])
-        self.dataTable.setVisible(False)
-        self.dataTable.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
-        layout.addWidget(self.dataTable)
+        self.filePathLineEdit1 = QLineEdit(self)
+        self.filePathLineEdit1.setReadOnly(True)
+        self.filePathLineEdit1.setVisible(False)
+        self.tab1_layout.addWidget(self.filePathLineEdit1)
+
+        # Table to display the data for the first tab
+        self.dataTable1 = QTableWidget(self)
+        self.dataTable1.setColumnCount(3)
+        self.dataTable1.setHorizontalHeaderLabels(["Temperature [°C]", "Young's Modulus [GPa]", "Poisson's Ratio"])
+        self.dataTable1.setVisible(False)
+        self.dataTable1.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
+        self.tab1_layout.addWidget(self.dataTable1)
+
+        # Layout for the second tab
+        self.tab2_layout = QVBoxLayout()
+        self.tab2.setLayout(self.tab2_layout)
+
+        # File selection and data table visibility for the second tab
+        fileLayout2 = QHBoxLayout()
+        self.fileLabel2 = QLabel("Select a directory for 'Time vs. Temp' data at each measurement point:")
+        self.fileLabel2.setVisible(False)
+        self.selectFileButton2 = QPushButton("Select File")
+        self.selectFileButton2.clicked.connect(lambda: self.select_file(2))
+        self.selectFileButton2.setVisible(False)
+        fileLayout2.addWidget(self.fileLabel2)
+        fileLayout2.addWidget(self.selectFileButton2)
+        self.tab2_layout.addLayout(fileLayout2)
+
+        self.filePathLineEdit2 = QLineEdit(self)
+        self.filePathLineEdit2.setReadOnly(True)
+        self.filePathLineEdit2.setVisible(False)
+        self.tab2_layout.addWidget(self.filePathLineEdit2)
+
+        # Table to display the data for the second tab
+        self.dataTable2 = QTableWidget(self)
+        self.dataTable2.setVisible(False)
+        self.dataTable2.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
+        self.tab2_layout.addWidget(self.dataTable2)
+
+        layout.addWidget(self.tabs)
 
         # OK and Cancel buttons
         buttonLayout = QHBoxLayout()
@@ -195,46 +241,63 @@ class MaterialPropertiesDialog(QDialog):
         self.resize(self.reducedWidth, self.reducedHeight+100)
 
     def toggle_time_dependent_input(self, state):
-        is_checked = state == Qt.Checked
-        if is_checked:
+        self.is_checked = state == Qt.Checked
+        if self.is_checked:
             self.resize(self.fullWidth, self.fullHeight)
             self.lineEditE.clear()
             self.lineEditV.clear()
             self.lineEditE.setStyleSheet("background-color: #e0e0e0;")  # Light grey background
             self.lineEditV.setStyleSheet("background-color: #e0e0e0;")  # Light grey background
+            self.tabs.setVisible(self.is_checked)
         else:
             self.resize(self.reducedWidth, self.reducedHeight)
             self.lineEditE.setStyleSheet("background-color: #ffffff;")  # White background
             self.lineEditV.setStyleSheet("background-color: #ffffff;")  # White background
-        self.lineEditE.setDisabled(is_checked)
-        self.lineEditV.setDisabled(is_checked)
-        self.fileLabel.setVisible(is_checked)
-        self.selectFileButton.setVisible(is_checked)
-        self.filePathLineEdit.setVisible(is_checked)
-        self.dataTable.setVisible(is_checked)
+            self.tabs.setVisible(self.is_checked)
+        self.lineEditE.setDisabled(self.is_checked)
+        self.lineEditV.setDisabled(self.is_checked)
+        self.fileLabel1.setVisible(self.is_checked)
+        self.selectFileButton1.setVisible(self.is_checked)
+        self.filePathLineEdit1.setVisible(self.is_checked)
+        self.dataTable1.setVisible(self.is_checked)
+        self.fileLabel2.setVisible(self.is_checked)
+        self.selectFileButton2.setVisible(self.is_checked)
+        self.filePathLineEdit2.setVisible(self.is_checked)
+        self.dataTable2.setVisible(self.is_checked)
 
-    def select_file(self):
+    def select_file(self, tab_index):
         file_path, _ = QFileDialog.getOpenFileName(self, "Open File", "", "CSV Files (*.csv);;All Files (*)")
         if file_path:
-            self.filePathLineEdit.setText(file_path)
-            self.load_data(file_path)
+            if tab_index == 1:
+                self.filePathLineEdit1.setText(file_path)
+                self.load_data(file_path, self.dataTable1, tab_index)
+            elif tab_index == 2:
+                self.filePathLineEdit2.setText(file_path)
+                self.load_data(file_path, self.dataTable2, tab_index)
 
-    def load_data(self, file_path):
+    def load_data(self, file_path, table, tab_index):
         try:
             data = pd.read_csv(file_path, encoding='ISO-8859-1')
-            self.populate_table(data)
+            self.populate_table(data, table, tab_index)
         except Exception as e:
             QMessageBox.critical(self, "Error", f"Failed to load the file: {str(e)}")
 
-    def populate_table(self, data):
-        self.dataTable.setRowCount(len(data))
+    def populate_table(self, data, table, tab_index):
+        if tab_index == 1:
+            table.setColumnCount(3)
+            table.setHorizontalHeaderLabels(["Temperature [°C]", "Young's Modulus [GPa]", "Poisson's Ratio"])
+        elif tab_index == 2:
+            table.setColumnCount(len(data.columns))
+            table.setHorizontalHeaderLabels(data.columns)
+        
+        table.setRowCount(len(data))
         for i, (index, row) in enumerate(data.iterrows()):
-            self.dataTable.setItem(i, 0, QTableWidgetItem(str(row[0])))
-            self.dataTable.setItem(i, 1, QTableWidgetItem(str(row[1])))
-            self.dataTable.setItem(i, 2, QTableWidgetItem(str(row[2])))
-        self.dataTable.setVisible(True)
+            for j in range(len(row)):
+                table.setItem(i, j, QTableWidgetItem(str(row[j])))
+        table.setVisible(True)
 
     def acceptInputs(self):
+        if self.is_checked == False:   # If "Time and Temperature Dependent-Input" is NOT checked
             try:
                 E = float(self.lineEditE.text())
                 E = E*1e9  # Convert the [GPa] to SI units [Pa]
@@ -245,7 +308,7 @@ class MaterialPropertiesDialog(QDialog):
                 self.user_input = {'E': E, 'v': v}
                 self.accept()  # Close the dialog and return success
             except ValueError as ve:
-                QMessageBox.critical(self, "Input Error", str(ve))
+                QMessageBox.critical
 
 class PlotlyViewer(QWebEngineView):
     def __init__(self, parent=None):
@@ -292,16 +355,16 @@ class PlotWindow(QMainWindow):
                     output_data = output_SG_data_w_raw
             else:
                 output_data = output_SG_data_w_raw
-            
+
             time_df = pd.DataFrame(time).reset_index(drop=True)
             if 'Time' not in output_data.columns:
                 output_data = pd.concat([time_df, output_data.reset_index(drop=True)], axis=1)
             output_data = output_data.sort_values(by='Time')
-            
+
         except Exception as e:
             QMessageBox.critical(self, "File Error", f"Failed to read the file: {str(e)}")
             sys.exit(1)
-    
+
         # Ensure 'Time' is the first column
         cols = ['Time'] + [col for col in output_data if col != 'Time']
         output_data = output_data[cols]
@@ -335,7 +398,7 @@ class PlotWindow(QMainWindow):
 
         self.offsetZeroButton = QPushButton("Offset-Zero SG's")
         self.offsetZeroButton.clicked.connect(self.offset_zero_sgs)  # Connect to the new function
-        
+
         self.offsetStartTimeButton = QPushButton("Offset-Zero Start Time")  # New button
         self.offsetStartTimeButton.clicked.connect(self.offset_start_time)  # Connect to the new function
 
@@ -452,7 +515,7 @@ class PlotWindow(QMainWindow):
         # Retrieve the parent name from the environment for the filename
         parent_name = '''""" + sol_selected_environment.Parent.Name + """'''
         active_tab = self.get_active_tab()
-    
+
         if active_tab == 'tab-main':
             filename = f"SG_Calculations__{parent_name}__{selected_group}__main.html"
             plot(current_figure_main, filename=os.path.join(self.folder_name, filename),
@@ -476,90 +539,90 @@ class PlotWindow(QMainWindow):
         else:
             QMessageBox.warning(self, "Save Plot", "No active plot found to save.")
             return
-    
+
         QMessageBox.information(self, "Plot Saved", f"The plot has been saved to: {filename} in the solution directory.")
-    
+
     def offset_zero_sgs(self):
         # Get the unique time points as strings for the combo box
         time_points = [str(tp) for tp in output_data['Time'].unique()]
-        
+
         dialog = OffsetZeroDialog(self, time_points)
         if dialog.exec_() == QDialog.Accepted:
             selected_time = dialog.get_selected_time()
             self.apply_offset_zero(selected_time)
-    
+
     def apply_offset_zero(self, selected_time):
         global output_data, initial_SG_raw_data
-    
+
         # Define a small epsilon value
         epsilon = 1e-10
-        
+
         # Make a copy of the raw SG data
         raw_data_copy = initial_SG_raw_data.copy()
-        
+
         # Get the strain columns (assume columns with 'SG' in their name)
         strain_columns = [col for col in raw_data_copy.columns if 'SG' in col]
-        
+
         # Extract strain data 
         strain_data = raw_data_copy[strain_columns]
-        
+
         # Add epsilon to any zero values in the strain columns before the offset calculations
         strain_data = strain_data.apply(lambda x: x + (x == 0) * epsilon)
-        
+
         # Find the index of the selected time
         selected_time_index = output_data[output_data['Time'] == selected_time].index
         if selected_time_index.empty:
             QMessageBox.critical(self, "Error", "Selected time point not found in the data.")
             return
         selected_time_index = selected_time_index[0]
-        
+
         # Extract the strain values at the selected time point
         offset_values = strain_data.iloc[selected_time_index]
-        
+
         # Subtract the strains at the selected time point from all strain values
         strain_data = strain_data - offset_values
-        
+
         # Set all strain values before the selected time point to zero
         strain_data[:selected_time_index] = 0
-        
+
         # Add epsilon to any zero values again after the offset calculations
         strain_data = strain_data.apply(lambda x: x + (x == 0) * epsilon)
-        
+
         # Recalculate the SG variables
         output_SG_data_w_raw = calculate_all_SG_variables(strain_data, rosette_angles_df)
         output_SG_data_w_raw.insert(0, 'Time', output_data['Time'])
         #output_SG_data_w_raw.set_index('Time', inplace=True)
-    
+
         output_data = output_SG_data_w_raw
-    
+
         # Update the plot
         self.update_plot(0)
-        
+
     def offset_start_time(self):
         # Get the unique time points as strings for the combo box
         time_points = [str(tp) for tp in output_data['Time'].unique()]
-        
+
         dialog = OffsetZeroDialog(self, time_points)
         if dialog.exec_() == QDialog.Accepted:
             selected_time = dialog.get_selected_time()
             self.apply_offset_start_time(selected_time)
-    
+
     def apply_offset_start_time(self, selected_time):
         global output_data
-    
+
         # Find the index of the selected time
         selected_time_index = output_data[output_data['Time'] == selected_time].index
         if selected_time_index.empty:
             QMessageBox.critical(self, "Error", "Selected time point not found in the data.")
             return
         selected_time_index = selected_time_index[0]
-    
+
         # Drop data before the selected time point
         output_data = output_data.loc[selected_time_index:].reset_index(drop=True)
-    
+
         # Offset the time so that the selected time point becomes the new zero
         output_data['Time'] = output_data['Time'] - selected_time
-    
+
         # Update the plot
         self.update_plot(0)
 
@@ -568,16 +631,16 @@ class PlotWindow(QMainWindow):
         global compare_data_full
         global compare_data_percent_full
         file_path = os.path.join(self.folder_name, self.file_name)
-        
+
         combined_data = output_data
-        
+
         try:
             if compare_data_full is not None:
                 combined_data = pd.concat([combined_data, compare_data_full], axis=1)
-            
+
             if compare_data_percent_full is not None:
                 combined_data = pd.concat([combined_data, compare_data_percent_full], axis=1)
-            
+
             combined_data.to_csv(file_path, index=False, encoding='utf-8-sig')
             QMessageBox.information(self, "CSV Saved", f"The full data has been saved as {file_path}")
         except Exception as e:
@@ -661,7 +724,7 @@ def render_content(tab, comparison_data_loaded):
     'font-size': '10px','background-color': '#87CEFA',
     'border': 'none','border-radius': '8px',
     'cursor': 'pointer','transition': 'background-color 0.3s ease'}
-    
+
     button_success_style = {
     **button_style,
     'background-color': 'green',  # Change to green on success
@@ -681,7 +744,7 @@ def render_content(tab, comparison_data_loaded):
             html.Button("Click to Plot", id="plot-button", n_clicks=0, style=button_style),
             graph
         ])
-        
+
     elif tab == 'tab-compared-data':
         graph_compared_data = dcc.Graph(
             id="graph-compared-data-id",
@@ -697,7 +760,7 @@ def render_content(tab, comparison_data_loaded):
             html.Button("Load Comparison CSV", id="load-comparison-csv-button", n_clicks=0, style=button_style),
             graph_compared_data
         ])
-        
+
     elif tab == 'tab-main-and-compared-data':
         graph_main_and_compared_data = dcc.Graph(
             id="graph-main-and-compared-data-id",
@@ -712,7 +775,7 @@ def render_content(tab, comparison_data_loaded):
             html.Button("Click to Plot", id="plot-main-and-compared-data-button", n_clicks=0, style=button_style),
             graph_main_and_compared_data
         ])
-        
+
     elif tab == 'tab-comparison':
         graph_comparison = dcc.Graph(
             id="graph-comparison-id",
@@ -727,7 +790,7 @@ def render_content(tab, comparison_data_loaded):
             html.Button("Click to Plot", id="plot-comparison-button", n_clicks=0, style=button_style),
             graph_comparison
         ])
-        
+
     elif tab == 'tab-comparison-percent':
         graph_comparison_percent = dcc.Graph(
             id="graph-comparison-percent-id",
@@ -756,15 +819,15 @@ def plot_graph(n_clicks):
         global my_fig_main
         global output_data
         global trace_columns
-        
+
         mainWindow.plot_started.emit() # Emit the plot started signal
-        
+
         if len(my_fig_main.data):
             my_fig_main.replace(go.Figure())
 
         time_data_in_x_axis = output_data['Time']
         total_no_of_traces_to_add = len(trace_columns)
-        
+
         for idx, col in enumerate(trace_columns):
             color_idx = idx % len(my_discrete_color_scheme)
             my_fig_main.add_trace(go.Scattergl(
@@ -778,7 +841,7 @@ def plot_graph(n_clicks):
             ))
             progress = int((idx + 1) / total_no_of_traces_to_add * 100)
             mainWindow.plot_progress.emit(progress)  # Emit the plot progress signal
-            
+
             my_fig_main.update_layout(
                 title_text='SG Calculations : """ + sol_selected_environment.Parent.Name + """ ' + "( " + selected_group + " )",
                 title_x=0.45,
@@ -796,7 +859,7 @@ def plot_graph(n_clicks):
                 hovermode='closest',
                 margin=dict(t=40,b=0)  # Adjust the top margin to bring the graph closer to the title
             )
-        
+
         current_figure_main = my_fig_main  # Update the global variable with the new figure
         mainWindow.plot_finished.emit()  # Emit the plot finished signal
         return my_fig_main
@@ -919,10 +982,10 @@ def plot_compared_data_graph(n_clicks):
 
     if selected_ref_number != "-":
         compared_data_trace_columns = [col for col in compared_data_trace_columns if col.split('_')[1] == selected_ref_number]
-    
+
     comparison_time = comparison_data['Time']
     main_time = output_data['Time']
-    
+
     # Determine which dataset has a lower sample rate
     if len(main_time) > len(comparison_time):
         interp_func = interp1d(comparison_time, comparison_data[compared_data_trace_columns], axis=0, fill_value="extrapolate")
@@ -933,7 +996,7 @@ def plot_compared_data_graph(n_clicks):
         interp_func = interp1d(main_time, output_data[compared_data_trace_columns], axis=0, fill_value="extrapolate")
         interpolated_main_data = pd.DataFrame(interp_func(comparison_time), columns=compared_data_trace_columns)
         interpolated_main_data.insert(0, 'Time', comparison_time)
-        
+
         compared_data = comparison_data
 
     if len(ctx.triggered) and "plot-compared-data-button" in ctx.triggered[0]["prop_id"]:
@@ -1005,25 +1068,25 @@ def plot_main_and_compared_data_graph(n_clicks):
 
     if selected_ref_number != "-":
         main_and_compared_data_trace_columns = [col for col in main_and_compared_data_trace_columns if col.split('_')[1] == selected_ref_number]
-    
+
     comparison_time = comparison_data['Time']
     main_time = output_data['Time']
-    
+
     common_columns = [col for col in main_and_compared_data_trace_columns if col in comparison_data.columns and col in output_data.columns]
-    
+
     # Determine which dataset has a lower sample rate
     if len(main_time) > len(comparison_time):
         interp_func = interp1d(comparison_time, comparison_data[common_columns], axis=0, fill_value="extrapolate")
         interpolated_comparison_data = pd.DataFrame(interp_func(main_time), columns=common_columns)
         interpolated_comparison_data.insert(0, 'Time', main_time)
-        
+
         compared_data = interpolated_comparison_data
         main_data = output_data
     else:
         interp_func = interp1d(main_time, output_data[common_columns], axis=0, fill_value="extrapolate")
         interpolated_main_data = pd.DataFrame(interp_func(comparison_time), columns=common_columns)
         interpolated_main_data.insert(0, 'Time', comparison_time)
-        
+
         compared_data = comparison_data
         main_data = interpolated_main_data
 
@@ -1047,7 +1110,7 @@ def plot_main_and_compared_data_graph(n_clicks):
                     hoverlabel=dict(font_size=14, bgcolor='rgba(255, 255, 255, 0.5)'),
                     meta= "Main: "+ col,
                 ))
-                
+
                 my_fig_main_and_compared_data.add_trace(go.Scattergl(
                     x=time_data_in_x_axis,
                     y=compared_data[col],
@@ -1057,7 +1120,7 @@ def plot_main_and_compared_data_graph(n_clicks):
                     hoverlabel=dict(font_size=14, bgcolor='rgba(255, 255, 255, 0.5)'),
                     meta= "Comp: " + col,
                 ))
-                
+
                 progress = int((idx + 1) / total_no_of_traces_to_add * 100)
                 mainWindow.plot_progress.emit(progress)  # Emit the plot progress signal
 
@@ -1106,16 +1169,16 @@ def plot_comparison_graph(n_clicks):
 
     if selected_ref_number != "-":
         comparison_trace_columns = [col for col in comparison_trace_columns if col.split('_')[1] == selected_ref_number]
-    
+
     comparison_time = comparison_data['Time']
     main_time = output_data['Time']
-    
+
     # Determine which dataset has a lower sample rate
     if len(main_time) > len(comparison_time):
         interp_func = interp1d(comparison_time, comparison_data[comparison_trace_columns], axis=0, fill_value="extrapolate")
         interpolated_comparison_data = pd.DataFrame(interp_func(main_time), columns=comparison_trace_columns)
         interpolated_comparison_data.insert(0, 'Time', main_time)
-        
+
         # Calculate the difference
         compare_data = output_data[comparison_trace_columns].values - interpolated_comparison_data[comparison_trace_columns].values
         compare_data = pd.DataFrame(compare_data, columns=comparison_trace_columns)
@@ -1124,7 +1187,7 @@ def plot_comparison_graph(n_clicks):
         interp_func = interp1d(main_time, output_data[comparison_trace_columns], axis=0, fill_value="extrapolate")
         interpolated_main_data = pd.DataFrame(interp_func(comparison_time), columns=comparison_trace_columns)
         interpolated_main_data.insert(0, 'Time', comparison_time)
-        
+
         # Calculate the difference
         compare_data = interpolated_main_data[comparison_trace_columns].values - comparison_data[comparison_trace_columns].values
         compare_data = pd.DataFrame(compare_data, columns=comparison_trace_columns)
@@ -1197,16 +1260,16 @@ def plot_comparison_percent_graph(n_clicks):
 
     if selected_ref_number != "-":
         comparison_trace_columns_percent = [col for col in comparison_trace_columns_percent if col.split('_')[1] == selected_ref_number]
-    
+
     comparison_time = comparison_data['Time']
     main_time = output_data['Time']
-    
+
     # Determine which dataset has a lower sample rate
     if len(main_time) > len(comparison_time):
         interp_func = interp1d(comparison_time, comparison_data[comparison_trace_columns_percent], axis=0, fill_value="extrapolate")
         interpolated_comparison_data = pd.DataFrame(interp_func(main_time), columns=comparison_trace_columns_percent)
         interpolated_comparison_data.insert(0, 'Time', main_time)
-        
+
         # Calculate the difference
         compare_data_percent = ((output_data[comparison_trace_columns_percent].values / interpolated_comparison_data[comparison_trace_columns_percent].values) -1)*100
         compare_data_percent = pd.DataFrame(compare_data_percent, columns=comparison_trace_columns_percent)
@@ -1215,7 +1278,7 @@ def plot_comparison_percent_graph(n_clicks):
         interp_func = interp1d(main_time, output_data[comparison_trace_columns_percent], axis=0, fill_value="extrapolate")
         interpolated_main_data = pd.DataFrame(interp_func(comparison_time), columns=comparison_trace_columns_percent)
         interpolated_main_data.insert(0, 'Time', comparison_time)
-        
+
         # Calculate the difference
         compare_data_percent = ((interpolated_main_data[comparison_trace_columns_percent].values / comparison_data[comparison_trace_columns_percent].values) -1)*100
         compare_data_percent = pd.DataFrame(compare_data_percent, columns=comparison_trace_columns_percent)
@@ -1283,7 +1346,7 @@ def update_active_tab(tab):
 app_dialog = QApplication(sys.argv)
 
 # File selection for raw strain data
-file_path_SG_raw_data, _ = QFileDialog().getOpenFileName(None, 'Open raw data file for SG rosettes',r'"""+solution_directory_path+"""' , 'All Files (*);;CSV Files (*.csv)')
+file_path_SG_raw_data, _ = QFileDialog().getOpenFileName(None, 'Open raw data file for SG rosettes',r'""" + solution_directory_path + """' , 'All Files (*);;CSV Files (*.csv)')
 
 # Check if a file was selected for SG data
 if file_path_SG_raw_data:
@@ -1326,10 +1389,10 @@ initial_SG_raw_data
 # endregion
 
 # region Define material properties
-input_dialog = MaterialPropertiesDialog()
-if input_dialog.exec_() == QDialog.Accepted:
-    E = input_dialog.user_input.get('E')
-    v = input_dialog.user_input.get('v')
+material_input_dialog = MaterialPropertiesDialog()
+if material_input_dialog.exec_() == QDialog.Accepted:
+    E = material_input_dialog.user_input.get('E')
+    v = material_input_dialog.user_input.get('v')
 
     # Convert to numpy column arrays to get individual E and v at each index (therefore, at each time step) later
     E = (np.full(time.shape, E))
@@ -1348,7 +1411,7 @@ def process_sg_number(sg_number, strain_gauge_data, E, v):
             current_angles = rosette_row.iloc[0, 1:].values
             strains = strain_gauge_data[sg_cols].values.astype(dtype=np.float64)
             theta_A, theta_B, theta_C = np.radians(current_angles)
-            
+
             # Matrix T and its inverse T_inv
             T = np.array([
                 [np.cos(theta_A)**2, np.sin(theta_A)**2, np.sin(theta_A) * np.cos(theta_A)],
@@ -1356,24 +1419,24 @@ def process_sg_number(sg_number, strain_gauge_data, E, v):
                 [np.cos(theta_C)**2, np.sin(theta_C)**2, np.sin(theta_C) * np.cos(theta_C)]
             ])
             T_inv = np.linalg.inv(T)
-            
+
             # Vectorized global strains transformation
             global_strains = strains @ T_inv.T
-            
+
             # Vectorized principal strains calculation
             # epsilon_x = global_strains[:, 0]
             # epsilon_y = global_strains[:, 1]
             C = (global_strains[:, 0] + global_strains[:, 1]) / 2
             R = np.sqrt(((global_strains[:, 0] - global_strains[:, 1]) / 2)**2 + (global_strains[:, 2] / 2)**2)
             principal_strains = np.stack((C + R, C - R), axis=-1)
-            
+
             # Vectorized principal stresses calculation
             S = np.array([
                 [1, v[0]],
                 [v[0], 1]
             ]) * E[0] / (1 - v[0]**2)
             principal_stresses = (principal_strains / 1e6) @ S.T / 1e6  # Convert to MPa
-            
+
             # Vectorized principal strain orientation calculation
             # gamma_xy  = global_strains[:, 2]
             # epsilon_x = global_strains[:, 0]
@@ -1381,17 +1444,17 @@ def process_sg_number(sg_number, strain_gauge_data, E, v):
             theta_p_rad = 0.5 * np.arctan2(global_strains[:, 2], global_strains[:, 0] - global_strains[:, 1])
             theta_p = np.degrees(theta_p_rad)
             theta_p[theta_p < 0] += 180
-            
+
             # Vectorized biaxiality ratio calculation
             sigma_1 = np.maximum(np.abs(principal_stresses[:, 0]), np.abs(principal_stresses[:, 1]))
             sigma_2 = np.minimum(np.abs(principal_stresses[:, 0]), np.abs(principal_stresses[:, 1]))
             biaxiality_ratios = sigma_2 / sigma_1
-            
+
             # Vectorized von Mises stress calculation
             # S1 = principal_stresses[:, 0]
             # S2 = principal_stresses[:, 1]
             von_mises_stresses = np.sqrt(((principal_stresses[:, 0] - principal_stresses[:, 1])**2 + principal_stresses[:, 0]**2 + principal_stresses[:, 1]**2) / 2)
-            
+
             # Collect results into new columns
             for i, strain_type in enumerate(['epsilon_x [µε]', 'epsilon_y [µε]', 'gamma_xy [µε]']):
                 new_columns.append(pd.DataFrame({f'SG{sg_number}_{strain_type}': global_strains[:, i]}))
@@ -1412,7 +1475,7 @@ def process_sg_number(sg_number, strain_gauge_data, E, v):
 def calculate_all_SG_variables(strain_gauge_data, rosette_angles_df):
     # Start the timer
     start_time = time_module.time()
-    
+
     matching_columns = [col for col in strain_gauge_data.columns if re.search(r'SG(\d+)_', col)]
     sg_numbers = sorted(set(int(re.search(r'SG(\d+)_', col).group(1)) for col in matching_columns))
 
@@ -1431,14 +1494,14 @@ def calculate_all_SG_variables(strain_gauge_data, rosette_angles_df):
 
     # End the timer
     end_time = time_module.time()
-    
+
     # Calculate elapsed time in seconds (two significant digits)
     elapsed_time = end_time - start_time
     elapsed_time_formatted = f"{elapsed_time:.2f}"
-    
+
     # Show the completion message with the elapsed time
     QMessageBox.information(None, "Info", f"Calculation is completed in {elapsed_time_formatted} seconds.")
-    
+
     return strain_gauge_data
 # endregion
 
@@ -1462,13 +1525,13 @@ try:
                 if s.connect_ex(('localhost', port)) != 0:
                     return port
         return None
-    
+
     if __name__ == '__main__':
         app_plot = QApplication(sys.argv)
-        
+
         # The plotly-resampler callback to update the graph after a relayout event (= zoom/pan)
         my_fig_main.register_update_graph_callback(app=my_dash_app, graph_id="graph-id")
-        
+
         mainWindow = PlotWindow('""" + solution_directory_path + """', '""" + file_name_of_SG_calculations + """')
         mainWindow.show()
         available_port = find_available_port([8050, 8051, 8052, 8053])
