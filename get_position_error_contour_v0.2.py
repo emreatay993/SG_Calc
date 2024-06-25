@@ -80,6 +80,42 @@ import numpy as np
 import pandas as pd
 import re
 import math
+import sys
+from PyQt5.QtWidgets import QApplication, QDialog, QVBoxLayout, QLabel, QLineEdit, QPushButton
+
+# Define classes for dialog windows etc.
+class RadiusDialog(QDialog):
+    def __init__(self):
+        super().__init__()
+        self.initUI()
+
+    def initUI(self):
+        self.setWindowTitle('Specify Distance')
+        layout = QVBoxLayout()
+
+        self.label = QLabel('Enter the max distance [mm]:')
+        self.setFixedWidth(600)
+        layout.addWidget(self.label)
+
+        self.radius_input = QLineEdit(self)
+        layout.addWidget(self.radius_input)
+
+        self.submit_button = QPushButton('Submit', self)
+        self.submit_button.clicked.connect(self.submit)
+        layout.addWidget(self.submit_button)
+
+        self.setLayout(layout)
+
+    def submit(self):
+        self.radius = float(self.radius_input.text())
+        self.accept()
+
+def get_user_radius():
+    app = QApplication(sys.argv)
+    dialog = RadiusDialog()
+    if dialog.exec_() == QDialog.Accepted:
+        return dialog.radius
+    return None
 
 # Define the function to calculate the distance between two points
 def calculate_distance(point1, point2):
@@ -93,7 +129,11 @@ data = pd.read_csv(file_name, delimiter='\t')
 reference_coordinates = """ + str(list_of_coordinates_of_all_filtered_names_of_CS_SG_channels) + """
 
 # User-specified radius
-radius = 1.2  # Example radius value
+radius = get_user_radius()
+
+if radius is None:
+    print("No radius specified.")
+    sys.exit()
 
 # Function to find the closest node
 def find_closest_node(ref_coord, data):
