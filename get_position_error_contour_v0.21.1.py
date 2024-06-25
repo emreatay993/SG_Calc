@@ -122,7 +122,7 @@ def calculate_distance(point1, point2):
     return np.linalg.norm(np.array(point1) - np.array(point2))
 
 # Read the dataset
-file_name = r"C:\Users\emre_\OneDrive\Desktop\J\ANSYS\Benchmark\load_reconstruction_v0_files\dp0\SYS-6\MECH\distance_error.txt"
+file_name = r'""" + solution_directory_path + """' + "\\distance_error.txt"
 data = pd.read_csv(file_name, delimiter='\t')
 
 # Define the reference coordinates
