@@ -159,7 +159,7 @@ for idx, ref_coord in enumerate(reference_coordinates):
         node_coord = [row['X Location (mm)'], row['Y Location (mm)'], row['Z Location (mm)']]
         distance = calculate_distance(ref_coord, node_coord)
         if distance <= radius:
-            absolute_error = abs(closest_value - row['Equivalent (von-Mises) Stress (MPa)'])
+            absolute_error = closest_value - row['Equivalent (von-Mises) Stress (MPa)']
             relative_error = (absolute_error / closest_value) * 100
             max_abs_error = max(max_abs_error, absolute_error)
             max_rel_error = max(max_rel_error, relative_error)
