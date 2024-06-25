@@ -1,81 +1,3 @@
-import clr
-
-clr.AddReference('mscorlib')  # Ensure the core .NET assembly is referenced
-from System.IO import StreamWriter, FileStream, FileMode, FileAccess
-from System.Text import UTF8Encoding
-from System.Diagnostics import Process, ProcessWindowStyle
-import os
-
-ExtAPI.Application.ActiveUnitSystem = MechanicalUnitSystem.StandardNMM
-
-# Define the reference coordinates
-# region Filter the list of name of reference channels (in this case Ch_2) from each CS_SG_Ch object
-list_of_all_coordinate_systems = DataModel.Project.GetChildren(DataModelObjectCategory.CoordinateSystem,True)
-list_of_names_of_CS_SG_channels = [list_of_all_coordinate_systems[i].Name 
-                                   for i in range(len(list_of_all_coordinate_systems))
-                                   if list_of_all_coordinate_systems[i].Name.Contains("CS_SG_Ch_")
-                                   and list_of_all_coordinate_systems[i].ObjectState != ObjectState.Suppressed]
-
-# Regular expression to match channel names where y = 2, possibly followed by an underscore and more characters
-pattern = r'CS_SG_Ch_(\d+)_2[^0-9]*'
-
-# Filtered list using regular expression
-list_of_filtered_names_of_CS_SG_channels = [
-    channel for channel in list_of_names_of_CS_SG_channels if re.search(pattern, channel)]
-
-# Extract the number from the channel name for sorting
-def extract_number(channel_name):
-    match = re.search(r'CS_SG_Ch_(\d+)_2', channel_name)
-    return int(match.group(1)) if match else 0
-
-# Sort the list of filtered names of CS_SG_Channels so that they are in natural order
-list_of_filtered_names_of_CS_SG_channels.sort(key=extract_number)
-
-# Extract SG reference numbers as well
-list_of_SG_reference_numbers = [
-    int(re.search(pattern, channel).group(1))  # Capture the group 1 which is the reference number
-    for channel in list_of_filtered_names_of_CS_SG_channels if re.search(pattern, channel)]
-# endregion
-
-# region Get the corresponding objects from the tree and their coordinates
-#ExtAPI.Application.ActiveUnitSystem = MechanicalUnitSystem.StandardMKS  # Set the unit system as 'm,kg,N'
-list_of_coordinates_of_all_filtered_names_of_CS_SG_channels = []
-
-for i in range(len(list_of_filtered_names_of_CS_SG_channels)):
-    # Get the list of transformed coordinates of each reference SG channel as a list of strings
-    list_of_coordinates_of_filtered_names_of_CS_SG_channels = []
-    list_of_coordinates_of_filtered_names_of_CS_SG_channels = \
-    DataModel.GetObjectsByName(list_of_filtered_names_of_CS_SG_channels[i])[0].TransformedConfiguration.rsplit()[1:-1]
-    
-    # Convert this list into a list of actual numbers
-    list_of_coordinates_of_each_filtered_names_of_CS_SG_channels = \
-    [float(item) for item in list_of_coordinates_of_filtered_names_of_CS_SG_channels]
-    
-    # Collect the list of x,y,z coordinates of each reference SG channel in a wrapper/collector list
-    list_of_coordinates_of_all_filtered_names_of_CS_SG_channels.append(
-        list_of_coordinates_of_each_filtered_names_of_CS_SG_channels)
-# endregion
-
-list_of_coordinates_of_all_filtered_names_of_CS_SG_channels = []
-for i in range(len(list_of_filtered_names_of_CS_SG_channels)):
-    # Get the list of transformed coordinates of each reference SG channel as a list of strings
-    list_of_coordinates_of_filtered_names_of_CS_SG_channels = []
-    list_of_coordinates_of_filtered_names_of_CS_SG_channels = \
-    DataModel.GetObjectsByName(list_of_filtered_names_of_CS_SG_channels[i])[0].TransformedConfiguration.rsplit()[1:-1]
-    # Convert this list into a list of actual numbers
-    list_of_coordinates_of_each_filtered_names_of_CS_SG_channels = \
-    [float(item) for item in list_of_coordinates_of_filtered_names_of_CS_SG_channels]
-    # Collect the list of x,y,z coordinates of each reference SG channel in a wrapper/collector list
-    list_of_coordinates_of_all_filtered_names_of_CS_SG_channels.append(
-        list_of_coordinates_of_each_filtered_names_of_CS_SG_channels)
-# endregion
-
-solution_directory_path = sol_selected_environment.WorkingDir[:-1]
-solution_directory_path = solution_directory_path.Replace("\\", "\\\\")
-
-cpython_script_name = "calculate_distance_error_for_reference_nodes.py"
-cpython_script_path = sol_selected_environment.WorkingDir + cpython_script_name
-cpython_code = """
 import numpy as np
 import pandas as pd
 import re
@@ -91,10 +13,14 @@ class RadiusDialog(QDialog):
 
     def initUI(self):
         self.setWindowTitle('Specify Distance')
+        self.setFixedWidth(300)  # Adjust the width as needed
         layout = QVBoxLayout()
 
-        self.label = QLabel('Enter the max distance [mm]:')
-        self.setFixedWidth(600)
+        self.label = QLabel('Enter the max distance:')
+        font = self.label.font()
+        font.setPointSize(12)
+        font.setBold(True)
+        self.label.setFont(font)
         layout.addWidget(self.label)
 
         self.radius_input = QLineEdit(self)
@@ -159,10 +85,10 @@ for idx, ref_coord in enumerate(reference_coordinates):
         node_coord = [row['X Location (mm)'], row['Y Location (mm)'], row['Z Location (mm)']]
         distance = calculate_distance(ref_coord, node_coord)
         if distance <= radius:
-            absolute_error = abs(closest_value - row['Equivalent (von-Mises) Stress (MPa)'])
+            absolute_error = closest_value - row['Equivalent (von-Mises) Stress (MPa)']
             relative_error = (absolute_error / closest_value) * 100
-            max_abs_error = max(max_abs_error, absolute_error)
-            max_rel_error = max(max_rel_error, relative_error)
+            max_abs_error = max(max_abs_error, abs(absolute_error))
+            max_rel_error = max(max_rel_error, abs(relative_error))
             node_data = {
                 'X': row['X Location (mm)'],
                 'Y': row['Y Location (mm)'],
