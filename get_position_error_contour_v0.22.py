@@ -1,4 +1,5 @@
 import clr
+import re
 
 clr.AddReference('mscorlib')  # Ensure the core .NET assembly is referenced
 from System.IO import StreamWriter, FileStream, FileMode, FileAccess
@@ -154,8 +155,8 @@ for idx, ref_coord in enumerate(reference_coordinates):
     max_rel_error = 0
     
     for _, row in data.iterrows():
-        if row['Node Number'] == closest_node['Node Number']:
-            continue
+        # if row['Node Number'] == closest_node['Node Number']:
+        #     continue
         node_coord = [row['X Location (mm)'], row['Y Location (mm)'], row['Z Location (mm)']]
         distance = calculate_distance(ref_coord, node_coord)
         if distance <= radius:
@@ -164,9 +165,10 @@ for idx, ref_coord in enumerate(reference_coordinates):
             max_abs_error = max(max_abs_error, absolute_error)
             max_rel_error = max(max_rel_error, relative_error)
             node_data = {
-                'X': row['X Location (mm)'],
-                'Y': row['Y Location (mm)'],
-                'Z': row['Z Location (mm)'],
+                'Node Number': row['Node Number'],
+                'X [mm]': row['X Location (mm)'],
+                'Y [mm]': row['Y Location (mm)'],
+                'Z [mm]': row['Z Location (mm)'],
                 'Absolute Error': round(absolute_error, 2),
                 'Relative Error': round(relative_error, 2)
             }
@@ -177,19 +179,19 @@ for idx, ref_coord in enumerate(reference_coordinates):
         'Reference Point': f"Reference Point {idx + 1}",
         'Closest Node': {
             'Node Number': closest_node['Node Number'],
-            'X': closest_node['X Location (mm)'],
-            'Y': closest_node['Y Location (mm)'],
-            'Z': closest_node['Z Location (mm)'],
-            'Stress (MPa)': closest_value
+            'X [mm]': closest_node['X Location (mm)'],
+            'Y [mm]': closest_node['Y Location (mm)'],
+            'Z [mm]': closest_node['Z Location (mm)'],
+            'Field Value': closest_value
         },
         'Nodes Within Radius': nodes_within_radius
     })
     
     max_errors.append({
         'Reference Point': f"Reference Point {idx + 1}",
-        'X': ref_coord[0],
-        'Y': ref_coord[1],
-        'Z': ref_coord[2],
+        'X [mm]': ref_coord[0],
+        'Y [mm]': ref_coord[1],
+        'Z [mm]': ref_coord[2],
         'Max Absolute Error': round(max_abs_error, 2),
         'Max Relative Error': round(max_rel_error, 2)
     })
@@ -199,8 +201,8 @@ errors_df = pd.DataFrame(all_nodes_with_errors)
 max_errors_df = pd.DataFrame(max_errors)
 
 # Save the results to CSV files
-errors_csv = r'""" + solution_directory_path + """\\results_errors.csv'
-max_errors_csv = r'""" + solution_directory_path + """\\results_max_errors.csv'
+errors_csv = r'""" + solution_directory_path + """\\SG_positioning_errors.csv'
+max_errors_csv = r'""" + solution_directory_path + """\\SG_max_positioning_errors.csv'
 
 errors_df.to_csv(errors_csv, index=False)
 max_errors_df.to_csv(max_errors_csv, index=False)
