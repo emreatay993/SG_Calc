@@ -1,16 +1,22 @@
+# region Import necessary libraries
 import clr
 import re
 
 clr.AddReference('mscorlib')  # Ensure the core .NET assembly is referenced
+clr.AddReference('System.Windows.Forms')
+from System.Windows.Forms import MessageBox, MessageBoxButtons, MessageBoxIcon
 from System.IO import StreamWriter, FileStream, FileMode, FileAccess
 from System.Text import UTF8Encoding
 from System.Diagnostics import Process, ProcessWindowStyle
 import os
+# endregion
 
+# region Set the unit system as N.mm
 ExtAPI.Application.ActiveUnitSystem = MechanicalUnitSystem.StandardNMM
+# endregion
 
-# Define the reference coordinates
-# region Filter the list of name of reference channels (in this case Ch_2) from each CS_SG_Ch object
+# region Define the reference coordinates
+# Filter the list of name of reference channels (in this case Ch_2) from each CS_SG_Ch object
 list_of_all_coordinate_systems = DataModel.Project.GetChildren(DataModelObjectCategory.CoordinateSystem,True)
 list_of_names_of_CS_SG_channels = [list_of_all_coordinate_systems[i].Name 
                                    for i in range(len(list_of_all_coordinate_systems))
@@ -38,8 +44,7 @@ list_of_SG_reference_numbers = [
     for channel in list_of_filtered_names_of_CS_SG_channels if re.search(pattern, channel)]
 # endregion
 
-# region Get the corresponding objects from the tree and their coordinates
-#ExtAPI.Application.ActiveUnitSystem = MechanicalUnitSystem.StandardMKS  # Set the unit system as 'm,kg,N'
+# region Get the corresponding SG objects from the tree and their coordinates
 list_of_coordinates_of_all_filtered_names_of_CS_SG_channels = []
 
 for i in range(len(list_of_filtered_names_of_CS_SG_channels)):
@@ -57,21 +62,65 @@ for i in range(len(list_of_filtered_names_of_CS_SG_channels)):
         list_of_coordinates_of_each_filtered_names_of_CS_SG_channels)
 # endregion
 
-list_of_coordinates_of_all_filtered_names_of_CS_SG_channels = []
-for i in range(len(list_of_filtered_names_of_CS_SG_channels)):
-    # Get the list of transformed coordinates of each reference SG channel as a list of strings
-    list_of_coordinates_of_filtered_names_of_CS_SG_channels = []
-    list_of_coordinates_of_filtered_names_of_CS_SG_channels = \
-    DataModel.GetObjectsByName(list_of_filtered_names_of_CS_SG_channels[i])[0].TransformedConfiguration.rsplit()[1:-1]
-    # Convert this list into a list of actual numbers
-    list_of_coordinates_of_each_filtered_names_of_CS_SG_channels = \
-    [float(item) for item in list_of_coordinates_of_filtered_names_of_CS_SG_channels]
-    # Collect the list of x,y,z coordinates of each reference SG channel in a wrapper/collector list
-    list_of_coordinates_of_all_filtered_names_of_CS_SG_channels.append(
-        list_of_coordinates_of_each_filtered_names_of_CS_SG_channels)
-# endregion
-
+# region Export the result set to be used as input as a CSV file
 solution_directory_path = sol_selected_environment.WorkingDir[:-1]
+
+if len(Tree.ActiveObjects) > 1:
+        MessageBox.Show("More than one item is selected from the tree. Please select only one result item which is a valid contour object", 
+                        "Error", MessageBoxButtons.OK, MessageBoxIcon.Error)
+elif len(Tree.ActiveObjects) < 1:
+        MessageBox.Show("You need to select a result object to calculate the expected errors caused by potential offsets from the reference strain gauge positions.", 
+                        "Error", MessageBoxButtons.OK, MessageBoxIcon.Error)
+elif len(Tree.ActiveObjects) == 1:
+        obj_of_selected_result = Tree.ActiveObjects[0]
+        selected_result_object_type = obj_of_selected_result.DataModelObjectCategory
+
+        if (selected_result_object_type == DataModelObjectCategory.DirectionalStress 
+            or selected_result_object_type == DataModelObjectCategory.DirectionalDeformation
+            or selected_result_object_type == DataModelObjectCategory.TotalDeformation
+            or selected_result_object_type == DataModelObjectCategory.EquivalentStress
+            or selected_result_object_type == DataModelObjectCategory.MaximumPrincipalStress
+            or selected_result_object_type == DataModelObjectCategory.MinimumPrincipalStress
+            or selected_result_object_type == DataModelObjectCategory.NormalStress
+            or selected_result_object_type == DataModelObjectCategory.EquivalentElasticStrainRST
+            or selected_result_object_type == DataModelObjectCategory.MaximumPrincipalElasticStrain
+            or selected_result_object_type == DataModelObjectCategory.MinimumPrincipalElasticStrain
+            or selected_result_object_type == DataModelObjectCategory.NormalElasticStrain
+            or selected_result_object_type == DataModelObjectCategory.DirectionalThermalStrain
+            or selected_result_object_type == DataModelObjectCategory.UserDefinedResult):
+            
+            input_file_path = os.path.join(solution_directory_path, "distance_error.txt") 
+            obj_of_selected_result.ExportToTextFile(input_file_path)
+
+            if selected_result_object_type == DataModelObjectCategory.DirectionalDeformation:
+                 string_of_result_type_identifier_suffix = "DirectionalDeformation"
+            if selected_result_object_type == DataModelObjectCategory.TotalDeformation:
+                 string_of_result_type_identifier_suffix = "TotalDeformation"
+            if selected_result_object_type == DataModelObjectCategory.EquivalentStress:
+                 string_of_result_type_identifier_suffix = "EquivalentStress"
+            if selected_result_object_type == DataModelObjectCategory.MaximumPrincipalStress:
+                 string_of_result_type_identifier_suffix = "MaximumPrincipalStress"
+            if selected_result_object_type == DataModelObjectCategory.MinimumPrincipalStress:
+                 string_of_result_type_identifier_suffix = "MinimumPrincipalStress"
+            if selected_result_object_type == DataModelObjectCategory.NormalStress:
+                 string_of_result_type_identifier_suffix = "NormalStress"
+            if selected_result_object_type == DataModelObjectCategory.EquivalentElasticStrainRST:
+                 string_of_result_type_identifier_suffix = "EquivalentElasticStrainRST"
+            if selected_result_object_type == DataModelObjectCategory.MaximumPrincipalElasticStrain:
+                 string_of_result_type_identifier_suffix = "MaximumPrincipalElasticStrain"
+            if selected_result_object_type == DataModelObjectCategory.MinimumPrincipalElasticStrain:
+                 string_of_result_type_identifier_suffix = "MinimumPrincipalElasticStrain"
+            if selected_result_object_type == DataModelObjectCategory.NormalElasticStrain:
+                 string_of_result_type_identifier_suffix = "NormalElasticStrain"
+            if selected_result_object_type == DataModelObjectCategory.DirectionalThermalStrain:
+                 string_of_result_type_identifier_suffix = "DirectionalThermalStrain"
+            if selected_result_object_type == DataModelObjectCategory.UserDefinedResult:
+                 string_of_result_type_identifier_suffix = "UserDefinedResult"
+
+            print("Input CSV file is written to the solution directory")
+# endregion
+
+# region Define the CPython code to be run for calculating the errors
 solution_directory_path = solution_directory_path.Replace("\\", "\\\\")
 
 cpython_script_name = "calculate_distance_error_for_reference_nodes.py"
@@ -149,7 +198,7 @@ results = []
 for idx, ref_coord in enumerate(reference_coordinates):
     nodes_within_radius = []
     closest_node = find_closest_node(ref_coord, data)
-    closest_value = closest_node['Equivalent (von-Mises) Stress (MPa)']
+    closest_value = closest_node[closest_node.index[-1]]
     
     max_abs_error = 0
     max_rel_error = 0
@@ -160,7 +209,7 @@ for idx, ref_coord in enumerate(reference_coordinates):
         node_coord = [row['X Location (mm)'], row['Y Location (mm)'], row['Z Location (mm)']]
         distance = calculate_distance(ref_coord, node_coord)
         if distance <= radius:
-            absolute_error = closest_value - row['Equivalent (von-Mises) Stress (MPa)']
+            absolute_error = closest_value - row[row.index[-1]]
             relative_error = (absolute_error / closest_value) * 100
             max_abs_error = max(max_abs_error, absolute_error)
             max_rel_error = max(max_rel_error, relative_error)
@@ -223,6 +272,7 @@ with StreamWriter(FileStream(cpython_script_path, FileMode.Create, FileAccess.Wr
 print("Python file created successfully with UTF-8 encoding.")
 # endregion
 
+# region Run the CPython script asynchronously
 # Run the CPython script asynchronously
 process = Process()
 # Configure the process to hide the window and not use the shell execute feature
@@ -235,4 +285,31 @@ process.StartInfo.FileName = "cmd.exe"  # Use cmd.exe to allow window manipulati
 process.StartInfo.Arguments = '/c python "' + cpython_script_path + '"'
 # Start the process
 process.Start()
+
+#◙ Wait for the calculations to complete
+process.WaitForExit()
+# endregion
+
+# region Plot the result from the output CSV file if "CSV Plot" extension is already loaded inside Mechanical
+list_of_obj_of_extensions = ExtAPI.ExtensionManager.Extensions
+is_csv_plot_enabled = False
+for i in range(len(list_of_obj_of_extensions)):
+    if list_of_obj_of_extensions[i].Name == 'CSV Plot':
+        is_csv_plot_enabled = True
+        break
+    
+if is_csv_plot_enabled:
+    output_file_path = os.path.join(solution_directory_path, "SG_positioning_errors.csv")
+
+    contour_object_of_Static_CF_result = sol_selected_environment.Parent.CreateResultObject("csvPlot", "CSV Plot")
+    contour_object_of_Static_CF_result.Caption = "Relative Error around Each SG Reference Position" + ": " + string_of_result_type_identifier_suffix
+    contour_object_of_Static_CF_result.Properties[0].Properties[0].InternalValue = 'ID_NamedSelection'
+    if NS_of_faces_of_SG_test_parts:
+        contour_object_of_Static_CF_result.Properties[0].Properties[0].Properties[1].InternalValue = NS_of_faces_of_SG_test_parts.ObjectId.ToString()
+    contour_object_of_Static_CF_result.Properties[1].InternalValue = output_file_path
+    contour_object_of_Static_CF_result.Properties[3].InternalValue = 'Relative Error'
+    contour_object_of_Static_CF_result.Properties[4].InternalValue = 'Node'
+    contour_object_of_Static_CF_result.Properties[5].InternalValue = 'No'
+    contour_object_of_Static_CF_result.Suppressed = 1
+    contour_object_of_Static_CF_result.Suppressed = 0
 # endregion
