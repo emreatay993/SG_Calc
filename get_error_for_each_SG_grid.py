@@ -41,16 +41,6 @@ Ensure that it is assigned and this button is re-run. """
 
 if (NS_of_faces_of_SG_test_parts_not_found == False and
     len(NS_of_faces_of_SG_test_parts.Location.Ids) != 0):
-      
-    # # Define the message, caption, and buttons for the message box
-    # message = r"NS_of_faces_of_SG_test_parts" object is already defined. Ensure that it is assigned to correct parts."
-
-    # caption = "Warning"
-    # buttons = MessageBoxButtons.OK
-    # icon = MessageBoxIcon.Warning
-    # # Show the message box
-    # result = MessageBox.Show(message, caption, buttons, icon)
-    
     list_of_IDs_of_selections_of_NS_of_faces_of_SG_test_parts = NS_of_faces_of_SG_test_parts.Location.Ids
 # endregion
 
