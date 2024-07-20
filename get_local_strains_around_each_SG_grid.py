@@ -1,9 +1,20 @@
 # Import libraries
+import os
 import sys
 import clr
 clr.AddReference("System.Windows.Forms")
 from System.Windows.Forms import MessageBox, MessageBoxButtons, MessageBoxIcon
 import context_menu
+
+# Initialize the preference settings of Mechanical
+ExtAPI.Application.ScriptByName("jscript").ExecuteCommand(
+    'WB.PreferenceMgr.Preference("PID_Show_Node_Numbers") = 1;')
+ExtAPI.Application.ScriptByName("jscript").ExecuteCommand(
+    'WB.PreferenceMgr.Preference("PID_Show_Node_Location") = 1;')
+ExtAPI.Application.ScriptByName("jscript").ExecuteCommand(
+    'WB.PreferenceMgr.Preference("PID_Show_Tensor_Components") = 1;')
+
+# region Create local strain results around each SG with their respective SG orientations
 
 # Get named selections
 list_of_NS_of_nodes_around_each_SG = DataModel.GetObjectsByName("NS_of_nodes_around_each_SG")
@@ -149,3 +160,31 @@ DataModel.GetObjectsByName("New Folder")[0].Name = "StrainX_around_each_SG"
 # Evaluate all results
 sol_selected_environment.Activate()
 sol_selected_environment.EvaluateAllResults()
+
+# endregion
+
+# region Create CSV output files for each of these local SG strain results
+
+# Define the solution directory path
+solution_directory_path = sol_selected_environment.WorkingDir
+
+# Define the path for the subfolder inside the parent folder
+subfolder = os.path.join(solution_directory_path, "StrainX_around_each_SG")
+
+# Check if the subfolder already exists, and create it if it does not
+if not os.path.exists(subfolder):
+    os.makedirs(subfolder)
+    print("Folder '{}' created successfully.".format(subfolder))
+else:
+    print("Folder '{}' already exists.".format(subfolder))
+
+# Export strain results to CSV files in the subfolder
+for i in range(len(list_of_obj_of_StrainX_around)):
+    # Construct file name and path
+    file_name_of_StrainX_around_each_SG = list_of_obj_of_StrainX_around[i].Name + ".csv"
+    file_path = os.path.join(subfolder, file_name_of_StrainX_around_each_SG)
+    
+    # Export the strain object to a text file
+    list_of_obj_of_StrainX_around[i].ExportToTextFile(file_path)
+
+# endregion
