@@ -143,3 +143,7 @@ DataModel.GetObjectsByName("New Folder")[0].Name = "NS_of_nodes_around_each_SG"
 ExtAPI.DataModel.Tree.Activate(list_of_obj_of_StrainX_around)
 context_menu.DoCreateGroupingFolderInTree(ExtAPI)
 DataModel.GetObjectsByName("New Folder")[0].Name = "StrainX_around_each_SG"
+
+# Evaluate all results
+sol_selected_environment.Activate()
+sol_selected_environment.EvaluateAllResults()
