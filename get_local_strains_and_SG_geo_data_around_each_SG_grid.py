@@ -1,6 +1,7 @@
 # Import libraries
 import os
 import sys
+import csv
 import clr
 clr.AddReference("System.Windows.Forms")
 from System.Windows.Forms import MessageBox, MessageBoxButtons, MessageBoxIcon
@@ -13,6 +14,7 @@ ExtAPI.Application.ScriptByName("jscript").ExecuteCommand(
     'WB.PreferenceMgr.Preference("PID_Show_Node_Location") = 1;')
 ExtAPI.Application.ScriptByName("jscript").ExecuteCommand(
     'WB.PreferenceMgr.Preference("PID_Show_Tensor_Components") = 1;')
+ExtAPI.Application.ActiveUnitSystem = MechanicalUnitSystem.StandardNMM
 
 # region Create local strain results around each SG with their respective SG orientations
 
@@ -163,7 +165,7 @@ sol_selected_environment.EvaluateAllResults()
 
 # endregion
 
-# region Create CSV output files for each of these local SG strain results
+# region Create CSV files from each of these local SG strain results
 
 # Define the solution directory path
 solution_directory_path = sol_selected_environment.WorkingDir
@@ -187,4 +189,43 @@ for i in range(len(list_of_obj_of_StrainX_around)):
     # Export the strain object to a text file
     list_of_obj_of_StrainX_around[i].ExportToTextFile(file_path)
 
+# endregion
+
+# region Create CSV files containing the corner points of each SG grid body
+list_of_all_bodies_in_tree = DataModel.GetObjectsByType(DataModelObjectCategory.Body)
+
+list_of_of_SG_grid_bodies = [
+    (each_body.GetGeoBody().Name, each_body.GetGeoBody().Vertices)
+    for each_body in list_of_all_bodies_in_tree
+    if each_body.Name.Contains("SG_Grid_Body_") 
+    ]
+
+# Prepare data for CSV file containing SG geobody metadata (vertices, and their coords)
+geo_data_SG =[]
+body_vertices = each_body.GetGeoBody().Vertices
+for i, each_SG_body in enumerate(list_of_of_SG_grid_bodies):
+    body_vertices = each_SG_body[1]
+    for j, each_vertex in enumerate(body_vertices):
+        geo_data_SG.append({
+            'Body_Name': each_SG_body[0],
+            'Vertex_No': j+1,
+            'X [mm]': each_vertex.X,
+            'Y [mm]': each_vertex.Y,
+            'Z [mm]': each_vertex.Z
+        })
+        
+# Define CSV file path
+csv_file_path = os.path.join(subfolder, 'SG_grid_body_vertices.csv')
+
+# Write data to CSV
+with open(csv_file_path, 'wb') as csvfile:
+    fieldnames = ["Body_Name", "Vertex_No", "X [mm]", "Y [mm]", "Z [mm]"]
+    writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+    
+    writer.writeheader()
+    writer.writerows(geo_data_SG)
+
+print("CSV file saved to {}".format(csv_file_path))
+
+os.startfile(csv_file_path)
 # endregion
