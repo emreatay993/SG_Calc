@@ -1,4 +1,5 @@
 # Import libraries
+import sys
 import clr
 clr.AddReference("System.Windows.Forms")
 from System.Windows.Forms import MessageBox, MessageBoxButtons, MessageBoxIcon
@@ -121,6 +122,7 @@ for i in range(len(list_of_names_of_each_CS_SG_Ch_)):
         buttons = MessageBoxButtons.OK
         icon = MessageBoxIcon.Error
         MessageBox.Show(message, caption, buttons, icon)
+        sys.exit(1)
 
 # Get the list of all "NS_of_nodes_around_" objects in the tree
 list_of_obj_of_NS = DataModel.Project.GetChildren(DataModelObjectCategory.NamedSelection, True)
