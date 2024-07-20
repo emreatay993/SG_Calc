@@ -4,6 +4,40 @@ clr.AddReference("System.Windows.Forms")
 from System.Windows.Forms import MessageBox, MessageBoxButtons, MessageBoxIcon
 import context_menu
 
+# Check whether NS_of_nodes_around_each_SG
+list_of_NS_of_nodes_around_each_SG = \
+DataModel.GetObjectsByName("NS_of_nodes_around_each_SG")
+
+list_of_StrainX_around_each_SG = \
+DataModel.GetObjectsByName("StrainX_around_each_SG")
+
+try:
+    if len(list_of_NS_of_nodes_around_each_SG) == 0:
+        NS_of_nodes_around_each_SG_not_found = True
+    if len(list_of_NS_of_nodes_around_each_SG) != 0:
+        NS_of_nodes_around_each_SG_not_found = False
+    
+except:
+    NS_of_nodes_around_each_SG_not_found = False
+
+if NS_of_nodes_around_each_SG_not_found == False:
+    message = r"""Some output objects are already in the Mechanical Tree. The program will now attempt to delete and regenerate all of these objects."""
+    caption = "Warning"
+    buttons = MessageBoxButtons.OK
+    icon = MessageBoxIcon.Warning
+    # Show the message box
+    result = MessageBox.Show(message, caption, buttons, icon)
+
+    try:
+        list_of_NS_of_nodes_around_each_SG[0].DeleteTreeGroupAndChildren()
+    except Exception as e:
+         MessageBox.Show(str(e), "Error", MessageBoxButtons.OK, MessageBoxIcon.Error)
+
+    try:
+        list_of_StrainX_around_each_SG[0].DeleteTreeGroupAndChildren()
+    except Exception as e:
+         MessageBox.Show(str(e), "Error", MessageBoxButtons.OK, MessageBoxIcon.Error)
+
 try:
     NS_of_faces_of_SG_test_parts = DataModel.GetObjectsByName("NS_of_faces_of_SG_test_parts")[0]
     NS_of_faces_of_SG_test_parts_not_found = False
