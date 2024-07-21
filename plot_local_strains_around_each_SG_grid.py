@@ -1,38 +1,47 @@
 import sys
 import numpy as np
 import pandas as pd
-from PyQt5.QtWidgets import QApplication, QWidget, QVBoxLayout, QPushButton, QFileDialog
+from PyQt5.QtWidgets import QApplication, QMainWindow, QTabWidget, QWidget, QVBoxLayout, QFileDialog
+from PyQt5.QtCore import Qt
 from scipy.interpolate import griddata
 import pyvista as pv
+from pyvistaqt import BackgroundPlotter
 
-class App(QWidget):
+class MainWindow(QMainWindow):
 
     def __init__(self):
         super().__init__()
-        self.title = 'CSV File Selector'
-        self.initUI()
 
-    def initUI(self):
-        self.setWindowTitle(self.title)
-        layout = QVBoxLayout()
+        self.setWindowTitle("PyQt5 with PyVista")
+        self.setGeometry(100, 100, 800, 600)
 
-        # Create a button in the window
-        self.button = QPushButton('Open CSV File', self)
-        self.button.setToolTip('Click to open a CSV file')
-        self.button.clicked.connect(self.openFileNameDialog)
+        self.tabs = QTabWidget()
+        self.setCentralWidget(self.tabs)
 
-        # Add the button to the layout
-        layout.addWidget(self.button)
-        self.setLayout(layout)
+        self.vtk_widget = VTKWidget()
+        self.tabs.addTab(self.vtk_widget, "3D Plot")
 
         self.show()
+        self.openFileNameDialog()
 
     def openFileNameDialog(self):
-        options = QFileDialog.Options()
-        options |= QFileDialog.DontUseNativeDialog
-        fileName, _ = QFileDialog.getOpenFileName(self, "Open CSV File", "", "CSV Files (*.csv);;All Files (*)", options=options)
+        fileName, _ = QFileDialog.getOpenFileName(self, "Open CSV File", "", "CSV Files (*.csv);;All Files (*)")
         if fileName:
-            self.processFile(fileName)
+            self.vtk_widget.processFile(fileName)
+        else:
+            print("No file selected.")
+            sys.exit(1)
+
+
+class VTKWidget(QWidget):
+
+    def __init__(self):
+        super().__init__()
+
+        layout = QVBoxLayout()
+        self.plotter = BackgroundPlotter(show=False)  # Initialize the PyVista plotter
+        layout.addWidget(self.plotter.interactor)
+        self.setLayout(layout)
 
     def processFile(self, file_path):
         # Load the data
@@ -69,19 +78,17 @@ class App(QWidget):
         structured_grid = pv.StructuredGrid(grid_x, grid_y, grid_z)
         structured_grid['Strain [µε]'] = grid_strain
 
-        # Create a plotter object
-        plotter = pv.Plotter()
-
         # Add the original points to the plotter
-        plotter.add_mesh(polydata, scalars='Strain [µε]', cmap='turbo', point_size=15, render_points_as_spheres=True)
+        self.plotter.add_mesh(polydata, scalars='Strain [µε]', cmap='turbo', point_size=15, render_points_as_spheres=True)
 
         # Add the surface mesh to the plotter
-        plotter.add_mesh(structured_grid, scalars='Strain [µε]', cmap='turbo', opacity=0.7)
+        self.plotter.add_mesh(structured_grid, scalars='Strain [µε]', cmap='turbo', opacity=0.7)
 
-        # Show the plot
-        plotter.show()
+        # Render the plot
+        self.plotter.show()
+
 
 if __name__ == '__main__':
     app = QApplication(sys.argv)
-    ex = App()
+    main_window = MainWindow()
     sys.exit(app.exec_())
