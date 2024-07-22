@@ -229,3 +229,79 @@ print("CSV file saved to {}".format(csv_file_path))
 
 os.startfile(csv_file_path)
 # endregion
+
+# region Create CSV files containing the definition of coordinate system of the channel
+def get_sg_coordinate_data(channel_name):
+    # Retrieve the strain gauge channel object using its name
+    SG_channel = DataModel.GetObjectsByName(channel_name)[0]
+    
+    # Create a dictionary to hold the matrix of origins and directional vectors
+    coordinate_data = {
+        'CS Name': channel_name,
+        'Origin_X': SG_channel.Origin[0],
+        'Origin_Y': SG_channel.Origin[1],
+        'Origin_Z': SG_channel.Origin[2],
+        'X_dir_i': SG_channel.XAxis[0],
+        'X_dir_j': SG_channel.XAxis[1],
+        'X_dir_k': SG_channel.XAxis[2],
+        'Y_dir_i': SG_channel.YAxis[0],
+        'Y_dir_j': SG_channel.YAxis[1],
+        'Y_dir_k': SG_channel.YAxis[2],
+        'Z_dir_i': SG_channel.ZAxis[0],
+        'Z_dir_j': SG_channel.ZAxis[1],
+        'Z_dir_k': SG_channel.ZAxis[2]
+    }
+    
+    return coordinate_data
+
+def save_data_to_csv(coordinate_data, file_path):
+    # Define the order of the columns explicitly based on expected keys
+    expected_keys = [
+        'CS Name', 'Origin_X', 'Origin_Y', 'Origin_Z', 
+        'X_dir_i', 'X_dir_j', 'X_dir_k',
+        'Y_dir_i', 'Y_dir_j', 'Y_dir_k',
+        'Z_dir_i', 'Z_dir_j', 'Z_dir_k'
+    ]
+    
+    # Verify keys and add any that might be missing (optional robustness step)
+    fieldnames = [key for key in expected_keys if key in coordinate_data]
+    
+    # Check if the file already exists to decide on writing headers
+    write_header = not os.path.exists(file_path)
+    
+    with open(file_path, mode='ab') as file:
+        writer = csv.DictWriter(file, fieldnames=fieldnames)
+        
+        if write_header:
+            writer.writeheader()
+        
+        # Ensure data is in the correct order by using the fieldnames
+        writer.writerow({key: coordinate_data.get(key, '') for key in fieldnames})
+
+    print("Data saved to {}".format(file_path))
+
+# Define the solution directory path
+solution_directory_path = sol_selected_environment.WorkingDir
+
+# Define the path for the subfolder inside the parent folder
+subfolder = os.path.join(solution_directory_path, "StrainX_around_each_SG")
+file_name = "SG_coordinate_matrix.csv"
+file_path = os.path.join(subfolder, file_name)
+
+# Remove the old file to start fresh
+try:
+    if os.path.exists(file_path):
+        os.remove(file_path)
+except OSError as e:
+    print("Error: {} : {}".format(file_path, e.strerror))
+
+list_of_names_of_each_CS_SG_Ch_ = [
+    Model.CoordinateSystems.Children[i].Name
+    for i in range(len(Model.CoordinateSystems.Children))
+    if Model.CoordinateSystems.Children[i].Name.Contains("CS_SG_Ch_")
+]
+
+for channel_name in list_of_names_of_each_CS_SG_Ch_:
+    coordinate_data = get_sg_coordinate_data(channel_name)
+    save_data_to_csv(coordinate_data, file_path)
+# endregion
