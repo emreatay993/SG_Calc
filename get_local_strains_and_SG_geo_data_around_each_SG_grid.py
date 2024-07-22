@@ -1,4 +1,4 @@
-# Import libraries
+# region Import libraries
 import os
 import sys
 import csv
@@ -6,8 +6,9 @@ import clr
 clr.AddReference("System.Windows.Forms")
 from System.Windows.Forms import MessageBox, MessageBoxButtons, MessageBoxIcon
 import context_menu
+# endregion
 
-# Initialize the preference settings of Mechanical
+# region Initialize the preference settings of Mechanical
 def initialize_mechanical_preferences():
     ExtAPI.Application.ScriptByName("jscript").ExecuteCommand(
         'WB.PreferenceMgr.Preference("PID_Show_Node_Numbers") = 1;')
@@ -16,6 +17,7 @@ def initialize_mechanical_preferences():
     ExtAPI.Application.ScriptByName("jscript").ExecuteCommand(
         'WB.PreferenceMgr.Preference("PID_Show_Tensor_Components") = 1;')
     ExtAPI.Application.ActiveUnitSystem = MechanicalUnitSystem.StandardNMM
+# endregion
 
 # region Create local strain results around each SG with their respective SG orientations
 
@@ -33,7 +35,7 @@ def check_NS_existence(list_of_NS_of_nodes_around_each_SG):
         return False
 
 # If NS_of_nodes_around_each_SG exists, delete and regenerate objects
-def handle_existing_ns(list_of_NS_of_nodes_around_each_SG, list_of_StrainX_around_each_SG):
+def handle_existing_NS(list_of_NS_of_nodes_around_each_SG, list_of_StrainX_around_each_SG):
     if not check_NS_existence(list_of_NS_of_nodes_around_each_SG):
         message = r"""Some output objects are already in the Mechanical Tree. The program will now attempt to delete and regenerate all of these objects."""
         caption = "Warning"
@@ -92,7 +94,7 @@ def get_CS_SG_ids_and_names():
     return list_of_ids_of_each_CS_SG_Ch_, list_of_names_of_each_CS_SG_Ch_
 
 # Create a named selection of nodes around each SG channel
-def create_NS_of_nodes_around_sg(NS_test_parts, list_of_ids_of_each_CS_SG_Ch_, list_of_names_of_each_CS_SG_Ch_):
+def create_NS_of_nodes_around_SG(NS_test_parts, list_of_ids_of_each_CS_SG_Ch_, list_of_names_of_each_CS_SG_Ch_):
     try:
         NS_nodes_SG_test_parts = DataModel.GetObjectsByName("NS_of_nodes_of_SG_test_parts")[0]
     except:
@@ -268,17 +270,19 @@ def create_CSV_files_for_coordinate_system():
         coordinate_data = get_SG_coordinate_data(channel_name)
         save_data_to_csv(coordinate_data, file_path)
 
-# Main execution
+    os.startfile(file_path)
+
+# region Main execution
 initialize_mechanical_preferences()
 
 list_of_NS_of_nodes_around_each_SG, list_of_StrainX_around_each_SG = get_named_selections()
-handle_existing_ns(list_of_NS_of_nodes_around_each_SG, list_of_StrainX_around_each_SG)
+handle_existing_NS(list_of_NS_of_nodes_around_each_SG, list_of_StrainX_around_each_SG)
 
 NS_test_parts, NS_test_parts_not_found = check_test_parts_existence()
 NS_test_parts = ensure_test_piece_defined(NS_test_parts, NS_test_parts_not_found)
 
 list_of_ids_of_each_CS_SG_Ch_, list_of_names_of_each_CS_SG_Ch_ = get_CS_SG_ids_and_names()
-list_of_NS_test_part_strains = create_NS_of_nodes_around_sg(NS_test_parts, list_of_ids_of_each_CS_SG_Ch_, list_of_names_of_each_CS_SG_Ch_)
+list_of_NS_test_part_strains = create_NS_of_nodes_around_SG(NS_test_parts, list_of_ids_of_each_CS_SG_Ch_, list_of_names_of_each_CS_SG_Ch_)
 create_contour_plot_of_strains(list_of_names_of_each_CS_SG_Ch_, list_of_ids_of_each_CS_SG_Ch_, list_of_NS_test_part_strains)
 
 list_of_obj_of_NS_of_nodes_around_each_SG = [
@@ -294,3 +298,4 @@ evaluate_all_results()
 create_CSV_files_from_strain_results(list_of_obj_of_StrainX_around)
 create_CSV_files_for_SG_grid_bodies()
 create_CSV_files_for_coordinate_system()
+# endregion
