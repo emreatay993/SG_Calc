@@ -56,29 +56,29 @@ def handle_existing_NS(list_of_NS_of_nodes_around_each_SG, list_of_StrainX_aroun
 # Check if NS_of_faces_of_SG_test_parts exists
 def check_test_parts_existence():
     try:
-        NS_test_parts = DataModel.GetObjectsByName("NS_of_faces_of_SG_test_parts")[0]
-        return NS_test_parts, False
+        NS_faces_test_parts = DataModel.GetObjectsByName("NS_of_faces_of_SG_test_parts")[0]
+        return NS_faces_test_parts, False
     except:
         return None, True
 
 # Ensure test piece is correctly defined
-def ensure_test_piece_defined(NS_test_parts, NS_test_parts_not_found):
-    if NS_test_parts_not_found:
+def ensure_test_piece_defined(NS_faces_test_parts, NS_faces_test_parts_not_found):
+    if NS_faces_test_parts_not_found:
         message = r"""Please define a named selection of bodies called "NS_of_faces_of_SG_test_parts" using "Test Part" button. """
         caption = "Warning"
         MessageBox.Show(message, caption, MessageBoxButtons.OK, MessageBoxIcon.Warning)
 
-        NS_test_parts = Model.AddNamedSelection()
-        NS_test_parts.Name = "NS_of_faces_of_SG_test_parts"
-        NS_test_parts.SendToSolver = False
+        NS_faces_test_parts = Model.AddNamedSelection()
+        NS_faces_test_parts.Name = "NS_of_faces_of_SG_test_parts"
+        NS_faces_test_parts.SendToSolver = False
 
-    if not NS_test_parts_not_found and len(NS_test_parts.Location.Ids) == 0:
+    if not NS_faces_test_parts_not_found and len(NS_faces_test_parts.Location.Ids) == 0:
         message = r""""NS_of_faces_of_SG_test_parts" object is already in the tree but the bodies of test parts are not defined. 
         Ensure that it is assigned and this button is re-run. """
         caption = "Warning"
         MessageBox.Show(message, caption, MessageBoxButtons.OK, MessageBoxIcon.Warning)
 
-    return NS_test_parts
+    return NS_faces_test_parts
 
 # Get IDs and names of each coordinate system of each SG channel
 def get_CS_SG_ids_and_names():
@@ -109,11 +109,18 @@ def prompt_user_for_radius():
         sys.exit(1)
 
 # Create a named selection of nodes around each SG channel
-def create_NS_of_nodes_around_SG(NS_test_parts, list_of_ids_of_each_CS_SG_Ch_, list_of_names_of_each_CS_SG_Ch_, radius):
+def create_NS_of_nodes_around_SG(NS_faces_test_parts, list_of_ids_of_each_CS_SG_Ch_, list_of_names_of_each_CS_SG_Ch_, radius):
     try:
         NS_nodes_SG_test_parts = DataModel.GetObjectsByName("NS_of_nodes_of_SG_test_parts")[0]
     except:
-        NS_nodes_SG_test_parts = NS_test_parts.CreateNodalNamedSelection()
+        # NS_nodes_SG_test_parts = NS_faces_test_parts.CreateNodalNamedSelection()
+        NS_nodes_SG_test_parts = Model.AddNamedSelection()
+        NS_nodes_SG_test_parts.ScopingMethod = GeometryDefineByType.Worksheet
+        NS_nodes_SG_test_parts.GenerationCriteria.Add(None)
+        NS_nodes_SG_test_parts.GenerationCriteria[0].EntityType = SelectionType.GeoFace
+        NS_nodes_SG_test_parts.GenerationCriteria[0].Criterion = SelectionCriterionType.NamedSelection
+        NS_nodes_SG_test_parts.GenerationCriteria[0].Operator = SelectionOperatorType.Equal
+        NS_nodes_SG_test_parts.GenerationCriteria[0].Value = NS_faces_test_parts
         NS_nodes_SG_test_parts.Name = "NS_of_nodes_of_SG_test_parts"
 
     list_of_NS_test_part_strains = []
@@ -293,13 +300,13 @@ initialize_mechanical_preferences()
 list_of_NS_of_nodes_around_each_SG, list_of_StrainX_around_each_SG = get_named_selections()
 handle_existing_NS(list_of_NS_of_nodes_around_each_SG, list_of_StrainX_around_each_SG)
 
-NS_test_parts, NS_test_parts_not_found = check_test_parts_existence()
-NS_test_parts = ensure_test_piece_defined(NS_test_parts, NS_test_parts_not_found)
+NS_faces_test_parts, NS_faces_test_parts_not_found = check_test_parts_existence()
+NS_faces_test_parts = ensure_test_piece_defined(NS_faces_test_parts, NS_faces_test_parts_not_found)
 
 list_of_ids_of_each_CS_SG_Ch_, list_of_names_of_each_CS_SG_Ch_ = get_CS_SG_ids_and_names()
 
 radius = prompt_user_for_radius()
-list_of_NS_test_part_strains = create_NS_of_nodes_around_SG(NS_test_parts, list_of_ids_of_each_CS_SG_Ch_, list_of_names_of_each_CS_SG_Ch_, radius)
+list_of_NS_test_part_strains = create_NS_of_nodes_around_SG(NS_faces_test_parts, list_of_ids_of_each_CS_SG_Ch_, list_of_names_of_each_CS_SG_Ch_, radius)
 create_contour_plot_of_strains(list_of_names_of_each_CS_SG_Ch_, list_of_ids_of_each_CS_SG_Ch_, list_of_NS_test_part_strains)
 
 list_of_obj_of_NS_of_nodes_around_each_SG = [
