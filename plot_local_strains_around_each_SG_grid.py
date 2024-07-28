@@ -188,9 +188,8 @@ class VTKWidget(QWidget):
             if not self.first_channel_plot:
                 camera_position = self.plotter.camera.position
                 camera_focal_point = self.plotter.camera.focal_point
-                camera_view_up = self.plotter.camera.view_up
                 camera_clipping_range = self.plotter.camera.clipping_range
-                camera_zoom = self.plotter.camera.zoom
+                #camera_zoom = self.plotter.camera.zoom()
             else:
                 camera_position = None
 
@@ -261,15 +260,14 @@ class VTKWidget(QWidget):
             if camera_position is not None:
                 self.plotter.camera.position = camera_position
                 self.plotter.camera.focal_point = camera_focal_point
-                self.plotter.camera.view_up = camera_view_up
                 self.plotter.camera.clipping_range = camera_clipping_range
-                self.plotter.camera.zoom(camera_zoom)
+                #self.plotter.camera.zoom(camera_zoom)
 
                 # Render the plot
-                self.plotter.show(camera_position, camera_zoom)
+                self.plotter.show()
 
-                # Mark the first channel plot as complete
-                self.first_channel_plot = False
+            # Mark the first channel plot as complete
+            self.first_channel_plot = False
 
         except Exception as e:
             QMessageBox.critical(self, "Error", e)
