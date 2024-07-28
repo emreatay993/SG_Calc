@@ -14,7 +14,7 @@ class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
 
-        self.setWindowTitle("PyQt5 with PyVista")
+        self.setWindowTitle("SG Plotter")
         self.showMaximized()
 
         self.tabs = QTabWidget()
@@ -184,9 +184,13 @@ class VTKWidget(QWidget):
 
     def plotData(self, data, display_name):
         try:
-            # Store the current camera position if not the first actual channel plot
+            # Store the current camera settings if not the first actual channel plot
             if not self.first_channel_plot:
-                camera_position = self.plotter.camera_position
+                camera_position = self.plotter.camera.position
+                camera_focal_point = self.plotter.camera.focal_point
+                camera_view_up = self.plotter.camera.view_up
+                camera_clipping_range = self.plotter.camera.clipping_range
+                camera_zoom = self.plotter.camera.zoom
             else:
                 camera_position = None
 
@@ -253,12 +257,16 @@ class VTKWidget(QWidget):
                     if self.checkbox_axes.isChecked():
                         self.show_axes(display_name)
 
-            # Restore the camera position if it was set previously and this is not the first channel plot
+            # Restore the camera settings if they were set previously and this is not the first channel plot
             if camera_position is not None:
-                self.plotter.camera_position = camera_position
+                self.plotter.camera.position = camera_position
+                self.plotter.camera.focal_point = camera_focal_point
+                self.plotter.camera.view_up = camera_view_up
+                self.plotter.camera.clipping_range = camera_clipping_range
+                self.plotter.camera.zoom(camera_zoom)
 
                 # Render the plot
-                self.plotter.show()
+                self.plotter.show(camera_position, camera_zoom)
 
                 # Mark the first channel plot as complete
                 self.first_channel_plot = False
@@ -282,22 +290,21 @@ class VTKWidget(QWidget):
             self.hide_axes(selected_display_name)
 
     def show_axes(self, display_name):
-        if display_name not in self.sg_axes_actors:
-            # Create and add the SG axes at the origin
-            scale_factor_arrow = 4
-            try:
-                x_axis = pv.Arrow(start=self.origin, direction=self.x_dir, scale=scale_factor_arrow)
-                y_axis = pv.Arrow(start=self.origin, direction=self.y_dir, scale=scale_factor_arrow)
-                z_axis = pv.Arrow(start=self.origin, direction=self.z_dir, scale=scale_factor_arrow)
+        # Create and add the SG axes at the origin
+        scale_factor_arrow = 4
+        try:
+            x_axis = pv.Arrow(start=self.origin, direction=self.x_dir, scale=scale_factor_arrow)
+            y_axis = pv.Arrow(start=self.origin, direction=self.y_dir, scale=scale_factor_arrow)
+            z_axis = pv.Arrow(start=self.origin, direction=self.z_dir, scale=scale_factor_arrow)
 
-                x_actor = self.plotter.add_mesh(x_axis, color="red")
-                y_actor = self.plotter.add_mesh(y_axis, color="green")
-                z_actor = self.plotter.add_mesh(z_axis, color="blue")
+            x_actor = self.plotter.add_mesh(x_axis, color="red")
+            y_actor = self.plotter.add_mesh(y_axis, color="green")
+            z_actor = self.plotter.add_mesh(z_axis, color="blue")
 
-                self.sg_axes_actors[display_name] = [x_actor, y_actor, z_actor]
+            self.sg_axes_actors[display_name] = [x_actor, y_actor, z_actor]
 
-            except Exception as e:
-                print(e)
+        except Exception as e:
+            print(e)
 
     def hide_axes(self, display_name):
         if display_name in self.sg_axes_actors:
@@ -307,16 +314,16 @@ class VTKWidget(QWidget):
 
     def showSTL(self, selected_stl):
         stl_file_path = os.path.join(self.folder_path, selected_stl)
-        print(f"Loading STL file: {stl_file_path}")
+        #print(f"Loading STL file: {stl_file_path}")
         if os.path.exists(stl_file_path):
             stl_mesh = pv.read(stl_file_path)
-            print(f"STL mesh loaded: {stl_mesh}")
+            #print(f"STL mesh loaded: {stl_mesh}")
 
             # Apply scaling factor from settings
             scale_factor = float(
                 self.main_window.scale_factor_input.currentText())  # Get the scale factor from settings
             stl_mesh.scale([scale_factor, scale_factor, scale_factor], inplace=True)
-            print(f"STL mesh scaled: {stl_mesh.bounds}")
+            #print(f"STL mesh scaled: {stl_mesh.bounds}")
 
             # Add the mesh to the plotter, ensuring the old actor is removed if it exists
             if self.stl_actor is not None:
@@ -324,7 +331,7 @@ class VTKWidget(QWidget):
 
             self.stl_actor = self.plotter.add_mesh(stl_mesh, color="gray", opacity=0.5)  # Set opacity to 50%
 
-            print(f"STL actor added: {self.stl_actor}")
+            #print(f"STL actor added: {self.stl_actor}")
             self.plotter.render()
         else:
             print(f"STL file not found: {stl_file_path}")
