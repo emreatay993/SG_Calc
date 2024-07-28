@@ -4,6 +4,8 @@ import sys
 import csv
 import clr
 clr.AddReference("System.Windows.Forms")
+clr.AddReference("Microsoft.VisualBasic")
+from Microsoft.VisualBasic import Interaction
 from System.Windows.Forms import MessageBox, MessageBoxButtons, MessageBoxIcon
 import context_menu
 # endregion
@@ -93,8 +95,21 @@ def get_CS_SG_ids_and_names():
     ]
     return list_of_ids_of_each_CS_SG_Ch_, list_of_names_of_each_CS_SG_Ch_
 
+# Prompt the user for input
+def prompt_user_for_radius():
+    message = "Please enter the radius [mm] of interest around each SG:"
+    title = "Input Required"
+    default_value = "10"
+    radius_str = Interaction.InputBox(message, title, default_value)
+    try:
+        radius = float(radius_str)
+        return radius
+    except ValueError:
+        MessageBox.Show("Invalid input. Please enter a numeric value.", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error)
+        sys.exit(1)
+
 # Create a named selection of nodes around each SG channel
-def create_NS_of_nodes_around_SG(NS_test_parts, list_of_ids_of_each_CS_SG_Ch_, list_of_names_of_each_CS_SG_Ch_):
+def create_NS_of_nodes_around_SG(NS_test_parts, list_of_ids_of_each_CS_SG_Ch_, list_of_names_of_each_CS_SG_Ch_, radius):
     try:
         NS_nodes_SG_test_parts = DataModel.GetObjectsByName("NS_of_nodes_of_SG_test_parts")[0]
     except:
@@ -111,7 +126,7 @@ def create_NS_of_nodes_around_SG(NS_test_parts, list_of_ids_of_each_CS_SG_Ch_, l
         NS_test_part_strain.GenerationCriteria[0].EntityType = SelectionType.MeshNode
         NS_test_part_strain.GenerationCriteria[0].Criterion = SelectionCriterionType.Distance
         NS_test_part_strain.GenerationCriteria[0].Operator = SelectionOperatorType.LessThanOrEqual
-        NS_test_part_strain.GenerationCriteria[0].Value = Quantity(10, 'mm')
+        NS_test_part_strain.GenerationCriteria[0].Value = Quantity(radius, 'mm')
         NS_test_part_strain.GenerationCriteria[0].CoordinateSystem = DataModel.GetObjectById(list_of_ids_of_each_CS_SG_Ch_[i])
 
         NS_test_part_strain.GenerationCriteria.Add(None)
@@ -282,7 +297,9 @@ NS_test_parts, NS_test_parts_not_found = check_test_parts_existence()
 NS_test_parts = ensure_test_piece_defined(NS_test_parts, NS_test_parts_not_found)
 
 list_of_ids_of_each_CS_SG_Ch_, list_of_names_of_each_CS_SG_Ch_ = get_CS_SG_ids_and_names()
-list_of_NS_test_part_strains = create_NS_of_nodes_around_SG(NS_test_parts, list_of_ids_of_each_CS_SG_Ch_, list_of_names_of_each_CS_SG_Ch_)
+
+radius = prompt_user_for_radius()
+list_of_NS_test_part_strains = create_NS_of_nodes_around_SG(NS_test_parts, list_of_ids_of_each_CS_SG_Ch_, list_of_names_of_each_CS_SG_Ch_, radius)
 create_contour_plot_of_strains(list_of_names_of_each_CS_SG_Ch_, list_of_ids_of_each_CS_SG_Ch_, list_of_NS_test_part_strains)
 
 list_of_obj_of_NS_of_nodes_around_each_SG = [
