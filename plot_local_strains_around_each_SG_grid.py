@@ -189,7 +189,6 @@ class VTKWidget(QWidget):
                 camera_position = self.plotter.camera.position
                 camera_focal_point = self.plotter.camera.focal_point
                 camera_clipping_range = self.plotter.camera.clipping_range
-                #camera_zoom = self.plotter.camera.zoom()
             else:
                 camera_position = None
 
@@ -261,7 +260,6 @@ class VTKWidget(QWidget):
                 self.plotter.camera.position = camera_position
                 self.plotter.camera.focal_point = camera_focal_point
                 self.plotter.camera.clipping_range = camera_clipping_range
-                #self.plotter.camera.zoom(camera_zoom)
 
                 # Render the plot
                 self.plotter.show()
