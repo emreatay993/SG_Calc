@@ -380,21 +380,30 @@ def read_row_based_on_time_and_measurement(file_path, time_value, measurement_ty
                     
 # Function to classify headers and find unique time values
 def prepare_data(file_path):
-    times = set()
+    times = set()  # Initialize a set to collect unique time points
     measurements = classify_headers_by_measurement(file_path)  # Get measurement types dynamically
+
     with open(file_path, 'r') as file:
         reader = csv.reader(file)
         header = next(reader)  # Skip the header
         for row in reader:
-            times.add(row[0])  # Assuming time values are in the first column
+            time_value = row[0]  # Assuming the time value is in the first column
+            if time_value:  # Ensure it's not an empty string
+                try:
+                    # Try to convert the time value to float to check if it's numeric
+                    float(time_value)
+                    times.add(time_value)
+                except ValueError:
+                    # Skip non-numeric values
+                    continue
 
-    # Extract unique measurement types and sort them
-    measurement_types = sorted(set(measurement for measurement in measurements.keys() if measurement != 'Time'))
-
-    # Sort the time points in natural order
+    # Convert times to floats for natural numerical sorting
     list_of_time_points = sorted(float(time) for time in times)
-    
-    return list_of_time_points, measurement_types
+
+    # Create the list of measurement types which exist inside the data
+    list_of_measurement_types = sorted(set(measurement for measurement in measurements.keys() if measurement != 'Time'))
+  
+    return list_of_time_points, list_of_measurement_types
 # endregion
 
 measurement_suffixes = {
