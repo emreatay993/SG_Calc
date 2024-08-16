@@ -121,6 +121,10 @@ def create_NS_of_nodes_around_SG(NS_faces_test_parts, list_of_ids_of_each_CS_SG_
         NS_nodes_SG_test_parts.GenerationCriteria[0].Criterion = SelectionCriterionType.NamedSelection
         NS_nodes_SG_test_parts.GenerationCriteria[0].Operator = SelectionOperatorType.Equal
         NS_nodes_SG_test_parts.GenerationCriteria[0].Value = NS_faces_test_parts
+        NS_nodes_SG_test_parts.GenerationCriteria.Add(None)
+        NS_nodes_SG_test_parts.GenerationCriteria[1].Action = SelectionActionType.Convert
+        NS_nodes_SG_test_parts.GenerationCriteria[1].EntityType = SelectionType.MeshNode
+        NS_nodes_SG_test_parts.Generate()
         NS_nodes_SG_test_parts.Name = "NS_of_nodes_of_SG_test_parts"
 
     list_of_NS_test_part_strains = []
@@ -229,7 +233,7 @@ def create_CSV_files_for_SG_grid_bodies():
         writer.writerows(geo_data_SG)
 
     print("CSV file saved to {}".format(file_path_CSV_SG_grid_data))
-    os.startfile(file_path_CSV_SG_grid_data)
+    #os.startfile(file_path_CSV_SG_grid_data)
 
 # Create CSV files containing the definition of coordinate system of the channel
 def get_SG_coordinate_data(channel_name):
@@ -292,7 +296,7 @@ def create_CSV_files_for_coordinate_system():
         coordinate_data = get_SG_coordinate_data(channel_name)
         save_data_to_csv(coordinate_data, file_path)
 
-    os.startfile(file_path)
+    #os.startfile(file_path)
 
 # region Main execution
 initialize_mechanical_preferences()
