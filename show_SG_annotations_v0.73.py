@@ -389,8 +389,11 @@ def prepare_data(file_path):
 
     # Extract unique measurement types and sort them
     measurement_types = sorted(set(measurement for measurement in measurements.keys() if measurement != 'Time'))
+
+    # Sort the time points in natural order
+    list_of_time_points = sorted(float(time) for time in times)
     
-    return sorted(times), measurement_types
+    return list_of_time_points, measurement_types
 # endregion
 
 measurement_suffixes = {
