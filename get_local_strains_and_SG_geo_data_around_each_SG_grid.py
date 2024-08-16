@@ -6,8 +6,74 @@ import clr
 clr.AddReference("System.Windows.Forms")
 clr.AddReference("Microsoft.VisualBasic")
 from Microsoft.VisualBasic import Interaction
-from System.Windows.Forms import MessageBox, MessageBoxButtons, MessageBoxIcon
+from System.Windows.Forms import (Form, Label, TextBox, Button, DialogResult, 
+                                  MessageBox, MessageBoxButtons, MessageBoxIcon, 
+                                  FormStartPosition, FormBorderStyle, 
+                                  AnchorStyles, Keys)
+from System.Drawing import Font, FontStyle, Color, Point, Size
 import context_menu
+# endregion
+
+# region Definition of classes and global variables
+class ModernInputBox(Form):
+    def __init__(self, prompt, title="Input Required", default_value=""):
+        self.Text = title
+        self.Width = 400  # Initial width
+        self.Height = 180  # Initial height
+        self.StartPosition = FormStartPosition.CenterParent
+        self.BackColor = Color.White  # Set background color to white
+        self.FormBorderStyle = FormBorderStyle.Sizable  # Allow the form to be resizable
+        self.MinimumSize = Size(300, 150)  # Set a minimum size to prevent the form from being too small
+
+        # Label
+        self.label = Label()
+        self.label.Text = prompt
+        self.label.Font = Font("Segoe UI", 10, FontStyle.Regular)
+        self.label.Location = Point(20, 20)
+        self.label.Size = Size(360, 20)  # Adjusted size to fit within the form
+        self.label.ForeColor = Color.FromArgb(50, 50, 50)  # Dark gray text
+        self.label.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right  # Make label responsive to resizing
+        self.label.Parent = self
+
+        # TextBox
+        self.textBox = TextBox()
+        self.textBox.Location = Point(20, 50)
+        self.textBox.Size = Size(360, 30)  # Adjusted size to fit within the form
+        self.textBox.Font = Font("Segoe UI", 10, FontStyle.Regular)
+        self.textBox.ForeColor = Color.FromArgb(50, 50, 50)
+        self.textBox.Text = default_value  # Default value
+        self.textBox.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right  # Make text box responsive to resizing
+        self.textBox.Parent = self
+
+        # OK Button
+        self.okButton = Button()
+        self.okButton.Text = "OK"
+        self.okButton.Font = Font("Segoe UI", 10, FontStyle.Regular)
+        self.okButton.ForeColor = Color.White
+        self.okButton.BackColor = Color.FromArgb(45, 156, 219)  # Blue button
+        self.okButton.FlatStyle = System.Windows.Forms.FlatStyle.Flat
+        self.okButton.Location = Point(150, 100)  # Centered within the form
+        self.okButton.Size = Size(100, 30)
+        self.okButton.Anchor = AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right  # Make button responsive to resizing
+        self.okButton.Parent = self
+        self.okButton.Click += self.on_ok_click
+
+        self.KeyPreview = True  # Enable KeyPreview to capture key events
+        self.KeyDown += self.form_key_down  # Handle key down events on the form
+
+    def on_ok_click(self, sender, args):
+        self.DialogResult = DialogResult.OK
+        self.Close()
+
+    def form_key_down(self, sender, args):
+        if args.KeyCode == Keys.Enter:
+            args.Handled = True
+            self.on_ok_click(sender, args)
+
+    def get_input(self):
+        if self.ShowDialog() == DialogResult.OK:
+            return self.textBox.Text
+        return None
 # endregion
 
 # region Initialize the preference settings of Mechanical
@@ -95,18 +161,21 @@ def get_CS_SG_ids_and_names():
     ]
     return list_of_ids_of_each_CS_SG_Ch_, list_of_names_of_each_CS_SG_Ch_
 
-# Prompt the user for input
+# Prompt the user for radius of interest
 def prompt_user_for_radius():
-    message = "Please enter the radius [mm] of interest around each SG:"
-    title = "Input Required"
-    default_value = "10"
-    radius_str = Interaction.InputBox(message, title, default_value)
-    try:
-        radius = float(radius_str)
-        return radius
-    except ValueError:
-        MessageBox.Show("Invalid input. Please enter a numeric value.", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error)
-        sys.exit(1)
+    prompt = "Please enter the radius [mm] of interest around each SG:"
+    form = ModernInputBox(prompt, "Radius Input", "10")
+    radius_str = form.get_input()
+    if radius_str is not None:
+        try:
+            radius = float(radius_str)
+            return radius
+        except ValueError:
+            MessageBox.Show("Invalid input. Please enter a numeric value.", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error)
+            return prompt_user_for_radius()  # Retry input if invalid
+    else:
+        MessageBox.Show("Operation canceled. Please provide a valid radius.", "Information", MessageBoxButtons.OK, MessageBoxIcon.Information)
+        return None
 
 # Create a named selection of nodes around each SG channel
 def create_NS_of_nodes_around_SG(NS_faces_test_parts, list_of_ids_of_each_CS_SG_Ch_, list_of_names_of_each_CS_SG_Ch_, radius):
@@ -153,8 +222,24 @@ def create_NS_of_nodes_around_SG(NS_faces_test_parts, list_of_ids_of_each_CS_SG_
 
     return list_of_NS_test_part_strains
 
+# Prompt the user for time to be displayed in results
+def prompt_user_for_time():
+    prompt = "Enter the time to be displayed/extracted [in seconds]:"
+    form = ModernInputBox(prompt, "Time Input", "0.777")
+    time_str = form.get_input()
+    if time_str is not None:
+        try:
+            time_value = float(time_str)
+            return time_value
+        except ValueError:
+            MessageBox.Show("Invalid input. Please enter a numeric value.", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error)
+            return prompt_user_for_time()  # Retry input if invalid
+    else:
+        MessageBox.Show("Operation canceled. Please provide a valid time value.", "Information", MessageBoxButtons.OK, MessageBoxIcon.Information)
+        return None
+
 # Create contour plot of strains for nodes around each CS_SG_Ch_
-def create_contour_plot_of_strains(list_of_names_of_each_CS_SG_Ch_, list_of_ids_of_each_CS_SG_Ch_, list_of_NS_test_part_strains):
+def create_contour_plot_of_strains(list_of_names_of_each_CS_SG_Ch_, list_of_ids_of_each_CS_SG_Ch_, list_of_NS_test_part_strains, time_value):
     for i in range(len(list_of_names_of_each_CS_SG_Ch_)):
         try:
             obj_of_contour_of_nodes_around_each_SG_Ch = sol_selected_environment.AddNormalElasticStrain()
@@ -163,6 +248,7 @@ def create_contour_plot_of_strains(list_of_names_of_each_CS_SG_Ch_, list_of_ids_
             obj_of_contour_of_nodes_around_each_SG_Ch.Name = "StrainX_around_" + list_of_names_of_each_CS_SG_Ch_[i][3:]
             obj_of_contour_of_nodes_around_each_SG_Ch.CoordinateSystem = DataModel.GetObjectById(list_of_ids_of_each_CS_SG_Ch_[i])
             obj_of_contour_of_nodes_around_each_SG_Ch.CalculateTimeHistory = True
+            obj_of_contour_of_nodes_around_each_SG_Ch.DisplayTime = Quantity(time_value, "sec")
         except:
             message = r"""Please define the solution environment of interest by running "Solution Object" button. """
             caption = "Error"
@@ -310,8 +396,10 @@ NS_faces_test_parts = ensure_test_piece_defined(NS_faces_test_parts, NS_faces_te
 list_of_ids_of_each_CS_SG_Ch_, list_of_names_of_each_CS_SG_Ch_ = get_CS_SG_ids_and_names()
 
 radius = prompt_user_for_radius()
+time_value = prompt_user_for_time()
+
 list_of_NS_test_part_strains = create_NS_of_nodes_around_SG(NS_faces_test_parts, list_of_ids_of_each_CS_SG_Ch_, list_of_names_of_each_CS_SG_Ch_, radius)
-create_contour_plot_of_strains(list_of_names_of_each_CS_SG_Ch_, list_of_ids_of_each_CS_SG_Ch_, list_of_NS_test_part_strains)
+create_contour_plot_of_strains(list_of_names_of_each_CS_SG_Ch_, list_of_ids_of_each_CS_SG_Ch_, list_of_NS_test_part_strains, time_value)
 
 list_of_obj_of_NS_of_nodes_around_each_SG = [
     obj for obj in DataModel.Project.GetChildren(DataModelObjectCategory.NamedSelection, True) if obj.Name.Contains("NS_of_nodes_around_")
