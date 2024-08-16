@@ -268,6 +268,7 @@ class InputBox(Form):
 
 # region Global function and variable definitions
 form_closed = False
+label_manager = Graphics.LabelManager
 
 # Extract the number from the channel name for sorting
 def extract_number(channel_name):
@@ -341,13 +342,13 @@ def classify_headers_by_measurement(file_path):
         measurements = {}  # Dictionary to store measurement types and indices
 
         # Updated regex to include optional delta and percent symbols
-        pattern_measurement = re.compile(r'([Δ%]?SG\d+_(\w+))')
+        pattern_measurement = re.compile(r'([?%]?SG\d+_(\w+))')
 
         for index, header in enumerate(headers):
             match = pattern_measurement.search(header)
             if match:
                 measurement = match.group(2)  # Extracts the measurement type without the SG identifier
-                if match.group(1).startswith(('Δ', '%')):
+                if match.group(1).startswith(('?', '%')):
                     measurement = match.group(1)[0] + measurement
                 if measurement not in measurements:
                     measurements[measurement] = []
@@ -397,28 +398,28 @@ def prepare_data(file_path):
 # endregion
 
 measurement_suffixes = {
-    'epsilon_x': ', εx',
-    'epsilon_y': ' , εy',
-    'gamma_xy': ' , γxy',
-    'sigma_1': ' , σ1',
-    'sigma_2': ' , σ2',
-    'theta_p': ' , θp',
+    'epsilon_x': ', ex',
+    'epsilon_y': ' , ey',
+    'gamma_xy': ' , ?xy',
+    'sigma_1': ' , s1',
+    'sigma_2': ' , s2',
+    'theta_p': ' , ?p',
     'Biaxiality_Ratio': ' , BR',
     'von_Mises': ' , VM',
-    'Δepsilon_x': ' , Δεx',
-    'Δepsilon_y': ' , Δεy',
-    'Δgamma_xy': ' , Δγxy',
-    'Δsigma_1': ' , Δσ1',
-    'Δsigma_2': ' , Δσ2',
-    'Δtheta_p': ' , Δθp',
-    'ΔBiaxiality_Ratio': ' , ΔBR',
-    'Δvon_Mises': ' , ΔVM',
-    '%epsilon_x': ' , %εx',
-    '%epsilon_y': ' , %εy',
-    '%gamma_xy': ' , %γxy',
-    '%sigma_1': ' , %σ1',
-    '%sigma_2': ' , %σ2',
-    '%theta_p': ' , %θp',
+    '?epsilon_x': ' , ?ex',
+    '?epsilon_y': ' , ?ey',
+    '?gamma_xy': ' , ??xy',
+    '?sigma_1': ' , ?s1',
+    '?sigma_2': ' , ?s2',
+    '?theta_p': ' , ??p',
+    '?Biaxiality_Ratio': ' , ?BR',
+    '?von_Mises': ' , ?VM',
+    '%epsilon_x': ' , %ex',
+    '%epsilon_y': ' , %ey',
+    '%gamma_xy': ' , %?xy',
+    '%sigma_1': ' , %s1',
+    '%sigma_2': ' , %s2',
+    '%theta_p': ' , %?p',
     '%Biaxiality_Ratio': ' , %BR',
     '%von_Mises': ' , %VM'
 }
@@ -460,17 +461,6 @@ for i in range(len(list_of_filtered_names_of_CS_SG_channels)):
     list_of_coordinates_of_all_filtered_names_of_CS_SG_channels.append(
         list_of_coordinates_of_each_filtered_names_of_CS_SG_channels)
 # endregion
-
-#--------------------------------------------------------------------------------------------
-
-# # region Check if SG labels already exist within the memory, if they do, delete and re-create them
-# label_manager = Graphics.LabelManager
-# list_of_obj_of_SG_label_calculation = \
-#     [label_manager.Labels[i]
-#      for i in range(len(label_manager.Labels))
-#      if label_manager.Labels[i].Note.Contains("SG_")]
-# label_manager.DeleteLabels(list_of_obj_of_SG_label_calculation)
-# # endregion
 
 #--------------------------------------------------------------------------------------------
 
