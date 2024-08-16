@@ -228,9 +228,15 @@ class VTKWidget(QWidget):
             structured_grid = pv.StructuredGrid(grid_x, grid_y, grid_z)
             structured_grid['Strain [µε]'] = grid_strain
 
+            # Calculate the max and min values of the strains in the existing data on the screen
+            clim = [strain.min(), strain.max()]
+
             # Add the original points to the plotter
             self.polydata_actor = self.plotter.add_mesh(polydata, scalars='Strain [µε]', cmap='turbo', point_size=15,
                                                         render_points_as_spheres=True)
+
+            # Remove the default scalar bar that PyVista adds
+            self.plotter.remove_scalar_bar()
 
             # Set the visibility of the original points based on the checkbox state
             if not self.checkbox_points.isChecked():
@@ -238,6 +244,14 @@ class VTKWidget(QWidget):
 
             # Add the surface mesh to the plotter
             self.plotter.add_mesh(structured_grid, scalars='Strain [µε]', cmap='turbo', opacity=0.7)
+
+            # Remove the default scalar bar that PyVista adds
+            self.plotter.remove_scalar_bar()
+
+            # Manually add a custom scalar bar
+            self.plotter.add_scalar_bar(title="Strain [µε]", height=0.7, width=0.05, vertical=True, position_x=0.03,
+                                        position_y=0.2, n_labels=10,
+                                        title_font_size=10, label_font_size=10)
 
             # Add the global origin
             self.plotter.add_axes_at_origin(labels_off=True, line_width=3)
