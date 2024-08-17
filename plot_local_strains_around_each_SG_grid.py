@@ -201,6 +201,7 @@ class VTKWidget(QWidget):
             x = data['X Location (mm)'].values
             y = data['Y Location (mm)'].values
             z = data['Z Location (mm)'].values
+            nodes = np.c_[x.ravel(), y.ravel(), z.ravel()]
             strain = (data['Normal Elastic Strain (mm/mm)'].values) * 1e6
 
             # Create a PyVista PolyData for the original points
@@ -208,50 +209,34 @@ class VTKWidget(QWidget):
             polydata = pv.PolyData(points)
             polydata['Strain [µε]'] = strain
 
-            # Define the finer grid for interpolation
-            grid_x, grid_y = np.mgrid[x.min():x.max():2000j, y.min():y.max():2000j]
-
-            # Perform the interpolation for z and strain values
-            grid_z = griddata(points[:, :2], z, (grid_x, grid_y), method='linear')
-            grid_strain = griddata(points[:, :2], strain, (grid_x, grid_y), method='linear')
-
-            # Mask to filter out invalid points
-            mask = ~np.isnan(grid_z) & ~np.isnan(grid_strain)
-
-            # Reshape grid for structured grid creation
-            grid_x = grid_x[mask].reshape(grid_z[mask].shape)
-            grid_y = grid_y[mask].reshape(grid_z[mask].shape)
-            grid_z = grid_z[mask].reshape(grid_z[mask].shape)
-            grid_strain = grid_strain[mask].reshape(grid_strain[mask].shape)
-
-            # Create a structured grid
-            structured_grid = pv.StructuredGrid(grid_x, grid_y, grid_z)
-            structured_grid['Strain [µε]'] = grid_strain
-
             # Calculate the max and min values of the strains in the existing data on the screen
-            clim = [strain.min(), strain.max()]
+            initial_clim = [strain.min(), strain.max()]
 
             # Add the original points to the plotter
             self.polydata_actor = self.plotter.add_mesh(polydata, scalars='Strain [µε]', cmap='turbo', point_size=15,
-                                                        render_points_as_spheres=True)
+                                                        render_points_as_spheres=True, clim=initial_clim)
 
-            # Remove the default scalar bar that PyVista adds
-            self.plotter.remove_scalar_bar()
+            # Create the surface mesh of the strain data
+            mesh = pv.PolyData(nodes)
+            mesh = mesh.delaunay_2d()
+            mesh.point_data['Strain [µε]'] = strain
+
+            # Subdivide the mesh to increase resolution
+            refined_mesh = mesh.subdivide(3, subfilter='linear')
+            refined_mesh = refined_mesh.sample(mesh)
+
+            # Setting the properties of the scalar bar
+            sargs = dict(title="Strain [µε]", height=0.7, width=0.05, vertical=True, position_x=0.03,
+                                              position_y=0.2, n_labels=10,
+                                              title_font_size=10, label_font_size=10)
+
+            # Add the surface mesh to the plotter
+            self.plotter.add_mesh(refined_mesh, scalars='Strain [µε]', cmap='turbo', opacity=0.7, clim=initial_clim,
+                                  scalar_bar_args=sargs)
 
             # Set the visibility of the original points based on the checkbox state
             if not self.checkbox_points.isChecked():
                 self.polydata_actor.VisibilityOff()
-
-            # Add the surface mesh to the plotter
-            self.plotter.add_mesh(structured_grid, scalars='Strain [µε]', cmap='turbo', opacity=0.7)
-
-            # Remove the default scalar bar that PyVista adds
-            self.plotter.remove_scalar_bar()
-
-            # Manually add a custom scalar bar
-            self.plotter.add_scalar_bar(title="Strain [µε]", height=0.7, width=0.05, vertical=True, position_x=0.03,
-                                        position_y=0.2, n_labels=10,
-                                        title_font_size=10, label_font_size=10)
 
             # Add the global origin
             self.plotter.add_axes_at_origin(labels_off=True, line_width=3)
