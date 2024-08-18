@@ -61,7 +61,7 @@ class MainWindow(QMainWindow):
         self.scale_factor_input = QComboBox()
         self.scale_factor_input.setEditable(True)  # Make the combobox editable
         self.scale_factor_input.addItems(["0.001", "0.01", "0.1", "1", "10","100","1000"])
-        self.scale_factor_input.setCurrentText("1000")
+        self.scale_factor_input.setCurrentText("999")
         self.scale_factor_input.editTextChanged.connect(self.validateScaleFactor)
         h_layout_scale.addWidget(self.scale_label)
         h_layout_scale.addWidget(self.scale_factor_input)
@@ -78,13 +78,13 @@ class MainWindow(QMainWindow):
             value = float(text)
             if value <= 0:
                 raise ValueError("Scale factor must be positive.")
-            # Apply the factor of 0.999 and set it as the current text
-            adjusted_value = value * 0.999
+
+            adjusted_value = value
             self.scale_factor_input.blockSignals(True)  # Temporarily block signals to avoid recursive updates
             self.scale_factor_input.setCurrentText(str(adjusted_value))
             self.scale_factor_input.blockSignals(False)  # Re-enable signals
         except ValueError:
-            self.scale_factor_input.setCurrentText("1000")  # Revert to 1 if the input is not valid
+            self.scale_factor_input.setCurrentText("999")  # Revert to 1000 if the input is not valid
 
     def toggleSTLVisibility(self, state):
         if state == Qt.Checked:
@@ -142,6 +142,9 @@ class VTKWidget(QWidget):
         layout.addLayout(h_layout)
 
         self.plotter = BackgroundPlotter(show=False)  # Initialize the PyVista plotter
+
+        self.set_mouse_rotation_behavior()
+
         layout.addWidget(self.plotter.interactor)
 
         self.setLayout(layout)
@@ -154,6 +157,29 @@ class VTKWidget(QWidget):
         self.stl_actor = None
         self.plotter.show_axes()
 
+    def set_mouse_rotation_behavior(self):
+        """Customizes mouse rotation to use the clicked point as the center of rotation."""
+
+        def on_left_button_down(interactor, event):
+            # Get the click position
+            click_pos = interactor.GetEventPosition()
+
+            # Convert click position to 3D coordinates
+            picker = interactor.GetPicker()
+            picker.Pick(click_pos[0], click_pos[1], 0, self.plotter.renderer)
+            pick_position = picker.GetPickPosition()
+
+            if pick_position:
+                # Set the focal point to the click position
+                self.plotter.camera.focal_point = pick_position
+                self.plotter.render()
+
+            # Call the superclass method to handle the event normally
+            interactor.GetInteractorStyle().OnLeftButtonDown()
+
+        # Set the custom interaction behavior
+        self.plotter.interactor.AddObserver("LeftButtonPressEvent", on_left_button_down)
+
     def processFolder(self, folder_path):
         self.folder_path = folder_path
         # Load SG_coordinate_matrix.csv
@@ -162,14 +188,29 @@ class VTKWidget(QWidget):
             self.sg_data = pd.read_csv(sg_file_path)
 
         # Load each CSV file that starts with "StrainX_around_"
+        items = []
         for file_name in os.listdir(folder_path):
             if file_name.startswith("StrainX_around_") and file_name.endswith(".csv"):
                 file_path = os.path.join(folder_path, file_name)
                 data = pd.read_csv(file_path, sep='\t')
                 display_name = file_name.replace("StrainX_around_", "").replace(".csv", "")
-                self.data_frames[display_name] = data
-                self.file_mapping[display_name] = file_name
-                self.comboBox.addItem(display_name)
+                items.append((display_name, data, file_name))
+
+        def sort_key(display_name):
+            try:
+                return tuple(map(int, display_name.replace("SG_Ch_", "").split('_')))
+            except ValueError as e:
+                print(f"Error parsing '{display_name}': {e}. This item will be sorted at the end of the combobox.")
+                return float('inf'), 0  # Move problematic entries to the end
+
+        # Sort items based on SG and channel numbers
+        sorted_items = sorted(items, key=lambda x: sort_key(x[0]))
+
+        # Add sorted items to the combobox and store data
+        for display_name, data, file_name in sorted_items:
+            self.data_frames[display_name] = data
+            self.file_mapping[display_name] = file_name
+            self.comboBox.addItem(display_name)
 
         # Notify settings tab to load STL files
         self.main_window.loadStlFiles(folder_path)
@@ -231,7 +272,7 @@ class VTKWidget(QWidget):
                                               title_font_size=10, label_font_size=10)
 
             # Add the surface mesh to the plotter
-            self.plotter.add_mesh(refined_mesh, scalars='Strain [µε]', cmap='turbo', opacity=0.7, clim=initial_clim,
+            self.plotter.add_mesh(refined_mesh, scalars='Strain [µε]', cmap='turbo', opacity=0.99, clim=initial_clim,
                                   scalar_bar_args=sargs)
 
             # Set the visibility of the original points based on the checkbox state
@@ -324,7 +365,7 @@ class VTKWidget(QWidget):
             if self.stl_actor is not None:
                 self.plotter.remove_actor(self.stl_actor)
 
-            self.stl_actor = self.plotter.add_mesh(stl_mesh, color="gray", opacity=0.5)  # Set opacity to 50%
+            self.stl_actor = self.plotter.add_mesh(stl_mesh, color="white", opacity=1)  # Set opacity to 50%
 
             #print(f"STL actor added: {self.stl_actor}")
             self.plotter.render()
