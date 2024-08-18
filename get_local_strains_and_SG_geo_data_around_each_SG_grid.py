@@ -287,7 +287,7 @@ def create_CSV_files_from_strain_results(list_of_obj_of_StrainX_around):
         list_of_obj_of_StrainX_around[i].ExportToTextFile(file_path)
 
 # Create CSV files containing the corner points of each SG grid body
-def create_CSV_files_for_SG_grid_bodies():
+def create_CSV_files_for_SG_grid_bodies_in_global_CS():
     list_of_all_bodies_in_tree = DataModel.GetObjectsByType(DataModelObjectCategory.Body)
 
     list_of_of_SG_grid_bodies = [
@@ -303,9 +303,9 @@ def create_CSV_files_for_SG_grid_bodies():
             geo_data_SG.append({
                 'Body_Name': each_SG_body[0],
                 'Vertex_No': j+1,
-                'X [mm]': each_vertex.X,
-                'Y [mm]': each_vertex.Y,
-                'Z [mm]': each_vertex.Z
+                'X [mm]': each_vertex.X * 1000,  # Convert to mm
+                'Y [mm]': each_vertex.Y * 1000,  # Convert to mm
+                'Z [mm]': each_vertex.Z * 1000   # Convert to mm
             })
 
     solution_directory_path = sol_selected_environment.WorkingDir
@@ -384,6 +384,99 @@ def create_CSV_files_for_coordinate_system():
 
     #os.startfile(file_path)
 
+def parse_coordinate_matrix(file_path):
+    """Parses the SG_coordinate_matrix.csv file to extract local coordinate systems."""
+    coordinate_systems = {}
+    
+    with open(file_path, mode='r') as file:
+        reader = csv.DictReader(file)
+        for row in reader:
+            cs_name = row['CS Name']
+            origin = (float(row['Origin_X']), float(row['Origin_Y']), float(row['Origin_Z']))
+            x_dir = (float(row['X_dir_i']), float(row['X_dir_j']), float(row['X_dir_k']))
+            y_dir = (float(row['Y_dir_i']), float(row['Y_dir_j']), float(row['Y_dir_k']))
+            z_dir = (float(row['Z_dir_i']), float(row['Z_dir_j']), float(row['Z_dir_k']))
+            coordinate_systems[cs_name] = {'origin': origin, 'x_dir': x_dir, 'y_dir': y_dir, 'z_dir': z_dir}
+    
+    return coordinate_systems
+
+def transform_to_local(global_coords, local_cs):
+    """Transforms global coordinates to local coordinates using the local coordinate system."""
+    origin = local_cs['origin']
+    x_dir = local_cs['x_dir']
+    y_dir = local_cs['y_dir']
+    z_dir = local_cs['z_dir']
+    
+    # Convert global coordinates from meters to millimeters
+    global_coords_mm = [coord * 1000 for coord in global_coords]
+    
+    # Translate global coordinates by subtracting the origin
+    translated_coords = [
+        global_coords_mm[0] - origin[0], 
+        global_coords_mm[1] - origin[1], 
+        global_coords_mm[2] - origin[2]
+    ]
+    
+    # Project the translated coordinates onto the local axes
+    x_local = sum(translated_coords[i] * x_dir[i] for i in range(3))
+    y_local = sum(translated_coords[i] * y_dir[i] for i in range(3))
+    z_local = sum(translated_coords[i] * z_dir[i] for i in range(3))
+    
+    return (x_local, y_local, z_local)
+
+def create_CSV_files_for_SG_grid_bodies_in_local_CS():
+    # File paths
+    solution_directory_path = sol_selected_environment.WorkingDir
+    subfolder = os.path.join(solution_directory_path, "StrainX_around_each_SG")
+    cs_matrix_file = os.path.join(subfolder, 'SG_coordinate_matrix.csv')
+    local_vertices_file = os.path.join(subfolder, 'SG_grid_body_vertices_in_local_CS.csv')
+    
+    # Parse coordinate systems
+    coordinate_systems = parse_coordinate_matrix(cs_matrix_file)
+    
+    # Get bodies
+    list_of_all_bodies_in_tree = DataModel.GetObjectsByType(DataModelObjectCategory.Body)
+    list_of_SG_grid_bodies = [
+        (each_body.GetGeoBody().Name, each_body.GetGeoBody().Vertices)
+        for each_body in list_of_all_bodies_in_tree
+        if each_body.Name.Contains("SG_Grid_Body_") 
+    ]
+
+    geo_data_SG_local = []
+
+    # Transform each vertex to the local coordinate system
+    for each_SG_body in list_of_SG_grid_bodies:
+        body_name = each_SG_body[0]
+        body_vertices = each_SG_body[1]
+        
+        # Correctly extract the coordinate system name
+        cs_name = body_name.replace("SG_Grid_Body_", "CS_SG_Ch_")
+        
+        local_cs = coordinate_systems.get(cs_name, None)
+        
+        if not local_cs:
+            print("No coordinate system found for {}".format(cs_name))
+            continue
+        
+        for j, each_vertex in enumerate(body_vertices):
+            local_coords = transform_to_local((each_vertex.X, each_vertex.Y, each_vertex.Z), local_cs)
+            geo_data_SG_local.append({
+                'Body_Name': body_name,
+                'Vertex_No': j+1,
+                'X_local [mm]': local_coords[0],
+                'Y_local [mm]': local_coords[1],
+                'Z_local [mm]': local_coords[2]
+            })
+
+    # Save to CSV
+    with open(local_vertices_file, 'wb') as csvfile:
+        fieldnames = ["Body_Name", "Vertex_No", "X_local [mm]", "Y_local [mm]", "Z_local [mm]"]
+        writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+        writer.writeheader()
+        writer.writerows(geo_data_SG_local)
+
+    print("Local coordinates saved to {}".format(local_vertices_file))
+
 # region Main execution
 initialize_mechanical_preferences()
 
@@ -412,6 +505,7 @@ group_existing_objects(list_of_obj_of_NS_of_nodes_around_each_SG, list_of_obj_of
 evaluate_all_results()
 
 create_CSV_files_from_strain_results(list_of_obj_of_StrainX_around)
-create_CSV_files_for_SG_grid_bodies()
+create_CSV_files_for_SG_grid_bodies_in_global_CS()
 create_CSV_files_for_coordinate_system()
+create_CSV_files_for_SG_grid_bodies_in_local_CS()
 # endregion
