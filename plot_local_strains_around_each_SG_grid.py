@@ -257,6 +257,9 @@ class VTKWidget(QWidget):
             self.polydata_actor = self.plotter.add_mesh(polydata, scalars='Strain [µε]', cmap='turbo', point_size=15,
                                                         render_points_as_spheres=True, clim=initial_clim)
 
+            # Remove the default scalar bar that PyVista adds
+            self.plotter.remove_scalar_bar()
+
             # Create the surface mesh of the strain data
             mesh = pv.PolyData(nodes)
             mesh = mesh.delaunay_2d()
@@ -265,15 +268,14 @@ class VTKWidget(QWidget):
             # Subdivide the mesh to increase resolution
             refined_mesh = mesh.subdivide(3, subfilter='linear')
             refined_mesh = refined_mesh.sample(mesh)
-
             # Setting the properties of the scalar bar
-            sargs = dict(title="Strain [µε]", height=0.7, width=0.05, vertical=True, position_x=0.03,
+            self.sargs = dict(title="Strain [µε]", height=0.7, width=0.05, vertical=True, position_x=0.03,
                                               position_y=0.2, n_labels=10,
                                               title_font_size=10, label_font_size=10)
 
             # Add the surface mesh to the plotter
             self.plotter.add_mesh(refined_mesh, scalars='Strain [µε]', cmap='turbo', opacity=0.99, clim=initial_clim,
-                                  scalar_bar_args=sargs)
+                                  scalar_bar_args=self.sargs)
 
             # Set the visibility of the original points based on the checkbox state
             if not self.checkbox_points.isChecked():
