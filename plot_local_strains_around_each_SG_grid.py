@@ -1,4 +1,5 @@
 import sys
+import csv
 import os
 import numpy as np
 import pandas as pd
@@ -130,11 +131,11 @@ class VTKWidget(QWidget):
         h_layout.addWidget(self.label)
         h_layout.addWidget(self.comboBox)
 
-        self.checkbox_points = QCheckBox("Show original points")
+        self.checkbox_points = QCheckBox("Display Original Points")
         self.checkbox_points.stateChanged.connect(self.togglePointsVisibility)
         h_layout.addWidget(self.checkbox_points)
 
-        self.checkbox_axes = QCheckBox("Show Axes")
+        self.checkbox_axes = QCheckBox("Display Local Axis")
         self.checkbox_axes.setChecked(True)
         self.checkbox_axes.stateChanged.connect(self.toggleAxesVisibility)
         h_layout.addWidget(self.checkbox_axes)
@@ -156,6 +157,8 @@ class VTKWidget(QWidget):
         self.folder_path = None
         self.stl_actor = None
         self.plotter.show_axes()
+
+        self.bounding_boxes = None
 
     def set_mouse_rotation_behavior(self):
         """Customizes mouse rotation to use the clicked point as the center of rotation."""
@@ -186,6 +189,12 @@ class VTKWidget(QWidget):
         sg_file_path = os.path.join(folder_path, "SG_coordinate_matrix.csv")
         if os.path.exists(sg_file_path):
             self.sg_data = pd.read_csv(sg_file_path)
+
+        # Load bounding boxes from SG_grid_body_vertices.csv
+        vertices_file_path = os.path.join(folder_path, "SG_grid_body_vertices.csv")
+        if os.path.exists(vertices_file_path):
+            grid_bodies = self._parse_sg_grid_body_vertices(vertices_file_path)
+            self.bounding_boxes = self._calculate_bounding_boxes(grid_bodies)
 
         # Load each CSV file that starts with "StrainX_around_"
         items = []
@@ -218,6 +227,52 @@ class VTKWidget(QWidget):
         if self.comboBox.count() > 0:
             self.comboBox.setCurrentIndex(0)
 
+    def _parse_sg_grid_body_vertices(self, file_path):
+        """Parses the SG_grid_body_vertices.csv file to extract the vertices of each SG grid body."""
+        grid_bodies = {}
+
+        with open(file_path, mode='r') as file:
+            reader = csv.DictReader(file)
+            for row in reader:
+                body_name = row['Body_Name']
+                vertex = (
+                    float(row['X [mm]']),
+                    float(row['Y [mm]']),
+                    float(row['Z [mm]'])
+                )
+                if body_name not in grid_bodies:
+                    grid_bodies[body_name] = []
+                grid_bodies[body_name].append(vertex)
+
+        return grid_bodies
+
+    def _calculate_bounding_boxes(self, grid_bodies, extrusion_length=1.0):
+        """Calculates the bounding box for each SG grid body, with extrusion if the body is 2D."""
+        bounding_boxes = {}
+
+        for body_name, vertices in grid_bodies.items():
+            vertices = np.array(vertices)
+            min_bounds = vertices.min(axis=0)
+            max_bounds = vertices.max(axis=0)
+
+            # Determine if the bounding box is 2D (one dimension is flat)
+            if np.isclose(min_bounds[0], max_bounds[0]):  # Flat in X
+                min_bounds[0] -= extrusion_length / 2
+                max_bounds[0] += extrusion_length / 2
+            elif np.isclose(min_bounds[1], max_bounds[1]):  # Flat in Y
+                min_bounds[1] -= extrusion_length / 2
+                max_bounds[1] += extrusion_length / 2
+            elif np.isclose(min_bounds[2], max_bounds[2]):  # Flat in Z
+                min_bounds[2] -= extrusion_length / 2
+                max_bounds[2] += extrusion_length / 2
+
+            bounding_boxes[body_name] = {
+                'center': (min_bounds + max_bounds) / 2,
+                'lengths': max_bounds - min_bounds
+            }
+
+        return bounding_boxes
+
     def updatePlot(self):
         selected_display_name = self.comboBox.currentText()
         if selected_display_name in self.data_frames:
@@ -245,6 +300,10 @@ class VTKWidget(QWidget):
             nodes = np.c_[x.ravel(), y.ravel(), z.ravel()]
             strain = (data['Normal Elastic Strain (mm/mm)'].values) * 1e6
 
+            # Apply bounding box filtering if the bounding box exists for this channel
+            # Convert display_name to match the bounding box key format
+            bounding_box_key = display_name.replace("SG_Ch_", "SG_Grid_Body_")
+
             # Create a PyVista PolyData for the original points
             points = np.vstack((x, y, z)).T
             polydata = pv.PolyData(points)
@@ -258,7 +317,7 @@ class VTKWidget(QWidget):
                                                         render_points_as_spheres=True, clim=initial_clim)
 
             # Remove the default scalar bar that PyVista adds
-            self.plotter.remove_scalar_bar()
+            #self.plotter.remove_scalar_bar()
 
             # Create the surface mesh of the strain data
             mesh = pv.PolyData(nodes)
@@ -268,18 +327,59 @@ class VTKWidget(QWidget):
             # Subdivide the mesh to increase resolution
             refined_mesh = mesh.subdivide(3, subfilter='linear')
             refined_mesh = refined_mesh.sample(mesh)
+
             # Setting the properties of the scalar bar
             self.sargs = dict(title="Strain [µε]", height=0.7, width=0.05, vertical=True, position_x=0.03,
                                               position_y=0.2, n_labels=10,
                                               title_font_size=10, label_font_size=10)
 
             # Add the surface mesh to the plotter
-            self.plotter.add_mesh(refined_mesh, scalars='Strain [µε]', cmap='turbo', opacity=0.99, clim=initial_clim,
-                                  scalar_bar_args=self.sargs)
+            self.plotter.add_mesh(refined_mesh, scalars='Strain [µε]', cmap='turbo', opacity=0.8, clim=initial_clim,
+                                  scalar_bar_args=self.sargs, show_edges=True) # TODO - Make this line work
 
             # Set the visibility of the original points based on the checkbox state
             if not self.checkbox_points.isChecked():
                 self.polydata_actor.VisibilityOff()
+
+            # Check if the corresponding bounding box exists
+            bounding_box_key = display_name.replace("SG_Ch_", "SG_Grid_Body_")
+            if self.bounding_boxes and bounding_box_key in self.bounding_boxes:
+                bounding_box = self.bounding_boxes[bounding_box_key]
+
+                # Create a bounding box in PyVista
+                bbox_center = bounding_box['center']
+                bbox_lengths = bounding_box['lengths']
+                bounding_box_mesh = pv.Cube(center=bbox_center, x_length=bbox_lengths[0], y_length=bbox_lengths[1],
+                                            z_length=bbox_lengths[2])
+
+                # Filter the refined mesh within the bounding box
+                mask = (
+                        (refined_mesh.points[:, 0] >= bbox_center[0] - bbox_lengths[0] / 2) & (
+                        refined_mesh.points[:, 0] <= bbox_center[0] + bbox_lengths[0] / 2) &
+                        (refined_mesh.points[:, 1] >= bbox_center[1] - bbox_lengths[1] / 2) & (
+                                refined_mesh.points[:, 1] <= bbox_center[1] + bbox_lengths[1] / 2) &
+                        (refined_mesh.points[:, 2] >= bbox_center[2] - bbox_lengths[2] / 2) & (
+                                refined_mesh.points[:, 2] <= bbox_center[2] + bbox_lengths[2] / 2)
+                )
+                selected_refined_mesh = refined_mesh.extract_points(mask)
+
+                # Calculate the average strain in the bounding box
+                average_strain = selected_refined_mesh['Strain [µε]'].mean()
+
+                # Visualize the bounding box as a wireframe
+                self.plotter.add_mesh(bounding_box_mesh, color='red', style='wireframe', line_width=5)
+
+                # Visualize the selected points inside the bounding box
+                self.plotter.add_mesh(selected_refined_mesh, color='yellow', point_size=10,
+                                      render_points_as_spheres=True)
+
+                # Add a 3D label at the center of the bounding box with simple styling
+                label_text = f"Average Strain: {average_strain:.4f} µε"
+                self.plotter.add_point_labels(
+                    [bbox_center], [label_text],
+                    point_size=0, font_size=24, text_color='white', shape='rect',
+                    always_visible=True  # Ensure the label is visible from all angles
+                )
 
             # Add the global origin
             self.plotter.add_axes_at_origin(labels_off=True, line_width=3)
@@ -310,6 +410,7 @@ class VTKWidget(QWidget):
             self.first_channel_plot = False
 
         except Exception as e:
+            print(e)
             QMessageBox.critical(self, "Error", e)
 
     def togglePointsVisibility(self, state):
@@ -367,7 +468,7 @@ class VTKWidget(QWidget):
             if self.stl_actor is not None:
                 self.plotter.remove_actor(self.stl_actor)
 
-            self.stl_actor = self.plotter.add_mesh(stl_mesh, color="white", opacity=1)  # Set opacity to 50%
+            self.stl_actor = self.plotter.add_mesh(stl_mesh, color="white", opacity=0.99)  # Set opacity to 50%
 
             #print(f"STL actor added: {self.stl_actor}")
             self.plotter.render()
