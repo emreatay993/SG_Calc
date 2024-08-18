@@ -194,7 +194,11 @@ class VTKWidget(QWidget):
         vertices_file_path = os.path.join(folder_path, "SG_grid_body_vertices.csv")
         if os.path.exists(vertices_file_path):
             grid_bodies = self._parse_sg_grid_body_vertices(vertices_file_path)
-            self.bounding_boxes = self._calculate_bounding_boxes(grid_bodies)
+            global_bounding_boxes = self._calculate_global_bounding_boxes(grid_bodies)
+
+        # Transform bounding boxes to local coordinates
+        self.bounding_boxes = self._transform_to_local_coordinates(global_bounding_boxes)
+
 
         # Load each CSV file that starts with "StrainX_around_"
         items = []
@@ -246,8 +250,8 @@ class VTKWidget(QWidget):
 
         return grid_bodies
 
-    def _calculate_bounding_boxes(self, grid_bodies, extrusion_length=1.0):
-        """Calculates the bounding box for each SG grid body, with extrusion if the body is 2D."""
+    def _calculate_global_bounding_boxes(self, grid_bodies, extrusion_length=1.0):
+        """Calculates the bounding box for each SG grid body in global coordinates, with extrusion if the body is 2D."""
         bounding_boxes = {}
 
         for body_name, vertices in grid_bodies.items():
@@ -272,6 +276,34 @@ class VTKWidget(QWidget):
             }
 
         return bounding_boxes
+
+    def _transform_to_local_coordinates(self, bounding_boxes):
+        """Transforms the bounding boxes from global to local coordinates using the local CS of each SG."""
+        transformed_bounding_boxes = {}
+
+        for body_name, bbox in bounding_boxes.items():
+            # Find the corresponding local coordinate system
+            cs_name = body_name.replace("SG_Grid_Body_", "CS_SG_Ch_")
+            if cs_name in self.sg_data['CS Name'].values:
+                cs_row = self.sg_data[self.sg_data['CS Name'] == cs_name].iloc[0]
+                origin = np.array([cs_row['Origin_X'], cs_row['Origin_Y'], cs_row['Origin_Z']])
+                x_dir = np.array([cs_row['X_dir_i'], cs_row['X_dir_j'], cs_row['X_dir_k']])
+                y_dir = np.array([cs_row['Y_dir_i'], cs_row['Y_dir_j'], cs_row['Y_dir_k']])
+                z_dir = np.array([cs_row['Z_dir_i'], cs_row['Z_dir_j'], cs_row['Z_dir_k']])
+
+                # Transformation matrix from global to local coordinates
+                transformation_matrix = np.column_stack((x_dir, y_dir, z_dir))
+
+                # Apply transformation: Translate to origin, then rotate
+                local_center = np.linalg.inv(transformation_matrix).dot(bbox['center'] - origin)
+                local_lengths = bbox['lengths']  # Lengths remain unchanged since they are magnitudes
+
+                transformed_bounding_boxes[body_name] = {
+                    'center': local_center,
+                    'lengths': local_lengths
+                }
+
+        return transformed_bounding_boxes
 
     def updatePlot(self):
         selected_display_name = self.comboBox.currentText()
@@ -328,6 +360,75 @@ class VTKWidget(QWidget):
             refined_mesh = mesh.subdivide(3, subfilter='linear')
             refined_mesh = refined_mesh.sample(mesh)
 
+            # Apply bounding box filtering if the bounding box exists for this channel
+            bounding_box_key = display_name.replace("SG_Ch_", "SG_Grid_Body_")
+            if self.bounding_boxes and bounding_box_key in self.bounding_boxes:
+                bounding_box = self.bounding_boxes[bounding_box_key]
+
+                # Define bounding box bounds and center
+                bbox_center = bounding_box['center']
+                bbox_lengths = bounding_box['lengths']
+
+                # Create the bounding box mesh (initially axis-aligned)
+                bounding_box_mesh = pv.Cube(center=bbox_center, x_length=bbox_lengths[0], y_length=bbox_lengths[1],
+                                            z_length=bbox_lengths[2])
+
+                # Retrieve the local coordinate system
+                sg_row = self.sg_data[self.sg_data['CS Name'] == f"CS_{display_name}"]
+                if not sg_row.empty:
+                    origin = sg_row[['Origin_X', 'Origin_Y', 'Origin_Z']].values.flatten()
+                    x_dir = sg_row[['X_dir_i', 'X_dir_j', 'X_dir_k']].values.flatten()
+                    y_dir = sg_row[['Y_dir_i', 'Y_dir_j', 'Y_dir_k']].values.flatten()
+                    z_dir = sg_row[['Z_dir_i', 'Z_dir_j', 'Z_dir_k']].values.flatten()
+
+                    # Create the 4x4 transformation matrix
+                    transformation_matrix = np.eye(4)
+                    transformation_matrix[:3, :3] = np.column_stack((x_dir, y_dir, z_dir))
+                    transformation_matrix[:3, 3] = origin - bbox_center
+
+                    # Apply the transformation to the bounding box
+                    bounding_box_mesh = bounding_box_mesh.transform(transformation_matrix)
+
+                    # Apply the inverse rotation to the refined mesh points
+                    inverse_transformation_matrix = np.linalg.inv(transformation_matrix)
+                    transformed_points = pv.PolyData(refined_mesh.points).transform(
+                        inverse_transformation_matrix).points
+
+                    # Define axis-aligned bounding box (AABB) in the transformed space
+                    transformed_bbox_min = bbox_center - bbox_lengths / 2
+                    transformed_bbox_max = bbox_center + bbox_lengths / 2
+
+                    # Filter points that lie within the AABB
+                    mask = (
+                            (transformed_points[:, 0] >= transformed_bbox_min[0]) & (
+                            transformed_points[:, 0] <= transformed_bbox_max[0]) &
+                            (transformed_points[:, 1] >= transformed_bbox_min[1]) & (
+                                    transformed_points[:, 1] <= transformed_bbox_max[1]) &
+                            (transformed_points[:, 2] >= transformed_bbox_min[2]) & (
+                                    transformed_points[:, 2] <= transformed_bbox_max[2])
+                    )
+
+                    selected_points = refined_mesh.extract_points(mask)
+
+                    # Calculate the average strain in the bounding box
+                    average_strain = selected_points['Strain [µε]'].mean()
+
+                    # Visualize the bounding box as a wireframe
+                    self.plotter.add_mesh(bounding_box_mesh, color='red', style='wireframe', line_width=5)
+
+                    # Visualize the selected points inside the rotated bounding box
+                    self.plotter.add_mesh(selected_points, color='yellow', point_size=10, render_points_as_spheres=True)
+
+                    # Add a 3D label at the center of the bounding box
+                    label_text = f"Average Strain: {average_strain:.4f} µε"
+                    bbox_center_rotated = bounding_box_mesh.center
+
+                    self.plotter.add_point_labels(
+                        [bbox_center_rotated], [label_text],
+                        point_size=0, font_size=24, text_color='white', shape='rect',
+                        always_visible=True
+                    )
+
             # Setting the properties of the scalar bar
             self.sargs = dict(title="Strain [µε]", height=0.7, width=0.05, vertical=True, position_x=0.03,
                                               position_y=0.2, n_labels=10,
@@ -340,46 +441,6 @@ class VTKWidget(QWidget):
             # Set the visibility of the original points based on the checkbox state
             if not self.checkbox_points.isChecked():
                 self.polydata_actor.VisibilityOff()
-
-            # Check if the corresponding bounding box exists
-            bounding_box_key = display_name.replace("SG_Ch_", "SG_Grid_Body_")
-            if self.bounding_boxes and bounding_box_key in self.bounding_boxes:
-                bounding_box = self.bounding_boxes[bounding_box_key]
-
-                # Create a bounding box in PyVista
-                bbox_center = bounding_box['center']
-                bbox_lengths = bounding_box['lengths']
-                bounding_box_mesh = pv.Cube(center=bbox_center, x_length=bbox_lengths[0], y_length=bbox_lengths[1],
-                                            z_length=bbox_lengths[2])
-
-                # Filter the refined mesh within the bounding box
-                mask = (
-                        (refined_mesh.points[:, 0] >= bbox_center[0] - bbox_lengths[0] / 2) & (
-                        refined_mesh.points[:, 0] <= bbox_center[0] + bbox_lengths[0] / 2) &
-                        (refined_mesh.points[:, 1] >= bbox_center[1] - bbox_lengths[1] / 2) & (
-                                refined_mesh.points[:, 1] <= bbox_center[1] + bbox_lengths[1] / 2) &
-                        (refined_mesh.points[:, 2] >= bbox_center[2] - bbox_lengths[2] / 2) & (
-                                refined_mesh.points[:, 2] <= bbox_center[2] + bbox_lengths[2] / 2)
-                )
-                selected_refined_mesh = refined_mesh.extract_points(mask)
-
-                # Calculate the average strain in the bounding box
-                average_strain = selected_refined_mesh['Strain [µε]'].mean()
-
-                # Visualize the bounding box as a wireframe
-                self.plotter.add_mesh(bounding_box_mesh, color='red', style='wireframe', line_width=5)
-
-                # Visualize the selected points inside the bounding box
-                self.plotter.add_mesh(selected_refined_mesh, color='yellow', point_size=10,
-                                      render_points_as_spheres=True)
-
-                # Add a 3D label at the center of the bounding box with simple styling
-                label_text = f"Average Strain: {average_strain:.4f} µε"
-                self.plotter.add_point_labels(
-                    [bbox_center], [label_text],
-                    point_size=0, font_size=24, text_color='white', shape='rect',
-                    always_visible=True  # Ensure the label is visible from all angles
-                )
 
             # Add the global origin
             self.plotter.add_axes_at_origin(labels_off=True, line_width=3)
