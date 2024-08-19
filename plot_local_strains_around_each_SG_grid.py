@@ -233,7 +233,7 @@ class VTKWidget(QWidget):
 
         # Add non-editable QSpinBox for subdivide level
         self.subdivide_spinbox = QSpinBox()
-        self.subdivide_spinbox.setRange(1, 10)
+        self.subdivide_spinbox.setRange(1, 8)
         self.subdivide_spinbox.setValue(4)  # Default value
         self.subdivide_spinbox.setFixedWidth(60)
         self.subdivide_spinbox.setFocusPolicy(Qt.NoFocus)
@@ -257,7 +257,7 @@ class VTKWidget(QWidget):
         h_layout_2.addWidget(self.checkbox_axes)
 
         # Checkbox for show_edges option
-        self.checkbox_show_edges = QCheckBox("Show Edges on Refined Mesh")
+        self.checkbox_show_edges = QCheckBox("Show Mesh")
         self.checkbox_show_edges.setChecked(False)
         self.checkbox_show_edges.stateChanged.connect(self.toggleShowEdges)
         h_layout_2.addWidget(self.checkbox_show_edges)
@@ -561,7 +561,7 @@ class VTKWidget(QWidget):
 
             # Add the surface mesh to the plotter
             self.refined_mesh_actor = self.plotter.add_mesh(refined_mesh, scalars='Strain [µε]', cmap='turbo', opacity=0.99, clim=initial_clim,
-                                  scalar_bar_args=self.sargs, show_edges=False) # TODO - Make this line work
+                                  scalar_bar_args=self.sargs, show_edges=self.checkbox_show_edges.isChecked()) # TODO - Make this line work
 
             # Set the visibility of the original points based on the checkbox state
             if not self.checkbox_points.isChecked():
