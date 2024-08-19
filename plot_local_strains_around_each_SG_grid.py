@@ -4,7 +4,7 @@ import os
 import numpy as np
 import pandas as pd
 from PyQt5.QtWidgets import QApplication, QMainWindow, QTabWidget, QWidget, QVBoxLayout, QHBoxLayout, QFileDialog, \
-    QComboBox, QLabel, QCheckBox, QMessageBox, QGroupBox
+    QComboBox, QLabel, QCheckBox, QMessageBox, QGroupBox, QSlider, QSpinBox
 from PyQt5.QtCore import Qt
 from scipy.interpolate import griddata
 import pyvista as pv
@@ -40,6 +40,53 @@ class MainWindow(QMainWindow):
             sys.exit(1)
 
     def initSettingsTab(self):
+
+        # Apply a modern stylesheet to the settings tab
+        self.setStyleSheet("""
+            QGroupBox {
+                font: bold;
+                border: 1px solid gray;
+                border-radius: 9px;
+                margin-top: 10px;
+                padding: 10px;
+                background-color: #f0f0f0;
+            }
+            QGroupBox::title {
+                subcontrol-origin: margin;
+                subcontrol-position: top left;
+                padding: 0 3px;
+                border-radius: 5px;
+            }
+            QLabel {
+                font-size: 12px;
+            }
+            QSlider {
+                background: #dedede;
+                border-radius: 5px;
+                height: 10px;
+            }
+            QSlider::groove:horizontal {
+                height: 6px;
+                background: #c0c0c0;
+                border-radius: 3px;
+            }
+            QSlider::handle:horizontal {
+                background: #5e5e5e;
+                border: 1px solid #5e5e5e;
+                width: 14px;
+                margin: -5px 0;
+                border-radius: 7px;
+            }
+            QCheckBox {
+                font-size: 12px;
+                padding: 5px;
+            }
+            QCheckBox::indicator {
+                width: 15px;
+                height: 15px;
+            }
+        """)
+
         layout = QVBoxLayout()
 
         self.checkbox_stl = QCheckBox("Show STL")
@@ -53,8 +100,8 @@ class MainWindow(QMainWindow):
         self.stl_comboBox = QComboBox()
         self.stl_comboBox.currentIndexChanged.connect(self.updateSTL)
         self.stl_file_label = QLabel("Select a file from the working folder:")
-        h_layout_stl_file.addWidget(self.stl_comboBox)
         h_layout_stl_file.addWidget(self.stl_file_label)
+        h_layout_stl_file.addWidget(self.stl_comboBox)
         stl_layout.addLayout(h_layout_stl_file)
 
         h_layout_scale = QHBoxLayout()
@@ -71,6 +118,40 @@ class MainWindow(QMainWindow):
         self.stl_groupbox.setLayout(stl_layout)
         self.stl_groupbox.hide()  # Initially hide the STL settings groupbox
         layout.addWidget(self.stl_groupbox)
+
+        # Add Graphics Settings group box
+        self.graphics_groupbox = QGroupBox("Graphics Settings")
+        graphics_layout = QVBoxLayout()
+
+        # Opacity slider for refined_mesh
+        self.refined_mesh_opacity_slider = QSlider(Qt.Horizontal)
+        self.refined_mesh_opacity_slider.setRange(0, 100)
+        self.refined_mesh_opacity_slider.setValue(100)
+        self.refined_mesh_opacity_slider.setToolTip("Set opacity for refined mesh")
+        self.refined_mesh_opacity_slider.valueChanged.connect(self.updateRefinedMeshOpacity)
+        graphics_layout.addWidget(QLabel("Refined Mesh Opacity"))
+        graphics_layout.addWidget(self.refined_mesh_opacity_slider)
+
+        # Opacity slider for stl_actor
+        self.stl_opacity_slider = QSlider(Qt.Horizontal)
+        self.stl_opacity_slider.setRange(0, 100)
+        self.stl_opacity_slider.setValue(100)
+        self.stl_opacity_slider.setToolTip("Set opacity for STL actor")
+        self.stl_opacity_slider.valueChanged.connect(self.updateSTLOpacity)
+        graphics_layout.addWidget(QLabel("STL Opacity"))
+        graphics_layout.addWidget(self.stl_opacity_slider)
+
+        # Opacity slider for selected_points
+        self.selected_points_opacity_slider = QSlider(Qt.Horizontal)
+        self.selected_points_opacity_slider.setRange(0, 100)
+        self.selected_points_opacity_slider.setValue(100)
+        self.selected_points_opacity_slider.setToolTip("Set opacity for selected points")
+        self.selected_points_opacity_slider.valueChanged.connect(self.updateSelectedPointsOpacity)
+        graphics_layout.addWidget(QLabel("Selected Points Opacity"))
+        graphics_layout.addWidget(self.selected_points_opacity_slider)
+
+        self.graphics_groupbox.setLayout(graphics_layout)
+        layout.addWidget(self.graphics_groupbox)
 
         self.settings_widget.setLayout(layout)
 
@@ -114,6 +195,23 @@ class MainWindow(QMainWindow):
             self.checkbox_stl.setChecked(False)
             self.checkbox_stl.setEnabled(False)
 
+    def updateRefinedMeshOpacity(self, value):
+        opacity = value / 100.0
+        if self.vtk_widget.refined_mesh_actor:
+            self.vtk_widget.refined_mesh_actor.GetProperty().SetOpacity(opacity)
+            self.vtk_widget.plotter.render()
+
+    def updateSTLOpacity(self, value):
+        opacity = value / 100.0
+        if self.vtk_widget.stl_actor:
+            self.vtk_widget.stl_actor.GetProperty().SetOpacity(opacity)
+            self.vtk_widget.plotter.render()
+
+    def updateSelectedPointsOpacity(self, value):
+        opacity = value / 100.0
+        if self.vtk_widget.selected_points_actor:
+            self.vtk_widget.selected_points_actor.GetProperty().SetOpacity(opacity)
+            self.vtk_widget.plotter.render()
 
 class VTKWidget(QWidget):
 
@@ -121,31 +219,54 @@ class VTKWidget(QWidget):
         super().__init__()
         self.main_window = main_window
         self.first_channel_plot = True
+        self.refined_mesh_actor = None
+        self.selected_points_actor = None
 
         layout = QVBoxLayout()
 
-        h_layout = QHBoxLayout()
+        h_layout_1 = QHBoxLayout()
         self.label = QLabel("Select a channel:")
         self.comboBox = QComboBox()
         self.comboBox.currentIndexChanged.connect(self.updatePlot)
-        h_layout.addWidget(self.label)
-        h_layout.addWidget(self.comboBox)
+        h_layout_1.addWidget(self.label)
+        h_layout_1.addWidget(self.comboBox)
+
+        # Add non-editable QSpinBox for subdivide level
+        self.subdivide_spinbox = QSpinBox()
+        self.subdivide_spinbox.setRange(1, 10)
+        self.subdivide_spinbox.setValue(4)  # Default value
+        self.subdivide_spinbox.setFixedWidth(60)
+        self.subdivide_spinbox.setFocusPolicy(Qt.NoFocus)
+        self.subdivide_spinbox.valueChanged.connect(self.updatePlot)
+        h_layout_1.addWidget(QLabel("Remesh Level (1 to 10):"))
+        h_layout_1.addWidget(self.subdivide_spinbox)
+
+        # Add the top horizontal layout to the main layout
+        layout.addLayout(h_layout_1)
+
+        # Create a horizontal layout for the checkboxes
+        h_layout_2 = QHBoxLayout()
 
         self.checkbox_points = QCheckBox("Display Original Points")
         self.checkbox_points.stateChanged.connect(self.togglePointsVisibility)
-        h_layout.addWidget(self.checkbox_points)
+        h_layout_2.addWidget(self.checkbox_points)
 
         self.checkbox_axes = QCheckBox("Display Local Axis")
         self.checkbox_axes.setChecked(True)
         self.checkbox_axes.stateChanged.connect(self.toggleAxesVisibility)
-        h_layout.addWidget(self.checkbox_axes)
+        h_layout_2.addWidget(self.checkbox_axes)
 
-        layout.addLayout(h_layout)
+        # Checkbox for show_edges option
+        self.checkbox_show_edges = QCheckBox("Show Edges on Refined Mesh")
+        self.checkbox_show_edges.setChecked(False)
+        self.checkbox_show_edges.stateChanged.connect(self.toggleShowEdges)
+        h_layout_2.addWidget(self.checkbox_show_edges)
+
+        # Add the top horizontal layout to the main layout
+        layout.addLayout(h_layout_2)
 
         self.plotter = BackgroundPlotter(show=False)  # Initialize the PyVista plotter
-
         self.set_mouse_rotation_behavior()
-
         layout.addWidget(self.plotter.interactor)
 
         self.setLayout(layout)
@@ -191,7 +312,7 @@ class VTKWidget(QWidget):
             self.sg_data = pd.read_csv(sg_file_path)
 
         # Load bounding boxes from SG_grid_body_vertices.csv
-        vertices_file_path = os.path.join(folder_path, "SG_grid_body_vertices.csv")
+        vertices_file_path = os.path.join(folder_path, "SG_grid_body_vertices_in_local_CS.csv")
         if os.path.exists(vertices_file_path):
             grid_bodies = self._parse_sg_grid_body_vertices(vertices_file_path)
             global_bounding_boxes = self._calculate_global_bounding_boxes(grid_bodies)
@@ -232,7 +353,7 @@ class VTKWidget(QWidget):
             self.comboBox.setCurrentIndex(0)
 
     def _parse_sg_grid_body_vertices(self, file_path):
-        """Parses the SG_grid_body_vertices.csv file to extract the vertices of each SG grid body."""
+        """Parses the SG_grid_body_vertices_in_local_CS.csv file to extract the vertices of each SG grid body."""
         grid_bodies = {}
 
         with open(file_path, mode='r') as file:
@@ -240,9 +361,9 @@ class VTKWidget(QWidget):
             for row in reader:
                 body_name = row['Body_Name']
                 vertex = (
-                    float(row['X [mm]']),
-                    float(row['Y [mm]']),
-                    float(row['Z [mm]'])
+                    float(row['X_local [mm]']),
+                    float(row['Y_local [mm]']),
+                    float(row['Z_local [mm]'])
                 )
                 if body_name not in grid_bodies:
                     grid_bodies[body_name] = []
@@ -294,8 +415,8 @@ class VTKWidget(QWidget):
                 # Transformation matrix from global to local coordinates
                 transformation_matrix = np.column_stack((x_dir, y_dir, z_dir))
 
-                # Apply transformation: Translate to origin, then rotate
-                local_center = np.linalg.inv(transformation_matrix).dot(bbox['center'] - origin)
+                # Apply transformation: Rotation
+                local_center = np.linalg.inv(transformation_matrix).dot(bbox['center'])
                 local_lengths = bbox['lengths']  # Lengths remain unchanged since they are magnitudes
 
                 transformed_bounding_boxes[body_name] = {
@@ -356,8 +477,11 @@ class VTKWidget(QWidget):
             mesh = mesh.delaunay_2d()
             mesh.point_data['Strain [µε]'] = strain
 
+            # Get the subdivide level from the spinbox
+            subdivide_level = self.subdivide_spinbox.value()
+
             # Subdivide the mesh to increase resolution
-            refined_mesh = mesh.subdivide(3, subfilter='linear')
+            refined_mesh = mesh.subdivide(subdivide_level, subfilter='linear')
             refined_mesh = refined_mesh.sample(mesh)
 
             # Apply bounding box filtering if the bounding box exists for this channel
@@ -417,16 +541,17 @@ class VTKWidget(QWidget):
                     self.plotter.add_mesh(bounding_box_mesh, color='red', style='wireframe', line_width=5)
 
                     # Visualize the selected points inside the rotated bounding box
-                    self.plotter.add_mesh(selected_points, color='yellow', point_size=10, render_points_as_spheres=True)
+                    self.selected_points_actor = self.plotter.add_mesh(selected_points, color='yellow', point_size=10,
+                                          render_points_as_spheres=True, opacity=1)
 
                     # Add a 3D label at the center of the bounding box
-                    label_text = f"Average Strain: {average_strain:.4f} µε"
+                    label_text = f"Strain (Avg.): {average_strain:.4f} µε"
                     bbox_center_rotated = bounding_box_mesh.center
 
                     self.plotter.add_point_labels(
                         [bbox_center_rotated], [label_text],
-                        point_size=0, font_size=24, text_color='white', shape='rect',
-                        always_visible=True
+                        point_size=0, font_size=12, text_color='black', shape='rounded_rect', margin=5,
+                        always_visible=True, shape_opacity=0.8, shape_color="#F5F5DC"
                     )
 
             # Setting the properties of the scalar bar
@@ -435,8 +560,8 @@ class VTKWidget(QWidget):
                                               title_font_size=10, label_font_size=10)
 
             # Add the surface mesh to the plotter
-            self.plotter.add_mesh(refined_mesh, scalars='Strain [µε]', cmap='turbo', opacity=0.8, clim=initial_clim,
-                                  scalar_bar_args=self.sargs, show_edges=True) # TODO - Make this line work
+            self.refined_mesh_actor = self.plotter.add_mesh(refined_mesh, scalars='Strain [µε]', cmap='turbo', opacity=0.99, clim=initial_clim,
+                                  scalar_bar_args=self.sargs, show_edges=False) # TODO - Make this line work
 
             # Set the visibility of the original points based on the checkbox state
             if not self.checkbox_points.isChecked():
@@ -489,6 +614,12 @@ class VTKWidget(QWidget):
         else:
             self.hide_axes(selected_display_name)
 
+    def toggleShowEdges(self, state):
+        show_edges = state == Qt.Checked
+        if self.refined_mesh_actor:
+            self.refined_mesh_actor.GetProperty().SetEdgeVisibility(show_edges)
+            self.plotter.render()
+
     def show_axes(self, display_name):
         # Create and add the SG axes at the origin
         scale_factor_arrow = 4
@@ -529,7 +660,7 @@ class VTKWidget(QWidget):
             if self.stl_actor is not None:
                 self.plotter.remove_actor(self.stl_actor)
 
-            self.stl_actor = self.plotter.add_mesh(stl_mesh, color="white", opacity=0.99)  # Set opacity to 50%
+            self.stl_actor = self.plotter.add_mesh(stl_mesh, color="white", opacity=0.65)  # Set opacity to 50%
 
             #print(f"STL actor added: {self.stl_actor}")
             self.plotter.render()
