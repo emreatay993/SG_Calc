@@ -41,7 +41,7 @@ class MainWindow(QMainWindow):
 
     def initSettingsTab(self):
 
-        # Apply a modern stylesheet to the settings tab
+        # Apply a stylesheet to widgets etc.
         self.setStyleSheet("""
             QGroupBox {
                 font: bold;
@@ -107,7 +107,7 @@ class MainWindow(QMainWindow):
         h_layout_scale = QHBoxLayout()
         self.scale_label = QLabel("STL Scale Factor:")
         self.scale_factor_input = QComboBox()
-        self.scale_factor_input.setEditable(True)  # Make the combobox editable
+        self.scale_factor_input.setEditable(True)
         self.scale_factor_input.addItems(["0.001", "0.01", "0.1", "1", "10","100","1000"])
         self.scale_factor_input.setCurrentText("999")
         self.scale_factor_input.editTextChanged.connect(self.validateScaleFactor)
@@ -116,7 +116,7 @@ class MainWindow(QMainWindow):
         stl_layout.addLayout(h_layout_scale)
 
         self.stl_groupbox.setLayout(stl_layout)
-        self.stl_groupbox.hide()  # Initially hide the STL settings groupbox
+        self.stl_groupbox.hide() 
         layout.addWidget(self.stl_groupbox)
 
         # Add Graphics Settings group box
@@ -152,7 +152,7 @@ class MainWindow(QMainWindow):
 
         # Add a checkbox for centering the camera around the rotation center
         self.center_camera_checkbox = QCheckBox("Position the screen around the rotation center")
-        self.center_camera_checkbox.setChecked(True)  # Default to checked (on)
+        self.center_camera_checkbox.setChecked(True)
         self.center_camera_checkbox.stateChanged.connect(self.vtk_widget.toggleCenterCamera)
         graphics_layout.addWidget(self.center_camera_checkbox)
 
@@ -168,11 +168,11 @@ class MainWindow(QMainWindow):
                 raise ValueError("Scale factor must be positive.")
 
             adjusted_value = value
-            self.scale_factor_input.blockSignals(True)  # Temporarily block signals to avoid recursive updates
+            self.scale_factor_input.blockSignals(True)
             self.scale_factor_input.setCurrentText(str(adjusted_value))
-            self.scale_factor_input.blockSignals(False)  # Re-enable signals
+            self.scale_factor_input.blockSignals(False) 
         except ValueError:
-            self.scale_factor_input.setCurrentText("999")  # Revert to 1000 if the input is not valid
+            self.scale_factor_input.setCurrentText("999")
 
     def toggleSTLVisibility(self, state):
         if state == Qt.Checked:
@@ -195,8 +195,8 @@ class MainWindow(QMainWindow):
         if stl_files:
             self.stl_comboBox.addItems(stl_files)
             self.stl_comboBox.setCurrentIndex(0)
-            self.checkbox_stl.setChecked(True)  # Check the checkbox if STL files are found
-            self.stl_comboBox.show()  # Show the combobox if STL files are found
+            self.checkbox_stl.setChecked(True) 
+            self.stl_comboBox.show()
         else:
             self.checkbox_stl.setChecked(False)
             self.checkbox_stl.setEnabled(False)
