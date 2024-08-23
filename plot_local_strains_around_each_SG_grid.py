@@ -150,6 +150,12 @@ class MainWindow(QMainWindow):
         graphics_layout.addWidget(QLabel("Selected Points Opacity"))
         graphics_layout.addWidget(self.selected_points_opacity_slider)
 
+        # Add a checkbox for centering the camera around the rotation center
+        self.center_camera_checkbox = QCheckBox("Position the screen around the rotation center")
+        self.center_camera_checkbox.setChecked(False)  # Default to checked (on)
+        self.center_camera_checkbox.stateChanged.connect(self.vtk_widget.toggleCenterCamera)
+        graphics_layout.addWidget(self.center_camera_checkbox)
+
         self.graphics_groupbox.setLayout(graphics_layout)
         layout.addWidget(self.graphics_groupbox)
 
@@ -311,6 +317,27 @@ class VTKWidget(QWidget):
         self.plotter.show_axes()
 
         self.bounding_boxes = None
+        self.rotation_sphere_actor = None
+        self.center_camera = True
+
+    def add_sphere_at_click(self, pick_position):
+        """Adds a sphere at the given pick position."""
+        if pick_position:
+            # Add a new sphere at the clicked position
+            sphere = pv.Sphere(radius=2, center=pick_position)
+            self.rotation_sphere_actor = self.plotter.add_mesh(sphere, color="blue")
+            self.plotter.render()
+
+    def remove_sphere(self):
+        """Removes the sphere if it exists."""
+        if self.rotation_sphere_actor is not None:
+            self.plotter.remove_actor(self.rotation_sphere_actor)
+            self.rotation_sphere_actor = None
+            self.plotter.render()
+
+    def toggleCenterCamera(self, state):
+        """Enable or disable centering the screen around the rotation center."""
+        self.center_camera = (state == Qt.Checked)
 
     def set_mouse_rotation_behavior(self):
         """Customizes mouse rotation to use the clicked point as the center of rotation."""
@@ -325,6 +352,10 @@ class VTKWidget(QWidget):
             pick_position = picker.GetPickPosition()
 
             if pick_position:
+                # Call the method to add a sphere at the pick position
+                self.add_sphere_at_click(pick_position)
+
+            if self.center_camera:  # Only center the camera if the checkbox is checked
                 # Set the focal point to the click position
                 self.plotter.camera.focal_point = pick_position
                 self.plotter.render()
@@ -332,8 +363,19 @@ class VTKWidget(QWidget):
             # Call the superclass method to handle the event normally
             interactor.GetInteractorStyle().OnLeftButtonDown()
 
+        def on_left_button_up(interactor, event):
+            # Call the method to remove the sphere
+            self.remove_sphere()
+
+            # Call the superclass method to handle the event normally
+            interactor.GetInteractorStyle().OnLeftButtonUp()
+
         # Set the custom interaction behavior
         self.plotter.interactor.AddObserver("LeftButtonPressEvent", on_left_button_down)
+        self.plotter.interactor.AddObserver("EndInteractionEvent", on_left_button_up)
+
+        # Explicitly set interaction style back after observers
+        self.plotter.interactor.SetInteractorStyle(self.plotter.interactor.GetInteractorStyle())
 
     def processFolder(self, folder_path):
         self.folder_path = folder_path
