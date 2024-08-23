@@ -116,7 +116,7 @@ class MainWindow(QMainWindow):
         stl_layout.addLayout(h_layout_scale)
 
         self.stl_groupbox.setLayout(stl_layout)
-        self.stl_groupbox.hide() 
+        self.stl_groupbox.hide()
         layout.addWidget(self.stl_groupbox)
 
         # Add Graphics Settings group box
@@ -170,7 +170,7 @@ class MainWindow(QMainWindow):
             adjusted_value = value
             self.scale_factor_input.blockSignals(True)
             self.scale_factor_input.setCurrentText(str(adjusted_value))
-            self.scale_factor_input.blockSignals(False) 
+            self.scale_factor_input.blockSignals(False)
         except ValueError:
             self.scale_factor_input.setCurrentText("999")
 
@@ -195,7 +195,7 @@ class MainWindow(QMainWindow):
         if stl_files:
             self.stl_comboBox.addItems(stl_files)
             self.stl_comboBox.setCurrentIndex(0)
-            self.checkbox_stl.setChecked(True) 
+            self.checkbox_stl.setChecked(True)
             self.stl_comboBox.show()
         else:
             self.checkbox_stl.setChecked(False)
@@ -224,7 +224,6 @@ class VTKWidget(QWidget):
     def __init__(self, main_window):
         super().__init__()
         self.main_window = main_window
-        self.first_channel_plot = True
         self.refined_mesh_actor = None
         self.selected_points_actor = None
 
@@ -506,13 +505,10 @@ class VTKWidget(QWidget):
 
     def plotData(self, data, display_name):
         try:
-            # Store the current camera settings if not the first actual channel plot
-            if not self.first_channel_plot:
-                camera_position = self.plotter.camera.position
-                camera_focal_point = self.plotter.camera.focal_point
-                camera_clipping_range = self.plotter.camera.clipping_range
-            else:
-                camera_position = None
+            camera_position = self.plotter.camera.position
+            camera_focal_point = self.plotter.camera.focal_point
+            camera_clipping_range = self.plotter.camera.clipping_range
+
 
             # Clear all plotter except the STL actor
             actors_to_remove = [actor for actor in self.plotter.renderer.actors.values() if actor != self.stl_actor]
@@ -666,17 +662,13 @@ class VTKWidget(QWidget):
             if self.checkbox_axes.isChecked():
                 self.show_axes(display_name)
 
-            # Restore the camera settings if they were set previously and this is not the first channel plot
-            if camera_position is not None:
-                self.plotter.camera.position = camera_position
-                self.plotter.camera.focal_point = camera_focal_point
-                self.plotter.camera.clipping_range = camera_clipping_range
+            self.plotter.camera.position = camera_position
+            self.plotter.camera.focal_point = camera_focal_point
+            self.plotter.camera.clipping_range = camera_clipping_range
 
-                # Render the plot
-                self.plotter.show()
-
-            # Mark the first channel plot as complete
-            self.first_channel_plot = False
+            # Render the plot
+            self.plotter.view_isometric()
+            self.plotter.show()
 
         except Exception as e:
             print(e)
