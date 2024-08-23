@@ -4,7 +4,7 @@ import os
 import numpy as np
 import pandas as pd
 from PyQt5.QtWidgets import QApplication, QMainWindow, QTabWidget, QWidget, QVBoxLayout, QHBoxLayout, QFileDialog, \
-    QComboBox, QLabel, QCheckBox, QMessageBox, QGroupBox, QSlider, QSpinBox
+    QComboBox, QLabel, QCheckBox, QMessageBox, QGroupBox, QSlider, QSpinBox, QDoubleSpinBox
 from PyQt5.QtCore import Qt
 from scipy.interpolate import griddata
 import pyvista as pv
@@ -222,6 +222,15 @@ class VTKWidget(QWidget):
         self.refined_mesh_actor = None
         self.selected_points_actor = None
 
+        # Initialize the directional vectors for the local coordinate system
+        self.x_dir = None
+        self.y_dir = None
+        self.z_dir = None
+
+        # Initialize bounding box offsets
+        self.bounding_box_offset_x = 0.0
+        self.bounding_box_offset_y = 0.0
+
         layout = QVBoxLayout()
 
         h_layout_1 = QHBoxLayout()
@@ -264,6 +273,28 @@ class VTKWidget(QWidget):
 
         # Add the top horizontal layout to the main layout
         layout.addLayout(h_layout_2)
+
+        h_layout_3 = QHBoxLayout()
+
+        self.label_offset_x = QLabel("X Offset:")
+        self.offset_x_spinbox = QDoubleSpinBox()
+        self.offset_x_spinbox.setRange(-50, 50)
+        self.offset_x_spinbox.setValue(0)
+        self.offset_x_spinbox.setSingleStep(0.2)
+        self.offset_x_spinbox.valueChanged.connect(self.updateBoundingBoxPosition)
+        h_layout_3.addWidget(self.label_offset_x)
+        h_layout_3.addWidget(self.offset_x_spinbox)
+
+        self.label_offset_y = QLabel("Y Offset:")
+        self.offset_y_spinbox = QDoubleSpinBox()
+        self.offset_y_spinbox.setRange(-50, 50)
+        self.offset_y_spinbox.setValue(0)
+        self.offset_y_spinbox.setSingleStep(0.2)
+        self.offset_y_spinbox.valueChanged.connect(self.updateBoundingBoxPosition)
+        h_layout_3.addWidget(self.label_offset_y)
+        h_layout_3.addWidget(self.offset_y_spinbox)
+
+        layout.addLayout(h_layout_3)
 
         self.plotter = BackgroundPlotter(show=False)  # Initialize the PyVista plotter
         self.set_mouse_rotation_behavior()
@@ -453,9 +484,21 @@ class VTKWidget(QWidget):
             nodes = np.c_[x.ravel(), y.ravel(), z.ravel()]
             strain = (data['Normal Elastic Strain (mm/mm)'].values) * 1e6
 
-            # Apply bounding box filtering if the bounding box exists for this channel
-            # Convert display_name to match the bounding box key format
-            bounding_box_key = display_name.replace("SG_Ch_", "SG_Grid_Body_")
+            # Retrieve the local coordinate system from the SG data
+            sg_row = self.sg_data[self.sg_data['CS Name'] == f"CS_{display_name}"]
+            if not sg_row.empty:
+                self.origin = sg_row[['Origin_X', 'Origin_Y', 'Origin_Z']].values.flatten()
+                self.x_dir = sg_row[['X_dir_i', 'X_dir_j', 'X_dir_k']].values.flatten()
+                self.y_dir = sg_row[['Y_dir_i', 'Y_dir_j', 'Y_dir_k']].values.flatten()
+                self.z_dir = sg_row[['Z_dir_i', 'Z_dir_j', 'Z_dir_k']].values.flatten()
+
+                # Normalize the directional vectors
+                self.x_dir /= np.linalg.norm(self.x_dir)
+                self.y_dir /= np.linalg.norm(self.y_dir)
+                self.z_dir /= np.linalg.norm(self.z_dir)
+            else:
+                # Handle the case where SG data is not found
+                raise ValueError(f"SG data for {display_name} not found.")
 
             # Create a PyVista PolyData for the original points
             points = np.vstack((x, y, z)).T
@@ -497,43 +540,46 @@ class VTKWidget(QWidget):
                 bounding_box_mesh = pv.Cube(center=bbox_center, x_length=bbox_lengths[0], y_length=bbox_lengths[1],
                                             z_length=bbox_lengths[2])
 
-                # Retrieve the local coordinate system
-                sg_row = self.sg_data[self.sg_data['CS Name'] == f"CS_{display_name}"]
-                if not sg_row.empty:
-                    origin = sg_row[['Origin_X', 'Origin_Y', 'Origin_Z']].values.flatten()
-                    x_dir = sg_row[['X_dir_i', 'X_dir_j', 'X_dir_k']].values.flatten()
-                    y_dir = sg_row[['Y_dir_i', 'Y_dir_j', 'Y_dir_k']].values.flatten()
-                    z_dir = sg_row[['Z_dir_i', 'Z_dir_j', 'Z_dir_k']].values.flatten()
+                # Calculate the translation vector in the local coordinate system
+                translation_vector = self.bounding_box_offset_x * np.array([1, 0, 0]) + self.bounding_box_offset_y * np.array([0, 1, 0])
 
-                    # Create the 4x4 transformation matrix
-                    transformation_matrix = np.eye(4)
-                    transformation_matrix[:3, :3] = np.column_stack((x_dir, y_dir, z_dir))
-                    transformation_matrix[:3, 3] = origin - bbox_center
+                # Translate the entire bounding box along the local axes
+                bounding_box_mesh.translate(translation_vector, inplace=True)
 
-                    # Apply the transformation to the bounding box
-                    bounding_box_mesh = bounding_box_mesh.transform(transformation_matrix)
+                # Create the 4x4 transformation matrix
+                transformation_matrix = np.eye(4)
+                transformation_matrix[:3, :3] = np.column_stack((self.x_dir, self.y_dir, self.z_dir))
+                transformation_matrix[:3, 3] = self.origin - bbox_center
 
-                    # Apply the inverse rotation to the refined mesh points
-                    inverse_transformation_matrix = np.linalg.inv(transformation_matrix)
-                    transformed_points = pv.PolyData(refined_mesh.points).transform(
-                        inverse_transformation_matrix).points
+                # Apply the transformation to the bounding box
+                bounding_box_mesh = bounding_box_mesh.transform(transformation_matrix)
 
-                    # Define axis-aligned bounding box (AABB) in the transformed space
-                    transformed_bbox_min = bbox_center - bbox_lengths / 2
-                    transformed_bbox_max = bbox_center + bbox_lengths / 2
+                # Apply the inverse rotation to the refined mesh points
+                inverse_transformation_matrix = np.linalg.inv(transformation_matrix)
+                transformed_points = pv.PolyData(refined_mesh.points).transform(
+                    inverse_transformation_matrix).points
 
-                    # Filter points that lie within the AABB
-                    mask = (
-                            (transformed_points[:, 0] >= transformed_bbox_min[0]) & (
-                            transformed_points[:, 0] <= transformed_bbox_max[0]) &
-                            (transformed_points[:, 1] >= transformed_bbox_min[1]) & (
-                                    transformed_points[:, 1] <= transformed_bbox_max[1]) &
-                            (transformed_points[:, 2] >= transformed_bbox_min[2]) & (
-                                    transformed_points[:, 2] <= transformed_bbox_max[2])
-                    )
+                # Apply the inverse translation the refined mesh points
+                transformed_points -= translation_vector
 
-                    selected_points = refined_mesh.extract_points(mask)
+                # Define axis-aligned bounding box (AABB) in the transformed space
+                transformed_bbox_min = bbox_center - bbox_lengths / 2
+                transformed_bbox_max = bbox_center + bbox_lengths / 2
 
+                # Filter points that lie within the AABB
+                mask = (
+                        (transformed_points[:, 0] >= transformed_bbox_min[0]) & (
+                        transformed_points[:, 0] <= transformed_bbox_max[0]) &
+                        (transformed_points[:, 1] >= transformed_bbox_min[1]) & (
+                                transformed_points[:, 1] <= transformed_bbox_max[1]) &
+                        (transformed_points[:, 2] >= transformed_bbox_min[2]) & (
+                                transformed_points[:, 2] <= transformed_bbox_max[2])
+                )
+
+                # Calculate the average strain in the bounding box
+                selected_points = refined_mesh.extract_points(mask)
+
+                if selected_points.n_points > 0:
                     # Calculate the average strain in the bounding box
                     average_strain = selected_points['Strain [µε]'].mean()
 
@@ -553,6 +599,10 @@ class VTKWidget(QWidget):
                         point_size=0, font_size=12, text_color='black', shape='rounded_rect', margin=5,
                         always_visible=True, shape_opacity=0.8, shape_color="#F5F5DC"
                     )
+                else:
+                    QMessageBox.warning(self, "Bounding Box Error",
+                                        "No points found within the bounding box. Average strain cannot be calculated.")
+                    return
 
             # Setting the properties of the scalar bar
             self.sargs = dict(title="Strain [µε]", height=0.7, width=0.05, vertical=True, position_x=0.03,
@@ -570,18 +620,9 @@ class VTKWidget(QWidget):
             # Add the global origin
             self.plotter.add_axes_at_origin(labels_off=True, line_width=3)
 
-            # Define the origin and directional vectors for the SG axes based on SG_coordinate_matrix.csv
-            if self.sg_data is not None:
-                sg_row = self.sg_data[self.sg_data['CS Name'] == f"CS_{display_name}"]
-                if not sg_row.empty:
-                    self.origin = sg_row[['Origin_X', 'Origin_Y', 'Origin_Z']].values.flatten()
-                    self.x_dir = sg_row[['X_dir_i', 'X_dir_j', 'X_dir_k']].values.flatten()
-                    self.y_dir = sg_row[['Y_dir_i', 'Y_dir_j', 'Y_dir_k']].values.flatten()
-                    self.z_dir = sg_row[['Z_dir_i', 'Z_dir_j', 'Z_dir_k']].values.flatten()
-
-                    # Add SG axes if the checkbox is checked
-                    if self.checkbox_axes.isChecked():
-                        self.show_axes(display_name)
+            # Display local SG axes if the checkbox is checked
+            if self.checkbox_axes.isChecked():
+                self.show_axes(display_name)
 
             # Restore the camera settings if they were set previously and this is not the first channel plot
             if camera_position is not None:
@@ -598,6 +639,12 @@ class VTKWidget(QWidget):
         except Exception as e:
             print(e)
             QMessageBox.critical(self, "Error", e)
+
+    def updateBoundingBoxPosition(self):
+        """Update the bounding box position based on user-defined offset values."""
+        self.bounding_box_offset_x = self.offset_x_spinbox.value()
+        self.bounding_box_offset_y = self.offset_y_spinbox.value()
+        self.updatePlot()
 
     def togglePointsVisibility(self, state):
         if self.polydata_actor is not None:
