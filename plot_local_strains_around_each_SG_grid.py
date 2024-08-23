@@ -152,7 +152,7 @@ class MainWindow(QMainWindow):
 
         # Add a checkbox for centering the camera around the rotation center
         self.center_camera_checkbox = QCheckBox("Position the screen around the rotation center")
-        self.center_camera_checkbox.setChecked(False)  # Default to checked (on)
+        self.center_camera_checkbox.setChecked(True)  # Default to checked (on)
         self.center_camera_checkbox.stateChanged.connect(self.vtk_widget.toggleCenterCamera)
         graphics_layout.addWidget(self.center_camera_checkbox)
 
@@ -324,7 +324,7 @@ class VTKWidget(QWidget):
         """Adds a sphere at the given pick position."""
         if pick_position:
             # Add a new sphere at the clicked position
-            sphere = pv.Sphere(radius=2, center=pick_position)
+            sphere = pv.Sphere(radius=1, center=pick_position)
             self.rotation_sphere_actor = self.plotter.add_mesh(sphere, color="blue")
             self.plotter.render()
 
@@ -652,7 +652,7 @@ class VTKWidget(QWidget):
                                               title_font_size=10, label_font_size=10)
 
             # Add the surface mesh to the plotter
-            self.refined_mesh_actor = self.plotter.add_mesh(refined_mesh, scalars='Strain [µε]', cmap='turbo', opacity=0.99, clim=initial_clim,
+            self.refined_mesh_actor = self.plotter.add_mesh(refined_mesh, scalars='Strain [µε]', cmap='turbo', opacity=1, clim=initial_clim,
                                   scalar_bar_args=self.sargs, show_edges=self.checkbox_show_edges.isChecked()) # TODO - Make this line work
 
             # Set the visibility of the original points based on the checkbox state
@@ -749,7 +749,7 @@ class VTKWidget(QWidget):
             if self.stl_actor is not None:
                 self.plotter.remove_actor(self.stl_actor)
 
-            self.stl_actor = self.plotter.add_mesh(stl_mesh, color="white", opacity=0.65)  # Set opacity to 50%
+            self.stl_actor = self.plotter.add_mesh(stl_mesh, color="white", opacity=0.99)  # Set opacity to 50%
 
             #print(f"STL actor added: {self.stl_actor}")
             self.plotter.render()
