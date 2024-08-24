@@ -1052,7 +1052,7 @@ def plot_compared_data_graph(n_clicks):
                 my_fig_compared_data.add_trace(go.Scattergl(
                     x=time_data_in_x_axis,
                     y=compared_data[col],
-                    name="Δ"+col,
+                    name="*"+col,
                     line=dict(color=my_discrete_color_scheme[color_idx]),
                     hovertemplate='%{meta}<br>Time = %{x:.2f} s<br>Data = %{y:.1f}<extra></extra>',
                     hoverlabel=dict(font_size=14, bgcolor='rgba(255, 255, 255, 0.5)'),
@@ -1591,7 +1591,9 @@ try:
 
         # The plotly-resampler callback to update the graph after a relayout event (= zoom/pan)
         my_fig_main.register_update_graph_callback(app=my_dash_app, graph_id="graph-id")
-
+        my_fig_compared_data.register_update_graph_callback(app=my_dash_app, graph_id="graph-compared-data-id")
+        my_fig_main_and_compared_data.register_update_graph_callback(app=my_dash_app, graph_id="graph-main-and-compared-data-id")
+        
         mainWindow = PlotWindow('""" + solution_directory_path + """', '""" + file_name_of_SG_calculations + """')
         mainWindow.show()
         available_port = find_available_port([8050, 8051, 8052, 8053])
