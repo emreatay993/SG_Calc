@@ -120,10 +120,6 @@ class FlatLineEdit(QLineEdit):
         self.setPlaceholderText(placeholder_text)
         self.setStyleSheet("QLineEdit {border: 1px solid #bfbfbf; border-radius: 5px; padding: 5px; background-color: #ffffff;} QLineEdit:focus {border: 2px solid #0077B6;}")
 
-from PyQt5.QtWidgets import (QApplication, QDialog, QVBoxLayout, QLabel, QLineEdit, QCheckBox, QHBoxLayout,
-                             QPushButton, QFileDialog, QTableWidget, QTableWidgetItem, QHeaderView, QTabWidget, QWidget, QMessageBox)
-import pandas as pd
-import sys
 
 class MaterialPropertiesDialog(QDialog):
     def __init__(self, parent=None):
@@ -141,7 +137,8 @@ class MaterialPropertiesDialog(QDialog):
         self.reducedWidth = 400
         self.reducedHeight = 200
 
-        self.setStyleSheet("QWidget { font-size: 11px; } QPushButton { background-color: #0077B6; color: white; border-radius: 5px; padding: 6px; } QLineEdit { border: 1px solid #ccc; border-radius: 5px; padding: 5px; background-color: #ffffff; } QLabel { color: #333; }")
+        self.setStyleSheet(
+            "QWidget { font-size: 11px; } QPushButton { background-color: #0077B6; color: white; border-radius: 5px; padding: 6px; } QLineEdit { border: 1px solid #ccc; border-radius: 5px; padding: 5px; background-color: #ffffff; } QLabel { color: #333; }")
 
         layout = QVBoxLayout()
         self.setLayout(layout)
@@ -173,7 +170,7 @@ class MaterialPropertiesDialog(QDialog):
         self.tabs.addTab(self.tab1, "Material Properties")
         self.tabs.addTab(self.tab2, "Temperature Measurement")
         self.tabs.setVisible(False)
-        
+
         # Layout for the first tab
         self.tab1_layout = QVBoxLayout()
         self.tab1.setLayout(self.tab1_layout)
@@ -225,7 +222,8 @@ class MaterialPropertiesDialog(QDialog):
         # Table to display the data for the second tab
         self.dataTable2 = QTableWidget(self)
         self.dataTable2.setVisible(False)
-        self.dataTable2.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
+        self.dataTable2.setHorizontalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+        self.dataTable2.setHorizontalScrollMode(QTableWidget.ScrollPerPixel)
         self.tab2_layout.addWidget(self.dataTable2)
 
         layout.addWidget(self.tabs)
@@ -240,7 +238,7 @@ class MaterialPropertiesDialog(QDialog):
         buttonLayout.addWidget(cancelButton)
         layout.addLayout(buttonLayout)
 
-        self.resize(self.reducedWidth, self.reducedHeight+100)
+        self.resize(self.reducedWidth, self.reducedHeight + 100)
 
     def toggle_time_dependent_input(self, state):
         self.is_temperature_dependent_properties_checked = state == Qt.Checked
@@ -288,21 +286,22 @@ class MaterialPropertiesDialog(QDialog):
         if tab_index == 1:
             table.setColumnCount(3)
             table.setHorizontalHeaderLabels(["Temperature [°C]", "Young's Modulus [GPa]", "Poisson's Ratio"])
-            
+
             # Create a DataFrame for the temperature-dependent material data
-            self.material_data_df = pd.DataFrame(columns=["Temperature [°C]", "Young's Modulus [GPa]", "Poisson's Ratio"])
+            self.material_data_df = pd.DataFrame(
+                columns=["Temperature [°C]", "Young's Modulus [GPa]", "Poisson's Ratio"])
         elif tab_index == 2:
             table.setColumnCount(len(data.columns))
             table.setHorizontalHeaderLabels(data.columns)
-            
+
             # Create a DataFrame for the temperature measurement data
             self.temperature_measurement_data_df = pd.DataFrame(columns=data.columns)
-        
+
         table.setRowCount(len(data))
         for i, (index, row) in enumerate(data.iterrows()):
             for j in range(len(row)):
-                table.setItem(i, j, QTableWidgetItem(str(row[j])))
-        
+                table.setItem(i, j, QTableWidgetItem(str(row.iloc[j])))
+
         if tab_index == 1:
             self.material_data_df = data
         elif tab_index == 2:
@@ -312,12 +311,18 @@ class MaterialPropertiesDialog(QDialog):
         min_temp_material = self.material_data_df["Temperature [°C]"].min()
         max_temp_material = self.material_data_df["Temperature [°C]"].max()
 
-        out_of_bounds_temps = self.temperature_measurement_data_df.apply(
-            lambda row: any(row < min_temp_material) or any(row > max_temp_material), axis=1
+        # Get columns of temperature data from time vs temperature measurements data
+        temperature_columns = [col for col in self.temperature_measurement_data_df.columns if
+                               "Temperature" in col or "[°C]" in col]
+
+        out_of_bounds_temps = self.temperature_measurement_data_df[temperature_columns].apply(
+            lambda row: any(
+                row.iloc[i] < min_temp_material or row.iloc[i] > max_temp_material for i in range(len(row))), axis=1
         )
 
         if out_of_bounds_temps.any():
-            QMessageBox.critical(self, "Error", "Some temperature measurements are outside the bounds of material data.")
+            QMessageBox.critical(self, "Warning",
+                                 "Some temperature measurements are outside the bounds of material data.")
             return
 
         table.setVisible(True)
@@ -326,7 +331,7 @@ class MaterialPropertiesDialog(QDialog):
         if self.is_temperature_dependent_properties_checked == False:
             try:
                 E = float(self.lineEditE.text())
-                E = E*1e9  # Convert the [GPa] to SI units [Pa]
+                E = E * 1e9  # Convert the [GPa] to SI units [Pa]
                 v = float(self.lineEditV.text())
                 # Optionally add validation rules here
                 if E <= 0 or v <= 0 or v >= 0.5:
@@ -335,9 +340,11 @@ class MaterialPropertiesDialog(QDialog):
                 self.accept()  # Close the dialog and return success
             except ValueError as ve:
                 QMessageBox.critical(self, "Input Error", str(ve))
-                
+
         if self.is_temperature_dependent_properties_checked == True:
-            QMessageBox.critical(None, "Error", "Temperature and time dependent SG calculation algorithm is not yet implemented.")
+            QMessageBox.critical(None, "Error",
+                                 "Temperature and time-dependent SG calculation algorithm is not yet implemented.")
+
 
 class PlotlyViewer(QWebEngineView):
     def __init__(self, parent=None):
@@ -347,7 +354,7 @@ class PlotlyViewer(QWebEngineView):
 
     def update_plot(self, fig):
         self.qdash.update_graph(fig)
-#        self.reload()
+
 
 class PlotWindow(QMainWindow):
     def __init__(self, folder_name, file_name):
@@ -675,10 +682,12 @@ class PlotWindow(QMainWindow):
         except Exception as e:
             QMessageBox.critical(self, "Error", f"Failed to write the CSV file: {str(e)}")
 
+
 # region Add styles for frontend GUI
 tab_style={'width': '40%', 'height': '3vh', 'line-height': '3vh', 'padding': '0', 'margin': '0','font-size': '10px'}
 selected_tab_style={'width': '40%', 'height': '3vh', 'line-height': '3vh', 'padding': '0', 'margin': '0', 'font-size': '10px'}
 # endregion
+
 
 class QDash(QtCore.QObject):
     def __init__(self, parent=None):
@@ -703,6 +712,7 @@ class QDash(QtCore.QObject):
 
     def update_graph(self, fig):
         pass
+
 
 class OffsetZeroDialog(QDialog):
     def __init__(self, parent=None, time_points=None):
@@ -1266,7 +1276,6 @@ def plot_comparison_graph(n_clicks):
             mainWindow.plot_finished.emit()
             return my_fig_comparison
     return no_update
-# endregion
 
 @my_dash_app.callback(
     Output("graph-comparison-percent-id", "figure"),
