@@ -114,19 +114,14 @@ common_columns = None
 # endregion
 
 # region Define global functions and classes
-class FlatLineEdit(QLineEdit):
-    def __init__(self, placeholder_text=""):
-        super(FlatLineEdit, self).__init__()
-        self.setPlaceholderText(placeholder_text)
-        self.setStyleSheet("QLineEdit {border: 1px solid #bfbfbf; border-radius: 5px; padding: 5px; background-color: #ffffff;} QLineEdit:focus {border: 2px solid #0077B6;}")
-
-
 class MaterialPropertiesDialog(QDialog):
     def __init__(self, parent=None):
         super(MaterialPropertiesDialog, self).__init__(parent)
         self.is_temperature_dependent_properties_checked = False
         self.material_data_df = pd.DataFrame()
         self.temperature_measurement_data_df = pd.DataFrame()
+        self.channel_specific_data = pd.DataFrame(columns=["Channel", "Time", "E", "v"])
+        self.interpolated_material_data = pd.DataFrame()
         self.initUI()
 
     def initUI(self):
@@ -307,6 +302,9 @@ class MaterialPropertiesDialog(QDialog):
         elif tab_index == 2:
             self.temperature_measurement_data_df = data
 
+        # After populating the data, perform a check to find channels with missing data
+        self.check_channel_data_consistency()
+
         # Check if any temperature measurement is outside the bounds of material data
         min_temp_material = self.material_data_df["Temperature [°C]"].min()
         max_temp_material = self.material_data_df["Temperature [°C]"].max()
@@ -321,11 +319,86 @@ class MaterialPropertiesDialog(QDialog):
         )
 
         if out_of_bounds_temps.any():
-            QMessageBox.critical(self, "Warning",
-                                 "Some temperature measurements are outside the bounds of material data.")
+            QMessageBox.warning(self, "Warning",
+                                 "Some temperature measurements are outside the bounds of material data. "
+                                 "Material properties for these points will be extrapolated accordingly.")
             return
 
         table.setVisible(True)
+
+    def natural_sort_key(self, s):
+        # Split the SG channel string into parts where digit sequences are treated numerically.
+        return [int(num) if num.isdigit() else num for num in re.split(r'(\d+)', s)]
+
+    def check_channel_data_consistency(self):
+        # Extract channel identifiers from strain and temperature measurement data
+        strain_channels = set([col for col in initial_SG_raw_data.columns if re.match(r'SG\d+_', col)])
+        temp_channels = set([col.split('_T')[0] for col in self.temperature_measurement_data_df.columns if
+                             ("Temperature" in col or "[°C]" in col) and 'Time' not in col])
+
+        # Channels with strain but no temperature
+        missing_temp_channels = strain_channels - temp_channels
+
+        # Channels with temperature but no strain
+        missing_strain_channels = temp_channels - strain_channels
+
+        if missing_temp_channels or missing_strain_channels:
+            missing_info = []
+            if missing_temp_channels:
+                # Use the natural_sort_key helper method to sort missing_temp_channels
+                sorted_missing_temp_channels = sorted(missing_temp_channels, key=self.natural_sort_key)
+                missing_info.append(
+                    f"Channels with strain data but missing temperature data: {', '.join(sorted_missing_temp_channels)}")
+            if missing_strain_channels:
+                # Use the natural_sort_key helper method to sort missing_strain_channels
+                sorted_missing_strain_channels = sorted(missing_strain_channels, key=self.natural_sort_key)
+                missing_info.append(
+                    f"Channels with temperature data but missing strain data: {', '.join(sorted_missing_strain_channels)}")
+
+            QMessageBox.warning(self, "Data Consistency Warning", "".join(missing_info))
+
+    def interpolate_material_properties(self):
+        # Prepare a DataFrame to hold the interpolated values for all channels
+        # TODO - Resample shorter, lower sampling rate measurement so both strain and temperature has data points at all time points
+        # TODO - Change df to be used in initializing depending on which one is longer and has a higher sampling rate
+        # TODO - I mean, change either to temperature_measurement_data_df['Time'] or data['Time']
+
+        interpolated_df = pd.DataFrame(index=self.temperature_measurement_data_df.index)
+
+        # Iterate over each channel in the temperature measurement data
+        for column in self.temperature_measurement_data_df.columns:
+            if "Temperature" in column or "[°C]" in column:
+                # Extract channel identifier (e.g., "SG1_1" from "SG_1_1_Temperature [°C]")
+                channel_identifier = "_".join(column.split("_")[:-1])
+
+                # Get temperature data for this channel
+                temperatures = self.temperature_measurement_data_df[column]
+
+                # Perform interpolation for E and v based on temperature
+                E_interp_func = interp1d(
+                    self.material_data_df["Temperature [°C]"],
+                    self.material_data_df["Young's Modulus [GPa]"] * 1e9,  # Convert to Pa
+                    fill_value="extrapolate"
+                )
+                v_interp_func = interp1d(
+                    self.material_data_df["Temperature [°C]"],
+                    self.material_data_df["Poisson's Ratio"],
+                    fill_value="extrapolate"
+                )
+
+                # Apply interpolation to get E and v values for each time step
+                E_values = E_interp_func(temperatures)
+                v_values = v_interp_func(temperatures)
+
+                # Store the interpolated values in the DataFrame
+                interpolated_df[f"{channel_identifier}_E"] = E_values
+                interpolated_df[f"{channel_identifier}_v"] = v_values
+
+        # Print the interpolated DataFrame
+        print(interpolated_df.head())
+
+        # Store it back into a class attribute to be used later in principal stress calculations
+        self.interpolated_material_data = interpolated_df
 
     def acceptInputs(self):
         if self.is_temperature_dependent_properties_checked == False:
@@ -335,16 +408,22 @@ class MaterialPropertiesDialog(QDialog):
                 v = float(self.lineEditV.text())
                 # Optionally add validation rules here
                 if E <= 0 or v <= 0 or v >= 0.5:
-                    raise ValueError("Please enter valid values: E > 0, 0 < v < 0.5")
+                    raise ValueError("Please enter valid values: E > 0 and 0 < v < 0.5")
                 self.user_input = {'E': E, 'v': v}
                 self.accept()  # Close the dialog and return success
             except ValueError as ve:
                 QMessageBox.critical(self, "Input Error", str(ve))
 
         if self.is_temperature_dependent_properties_checked == True:
-            QMessageBox.critical(None, "Error",
-                                 "Temperature and time-dependent SG calculation algorithm is not yet implemented.")
+            # Perform channel-specific interpolation for E and v
+            self.interpolate_material_properties()
 
+            if not self.interpolated_material_data.empty:
+                QMessageBox.information(self, "Success", "Material data is interpolated successfully")
+                return
+
+            # QMessageBox.critical(None, "Error",
+            #                      "Temperature and time-dependent SG calculation algorithm is not yet implemented.")
 
 class PlotlyViewer(QWebEngineView):
     def __init__(self, parent=None):
