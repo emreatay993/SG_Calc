@@ -22,6 +22,7 @@ cpython_script_path = sol_selected_environment.WorkingDir + cpython_script_name
 cpython_code = """
 # region Import necessary modules
 import warnings
+
 warnings.filterwarnings("ignore", category=DeprecationWarning)
 try:
     import sys
@@ -42,7 +43,7 @@ try:
     from PyQt5 import QtCore
     from PyQt5.QtWidgets import (QApplication, QMainWindow, QLineEdit, QDialog, QHBoxLayout,
                                  QVBoxLayout, QWidget, QMessageBox, QComboBox, QCheckBox, QFileDialog,
-                                 QLabel, QSizePolicy, QPushButton, QTableWidget, QTableWidgetItem, 
+                                 QLabel, QSizePolicy, QPushButton, QTableWidget, QTableWidgetItem,
                                  QHeaderView, QProgressBar, QTabWidget)
     from PyQt5.QtWebEngineWidgets import QWebEngineView
     import concurrent.futures
@@ -51,7 +52,7 @@ try:
     import dash
     from dash import Dash, Input, Output, callback_context, dcc, html, no_update, State
     import dash_bootstrap_components as dbc
-    #from dash_extensions.enrich import DashProxy, Serverside, ServersideOutputTransform
+    # from dash_extensions.enrich import DashProxy, Serverside, ServersideOutputTransform
 except ImportError as e:
 
     app_messagebox = QApplication(sys.argv)
@@ -96,7 +97,7 @@ trace_columns = None
 
 global comparison_data
 comparison_data = None
-global comparison_trace_columns  
+global comparison_trace_columns
 comparison_trace_columns = None
 global compare_data
 compare_data = None
@@ -111,6 +112,8 @@ selected_ref_number_comparison = None
 
 global common_columns
 common_columns = None
+
+
 # endregion
 
 # region Define global functions and classes
@@ -320,8 +323,8 @@ class MaterialPropertiesDialog(QDialog):
 
         if out_of_bounds_temps.any():
             QMessageBox.warning(self, "Warning",
-                                 "Some temperature measurements are outside the bounds of material data. "
-                                 "Material properties for these points will be extrapolated accordingly.")
+                                "Some temperature measurements are outside the bounds of material data. "
+                                "Material properties for these points will be extrapolated accordingly.")
             return
 
         table.setVisible(True)
@@ -419,11 +422,12 @@ class MaterialPropertiesDialog(QDialog):
             self.interpolate_material_properties()
 
             if not self.interpolated_material_data.empty:
-                QMessageBox.information(self, "Success", "Material data is interpolated successfully")
-                return
+                QMessageBox.information(self, "Success", "Material data has been interpolated successfully")
+                self.accept()
 
             # QMessageBox.critical(None, "Error",
             #                      "Temperature and time-dependent SG calculation algorithm is not yet implemented.")
+
 
 class PlotlyViewer(QWebEngineView):
     def __init__(self, parent=None):
@@ -438,12 +442,13 @@ class PlotlyViewer(QWebEngineView):
 class PlotWindow(QMainWindow):
     def __init__(self, folder_name, file_name):
         super().__init__()
-        self.setWindowTitle('SG Calculations : """ + sol_selected_environment.Parent.Name + """')
+        self.setWindowTitle('SG Calculations : All Loads Applied at Once')
         self.setGeometry(100, 100, 1000, 550)
         self.folder_name = folder_name
         self.file_name = file_name
         self.initProgressBar()
         self.initUI()
+
     plot_started = pyqtSignal()
     plot_progress = pyqtSignal(int)
     plot_finished = pyqtSignal()
@@ -462,8 +467,8 @@ class PlotWindow(QMainWindow):
                 )
                 if reply == QMessageBox.Yes:
                     output_data = pd.read_csv(file_path)
-                    # Drop columns starting with uppercase delta symbol (Δ)
-                    output_data = output_data.loc[:, ~output_data.columns.str.startswith('Δ')]
+                    # Drop columns starting with uppercase delta symbol (?)
+                    output_data = output_data.loc[:, ~output_data.columns.str.startswith('?')]
                     if 'Time' in output_data.columns:
                         output_data = output_data.drop(columns=['Time'])
                 else:
@@ -518,7 +523,8 @@ class PlotWindow(QMainWindow):
         self.offsetStartTimeButton.clicked.connect(self.offset_start_time)  # Connect to the new function
 
         self.writeCSVButton = QPushButton("Write Full Data to CSV (Main Data)")
-        self.writeCSVButton.setToolTip("Click to save the full output data as a CSV file in the specified location. If any offset operation is applied, the CSV file is written with those effects included.")
+        self.writeCSVButton.setToolTip(
+            "Click to save the full output data as a CSV file in the specified location. If any offset operation is applied, the CSV file is written with those effects included.")
         self.writeCSVButton.clicked.connect(self.write_full_data_to_csv)
 
         self.update_plot(0)  # Initialize plot
@@ -587,13 +593,14 @@ class PlotWindow(QMainWindow):
 
     def add_ref_number_items(self):
         global output_data
-        ref_numbers = set(col.split('_')[1] for col in output_data.columns if '_' in col and col.split('_')[1].isdigit())
+        ref_numbers = set(
+            col.split('_')[1] for col in output_data.columns if '_' in col and col.split('_')[1].isdigit())
         for ref_number in sorted(ref_numbers, key=int):
             self.refNumberComboBox.addItem(ref_number)
 
     def update_plot(self, index):
         fig: FigureResampler = FigureResampler()
-        global selected_group 
+        global selected_group
         global selected_ref_number
         global output_data
         global trace_columns
@@ -628,7 +635,7 @@ class PlotWindow(QMainWindow):
 
     def save_current_plot(self):
         # Retrieve the parent name from the environment for the filename
-        parent_name = '''""" + sol_selected_environment.Parent.Name + """'''
+        parent_name = '''All Loads Applied at Once'''
         active_tab = self.get_active_tab()
 
         if active_tab == 'tab-main':
@@ -655,7 +662,8 @@ class PlotWindow(QMainWindow):
             QMessageBox.warning(self, "Save Plot", "No active plot found to save.")
             return
 
-        QMessageBox.information(self, "Plot Saved", f"The plot has been saved to: {filename} in the solution directory.")
+        QMessageBox.information(self, "Plot Saved",
+                                f"The plot has been saved to: {filename} in the solution directory.")
 
     def offset_zero_sgs(self):
         # Get the unique time points as strings for the combo box
@@ -706,7 +714,7 @@ class PlotWindow(QMainWindow):
         # Recalculate the SG variables
         output_SG_data_w_raw = calculate_all_SG_variables(strain_data, rosette_angles_df)
         output_SG_data_w_raw.insert(0, 'Time', output_data['Time'])
-        #output_SG_data_w_raw.set_index('Time', inplace=True)
+        # output_SG_data_w_raw.set_index('Time', inplace=True)
 
         output_data = output_SG_data_w_raw
 
@@ -763,8 +771,11 @@ class PlotWindow(QMainWindow):
 
 
 # region Add styles for frontend GUI
-tab_style={'width': '40%', 'height': '3vh', 'line-height': '3vh', 'padding': '0', 'margin': '0','font-size': '10px'}
-selected_tab_style={'width': '40%', 'height': '3vh', 'line-height': '3vh', 'padding': '0', 'margin': '0', 'font-size': '10px'}
+tab_style = {'width': '40%', 'height': '3vh', 'line-height': '3vh', 'padding': '0', 'margin': '0', 'font-size': '10px'}
+selected_tab_style = {'width': '40%', 'height': '3vh', 'line-height': '3vh', 'padding': '0', 'margin': '0',
+                      'font-size': '10px'}
+
+
 # endregion
 
 
@@ -775,10 +786,14 @@ class QDash(QtCore.QObject):
         self.app.layout = html.Div([
             dcc.Tabs(id="tabs-example", value='tab-main', children=[
                 dcc.Tab(label='Main Data', value='tab-main', style=tab_style, selected_style=selected_tab_style),
-                dcc.Tab(label='Compared Data', value='tab-compared-data', style=tab_style, selected_style=selected_tab_style),
-                dcc.Tab(label='Main & Compared Data', value='tab-main-and-compared-data', style=tab_style, selected_style=selected_tab_style),
-                dcc.Tab(label='Comparison(Δ)', value='tab-comparison', style=tab_style, selected_style=selected_tab_style),
-                dcc.Tab(label='Comparison(%)', value='tab-comparison-percent', style=tab_style, selected_style=selected_tab_style),
+                dcc.Tab(label='Compared Data', value='tab-compared-data', style=tab_style,
+                        selected_style=selected_tab_style),
+                dcc.Tab(label='Main & Compared Data', value='tab-main-and-compared-data', style=tab_style,
+                        selected_style=selected_tab_style),
+                dcc.Tab(label='Comparison(?)', value='tab-comparison', style=tab_style,
+                        selected_style=selected_tab_style),
+                dcc.Tab(label='Comparison(%)', value='tab-comparison-percent', style=tab_style,
+                        selected_style=selected_tab_style),
             ], style={'width': '60%', 'height': '3vh', 'line-height': '3vh', 'padding': '0', 'margin': '0'}),
             html.Div(id='tabs-content-example', style={'padding': '0'}),
             html.Div(id='comparison-data-loaded', style={'display': 'none'}),
@@ -821,10 +836,14 @@ class OffsetZeroDialog(QDialog):
 
     def get_selected_time(self):
         return float(self.comboBox.currentText())
+
+
 # endregion
 
 # region Initialization of main dash app
 my_dash_app = Dash(__name__)
+
+
 # endregion
 
 # region Definition of callback functions required for main dash app
@@ -837,16 +856,16 @@ my_dash_app = Dash(__name__)
     prevent_initial_call=False,
 )
 def render_content(tab, comparison_data_loaded):
-    button_style  = {
-    'width': '12%', 'margin': '0.5vh',
-    'font-size': '10px','background-color': '#87CEFA',
-    'border': 'none','border-radius': '8px',
-    'cursor': 'pointer','transition': 'background-color 0.3s ease'}
+    button_style = {
+        'width': '12%', 'margin': '0.5vh',
+        'font-size': '10px', 'background-color': '#87CEFA',
+        'border': 'none', 'border-radius': '8px',
+        'cursor': 'pointer', 'transition': 'background-color 0.3s ease'}
 
     button_success_style = {
-    **button_style,
-    'background-color': 'green',  # Change to green on success
-}
+        **button_style,
+        'background-color': 'green',  # Change to green on success
+    }
 
     if tab == 'tab-main':
         graph = dcc.Graph(
@@ -924,6 +943,7 @@ def render_content(tab, comparison_data_loaded):
             graph_comparison_percent
         ])
 
+
 # Update the callback to plot the graph
 @my_dash_app.callback(
     Output("graph-id", "figure"),
@@ -938,7 +958,7 @@ def plot_graph(n_clicks):
         global output_data
         global trace_columns
 
-        mainWindow.plot_started.emit() # Emit the plot started signal
+        mainWindow.plot_started.emit()  # Emit the plot started signal
 
         if len(my_fig_main.data):
             my_fig_main.replace(go.Figure())
@@ -961,7 +981,7 @@ def plot_graph(n_clicks):
             mainWindow.plot_progress.emit(progress)  # Emit the plot progress signal
 
             my_fig_main.update_layout(
-                title_text='SG Calculations : """ + sol_selected_environment.Parent.Name + """ ' + "( " + selected_group + " )",
+                title_text='SG Calculations : All Loads Applied at Once ' + "( " + selected_group + " )",
                 title_x=0.45,
                 title_y=0.95,
                 legend_title_text='Result',
@@ -975,7 +995,7 @@ def plot_graph(n_clicks):
                 yaxis=dict(showgrid=True, zeroline=False, showline=False, showticklabels=True,
                            linecolor='rgb(204, 204, 204)', tickmode='auto', nticks=30),
                 hovermode='closest',
-                margin=dict(t=40,b=0)  # Adjust the top margin to bring the graph closer to the title
+                margin=dict(t=40, b=0)  # Adjust the top margin to bring the graph closer to the title
             )
 
         current_figure_main = my_fig_main  # Update the global variable with the new figure
@@ -983,6 +1003,7 @@ def plot_graph(n_clicks):
         return my_fig_main
     else:
         return no_update
+
 
 @my_dash_app.callback(
     Output('comparison-data-loaded', 'children'),
@@ -1003,8 +1024,8 @@ def load_comparison_csv(n_clicks):
         if file_path:
             comparison_data = pd.read_csv(file_path)
 
-            # Drop columns starting with "%" or "Δ"
-            comparison_data = comparison_data.loc[:, ~comparison_data.columns.str.startswith(('%', 'Δ'))]
+            # Drop columns starting with "%" or "?"
+            comparison_data = comparison_data.loc[:, ~comparison_data.columns.str.startswith(('%', '?'))]
 
             comparison_trace_columns_all = [col for col in comparison_data.columns if col != 'Time']
             if selected_group == "All":
@@ -1039,13 +1060,13 @@ def load_comparison_csv(n_clicks):
                     compare_data_full = output_data[common_columns].values - interpolated_comparison_data[
                         common_columns].values
                     compare_data_full = pd.DataFrame(compare_data_full,
-                                                     columns=['Δ' + col for col in comparison_trace_columns_all])
+                                                     columns=['?' + col for col in comparison_trace_columns_all])
                     compare_data_full.insert(0, 'Time', main_time)
 
                     compare_data_percent_full = ((output_data[common_columns].values / interpolated_comparison_data[
                         common_columns].values) - 1) * 100
                     compare_data_percent_full = pd.DataFrame(compare_data_percent_full, columns=['%' + col for col in
-                                                                                         comparison_trace_columns_all])
+                                                                                                 comparison_trace_columns_all])
                     compare_data_percent_full.insert(0, 'Time', main_time)
 
                     compare_data.insert(0, 'Time', main_time)
@@ -1061,13 +1082,14 @@ def load_comparison_csv(n_clicks):
                     compare_data_full = interpolated_main_data[common_columns].values - comparison_data[
                         common_columns].values
                     compare_data_full = pd.DataFrame(compare_data_full,
-                                                     columns=['Δ' + col for col in comparison_trace_columns_all])
+                                                     columns=['?' + col for col in comparison_trace_columns_all])
                     compare_data_full.insert(0, 'Time', comparison_time)
 
                     compare_data_percent_full = ((interpolated_main_data[common_columns].values / comparison_data[
                         common_columns].values) - 1) * 100
                     compare_data_percent_full = pd.DataFrame(compare_data_percent_full,
-                                                     columns=['%' + col for col in comparison_trace_columns_all])
+                                                             columns=['%' + col for col in
+                                                                      comparison_trace_columns_all])
                     compare_data_percent_full.insert(0, 'Time', comparison_time)
 
                     compare_data.insert(0, 'Time', comparison_time)
@@ -1076,6 +1098,7 @@ def load_comparison_csv(n_clicks):
             else:
                 raise KeyError("'Time' column is missing in one of the DataFrames")
     return no_update
+
 
 @my_dash_app.callback(
     Output("graph-compared-data-id", "figure"),
@@ -1099,14 +1122,16 @@ def plot_compared_data_graph(n_clicks):
         compared_data_trace_columns = [col for col in comparison_data.columns if col.endswith(selected_group)]
 
     if selected_ref_number != "-":
-        compared_data_trace_columns = [col for col in compared_data_trace_columns if col.split('_')[1] == selected_ref_number]
+        compared_data_trace_columns = [col for col in compared_data_trace_columns if
+                                       col.split('_')[1] == selected_ref_number]
 
     comparison_time = comparison_data['Time']
     main_time = output_data['Time']
 
     # Determine which dataset has a lower sample rate
     if len(main_time) > len(comparison_time):
-        interp_func = interp1d(comparison_time, comparison_data[compared_data_trace_columns], axis=0, fill_value="extrapolate")
+        interp_func = interp1d(comparison_time, comparison_data[compared_data_trace_columns], axis=0,
+                               fill_value="extrapolate")
         interpolated_comparison_data = pd.DataFrame(interp_func(main_time), columns=compared_data_trace_columns)
         interpolated_comparison_data.insert(0, 'Time', main_time)
         compared_data = interpolated_comparison_data
@@ -1131,17 +1156,17 @@ def plot_compared_data_graph(n_clicks):
                 my_fig_compared_data.add_trace(go.Scattergl(
                     x=time_data_in_x_axis,
                     y=compared_data[col],
-                    name="*"+col,
+                    name="*" + col,
                     line=dict(color=my_discrete_color_scheme[color_idx]),
                     hovertemplate='%{meta}<br>Time = %{x:.2f} s<br>Data = %{y:.1f}<extra></extra>',
                     hoverlabel=dict(font_size=14, bgcolor='rgba(255, 255, 255, 0.5)'),
-                    meta="Δ"+col
+                    meta="?" + col
                 ))
                 progress = int((idx + 1) / total_no_of_traces_to_add * 100)
                 mainWindow.plot_progress.emit(progress)  # Emit the plot progress signal
 
                 my_fig_compared_data.update_layout(
-                    title_text='Compared Data : """ + sol_selected_environment.Parent.Name + """ ' + " (" + selected_group + ")",
+                    title_text='Compared Data : All Loads Applied at Once ' + " (" + selected_group + ")",
                     title_x=0.45,
                     title_y=0.95,
                     legend_title_text='Result',
@@ -1162,6 +1187,7 @@ def plot_compared_data_graph(n_clicks):
             return my_fig_compared_data
     return no_update
 
+
 @my_dash_app.callback(
     Output("graph-main-and-compared-data-id", "figure"),
     Input("plot-main-and-compared-data-button", "n_clicks"),
@@ -1173,9 +1199,8 @@ def plot_main_and_compared_data_graph(n_clicks):
     global my_fig_main_and_compared_data
     global output_data
     global compare_data
-    #global compared_data_trace_columns
+    # global compared_data_trace_columns
     global output_data
-
 
     if selected_group == "All":
         main_and_compared_data_trace_columns = [col for col in comparison_data.columns if col != 'Time']
@@ -1185,12 +1210,14 @@ def plot_main_and_compared_data_graph(n_clicks):
         main_and_compared_data_trace_columns = [col for col in comparison_data.columns if col.endswith(selected_group)]
 
     if selected_ref_number != "-":
-        main_and_compared_data_trace_columns = [col for col in main_and_compared_data_trace_columns if col.split('_')[1] == selected_ref_number]
+        main_and_compared_data_trace_columns = [col for col in main_and_compared_data_trace_columns if
+                                                col.split('_')[1] == selected_ref_number]
 
     comparison_time = comparison_data['Time']
     main_time = output_data['Time']
 
-    common_columns = [col for col in main_and_compared_data_trace_columns if col in comparison_data.columns and col in output_data.columns]
+    common_columns = [col for col in main_and_compared_data_trace_columns if
+                      col in comparison_data.columns and col in output_data.columns]
 
     # Determine which dataset has a lower sample rate
     if len(main_time) > len(comparison_time):
@@ -1222,28 +1249,28 @@ def plot_main_and_compared_data_graph(n_clicks):
                 my_fig_main_and_compared_data.add_trace(go.Scattergl(
                     x=time_data_in_x_axis,
                     y=main_data[col],
-                    name= "Main: "+ col,
+                    name="Main: " + col,
                     line=dict(color=my_discrete_color_scheme[color_idx]),
                     hovertemplate='%{meta}<br>Time = %{x:.2f} s<br>Data = %{y:.1f}<extra></extra>',
                     hoverlabel=dict(font_size=14, bgcolor='rgba(255, 255, 255, 0.5)'),
-                    meta= "Main: "+ col,
+                    meta="Main: " + col,
                 ))
 
                 my_fig_main_and_compared_data.add_trace(go.Scattergl(
                     x=time_data_in_x_axis,
                     y=compared_data[col],
-                    name= "Comp: " + col,
+                    name="Comp: " + col,
                     line=dict(color=my_discrete_color_scheme[color_idx], dash='dash'),
                     hovertemplate='%{meta}<br>Time = %{x:.2f} s<br>Data = %{y:.1f}<extra></extra>',
                     hoverlabel=dict(font_size=14, bgcolor='rgba(255, 255, 255, 0.5)'),
-                    meta= "Comp: " + col,
+                    meta="Comp: " + col,
                 ))
 
                 progress = int((idx + 1) / total_no_of_traces_to_add * 100)
                 mainWindow.plot_progress.emit(progress)  # Emit the plot progress signal
 
                 my_fig_main_and_compared_data.update_layout(
-                    title_text='Overlay Plot : """ + sol_selected_environment.Parent.Name + """ ' + " (" + selected_group + ")",
+                    title_text='Overlay Plot : All Loads Applied at Once ' + " (" + selected_group + ")",
                     title_x=0.45,
                     title_y=0.95,
                     legend_title_text='Result',
@@ -1263,6 +1290,7 @@ def plot_main_and_compared_data_graph(n_clicks):
             mainWindow.plot_finished.emit()
             return my_fig_main_and_compared_data
     return no_update
+
 
 @my_dash_app.callback(
     Output("graph-comparison-id", "figure"),
@@ -1293,12 +1321,14 @@ def plot_comparison_graph(n_clicks):
 
     # Determine which dataset has a lower sample rate
     if len(main_time) > len(comparison_time):
-        interp_func = interp1d(comparison_time, comparison_data[comparison_trace_columns], axis=0, fill_value="extrapolate")
+        interp_func = interp1d(comparison_time, comparison_data[comparison_trace_columns], axis=0,
+                               fill_value="extrapolate")
         interpolated_comparison_data = pd.DataFrame(interp_func(main_time), columns=comparison_trace_columns)
         interpolated_comparison_data.insert(0, 'Time', main_time)
 
         # Calculate the difference
-        compare_data = output_data[comparison_trace_columns].values - interpolated_comparison_data[comparison_trace_columns].values
+        compare_data = output_data[comparison_trace_columns].values - interpolated_comparison_data[
+            comparison_trace_columns].values
         compare_data = pd.DataFrame(compare_data, columns=comparison_trace_columns)
         compare_data.insert(0, 'Time', main_time)
     else:
@@ -1307,7 +1337,8 @@ def plot_comparison_graph(n_clicks):
         interpolated_main_data.insert(0, 'Time', comparison_time)
 
         # Calculate the difference
-        compare_data = interpolated_main_data[comparison_trace_columns].values - comparison_data[comparison_trace_columns].values
+        compare_data = interpolated_main_data[comparison_trace_columns].values - comparison_data[
+            comparison_trace_columns].values
         compare_data = pd.DataFrame(compare_data, columns=comparison_trace_columns)
         compare_data.insert(0, 'Time', comparison_time)
 
@@ -1325,7 +1356,7 @@ def plot_comparison_graph(n_clicks):
                 my_fig_comparison.add_trace(go.Scattergl(
                     x=time_data_in_x_axis,
                     y=compare_data[col],
-                    name="Δ"+col,
+                    name="?" + col,
                     line=dict(color=my_discrete_color_scheme[color_idx]),
                     hovertemplate='%{meta}<br>Time = %{x:.2f} s<br>Data = %{y:.1f}<extra></extra>',
                     hoverlabel=dict(font_size=14, bgcolor='rgba(255, 255, 255, 0.5)'),
@@ -1335,7 +1366,7 @@ def plot_comparison_graph(n_clicks):
                 mainWindow.plot_progress.emit(progress)  # Emit the plot progress signal
 
                 my_fig_comparison.update_layout(
-                    title_text='Comparison : """ + sol_selected_environment.Parent.Name + """ ' + " (" + selected_group + ")",
+                    title_text='Comparison : All Loads Applied at Once ' + " (" + selected_group + ")",
                     title_x=0.45,
                     title_y=0.95,
                     legend_title_text='Result',
@@ -1355,6 +1386,7 @@ def plot_comparison_graph(n_clicks):
             mainWindow.plot_finished.emit()
             return my_fig_comparison
     return no_update
+
 
 @my_dash_app.callback(
     Output("graph-comparison-percent-id", "figure"),
@@ -1376,28 +1408,33 @@ def plot_comparison_percent_graph(n_clicks):
         comparison_trace_columns_percent = [col for col in comparison_data.columns if col.endswith(selected_group)]
 
     if selected_ref_number != "-":
-        comparison_trace_columns_percent = [col for col in comparison_trace_columns_percent if col.split('_')[1] == selected_ref_number]
+        comparison_trace_columns_percent = [col for col in comparison_trace_columns_percent if
+                                            col.split('_')[1] == selected_ref_number]
 
     comparison_time = comparison_data['Time']
     main_time = output_data['Time']
 
     # Determine which dataset has a lower sample rate
     if len(main_time) > len(comparison_time):
-        interp_func = interp1d(comparison_time, comparison_data[comparison_trace_columns_percent], axis=0, fill_value="extrapolate")
+        interp_func = interp1d(comparison_time, comparison_data[comparison_trace_columns_percent], axis=0,
+                               fill_value="extrapolate")
         interpolated_comparison_data = pd.DataFrame(interp_func(main_time), columns=comparison_trace_columns_percent)
         interpolated_comparison_data.insert(0, 'Time', main_time)
 
         # Calculate the difference
-        compare_data_percent = ((output_data[comparison_trace_columns_percent].values / interpolated_comparison_data[comparison_trace_columns_percent].values) -1)*100
+        compare_data_percent = ((output_data[comparison_trace_columns_percent].values / interpolated_comparison_data[
+            comparison_trace_columns_percent].values) - 1) * 100
         compare_data_percent = pd.DataFrame(compare_data_percent, columns=comparison_trace_columns_percent)
         compare_data_percent.insert(0, 'Time', main_time)
     else:
-        interp_func = interp1d(main_time, output_data[comparison_trace_columns_percent], axis=0, fill_value="extrapolate")
+        interp_func = interp1d(main_time, output_data[comparison_trace_columns_percent], axis=0,
+                               fill_value="extrapolate")
         interpolated_main_data = pd.DataFrame(interp_func(comparison_time), columns=comparison_trace_columns_percent)
         interpolated_main_data.insert(0, 'Time', comparison_time)
 
         # Calculate the difference
-        compare_data_percent = ((interpolated_main_data[comparison_trace_columns_percent].values / comparison_data[comparison_trace_columns_percent].values) -1)*100
+        compare_data_percent = ((interpolated_main_data[comparison_trace_columns_percent].values / comparison_data[
+            comparison_trace_columns_percent].values) - 1) * 100
         compare_data_percent = pd.DataFrame(compare_data_percent, columns=comparison_trace_columns_percent)
         compare_data_percent.insert(0, 'Time', comparison_time)
 
@@ -1415,17 +1452,17 @@ def plot_comparison_percent_graph(n_clicks):
                 my_fig_comparison_percent.add_trace(go.Scattergl(
                     x=time_data_in_x_axis,
                     y=compare_data_percent[col],
-                    name="%"+col,
+                    name="%" + col,
                     line=dict(color=my_discrete_color_scheme[color_idx]),
                     hovertemplate='%{meta}<br>Time = %{x:.2f} s<br>Data = %{y:.1f}%<extra></extra>',
                     hoverlabel=dict(font_size=14, bgcolor='rgba(255, 255, 255, 0.5)'),
-                    meta="%"+col
+                    meta="%" + col
                 ))
                 progress = int((idx + 1) / total_no_of_traces_to_add * 100)
                 mainWindow.plot_progress.emit(progress)  # Emit the plot progress signal
 
                 my_fig_comparison_percent.update_layout(
-                    title_text='Comparison : """ + sol_selected_environment.Parent.Name + """ ' + " (" + selected_group + ")",
+                    title_text='Comparison : All Loads Applied at Once ' + " (" + selected_group + ")",
                     title_x=0.45,
                     title_y=0.95,
                     legend_title_text='Result',
@@ -1446,6 +1483,7 @@ def plot_comparison_percent_graph(n_clicks):
             return my_fig_comparison_percent
     return no_update
 
+
 # Callback to update the active tab
 @my_dash_app.callback(
     Output('dummy-output', 'children'),  # Dummy output to trigger the callback
@@ -1455,6 +1493,7 @@ def update_active_tab(tab):
     global active_tab_value
     active_tab_value = tab
     return no_update
+
 
 # endregion
 
@@ -1474,7 +1513,8 @@ else:
     # file_path = 'default_raw_SG_data.csv'
 
 # File selection for rosette angles data
-angles_file_path, _ = QFileDialog().getOpenFileName(None, 'Open SG rosette angles configuration file', '', 'All Files (*);;CSV Files (*.csv)')
+angles_file_path, _ = QFileDialog().getOpenFileName(None, 'Open SG rosette angles configuration file', '',
+                                                    'All Files (*);;CSV Files (*.csv)')
 
 # Check if a file was selected for rosette angles data
 if angles_file_path:
@@ -1486,7 +1526,7 @@ else:
 # endregion
 
 # region Load the CSV file containing the rosette angles
-#angles_file_path = 'rosette_angles_v3.csv'
+# angles_file_path = 'rosette_angles_v3.csv'
 rosette_angles_df = pd.read_csv(angles_file_path)
 print("Selected rosette angles data:", angles_file_path)
 # endregion
@@ -1511,17 +1551,22 @@ if material_input_dialog.exec_() == QDialog.Accepted:
     if material_input_dialog.is_temperature_dependent_properties_checked == False:
         E = material_input_dialog.user_input.get('E')
         v = material_input_dialog.user_input.get('v')
-    
+
         # Convert to numpy column arrays to get individual E and v at each index (therefore, at each time step) later
         E = (np.full(time.shape, E))
         v = (np.full(time.shape, v))
 
+    if material_input_dialog.is_temperature_dependent_properties_checked == True:
+        pass
+
 else:
     sys.exit("Material properties input was canceled or failed.")
+
+
 # endregion
 
 # region Functions for main calculation loop
-def process_sg_number(sg_number, strain_gauge_data, E, v):
+def process_sg_number(sg_number, strain_gauge_data):
     sg_cols = [col for col in strain_gauge_data.columns if f'SG{sg_number}_' in col]
     new_columns = []
     if len(sg_cols) == 3:
@@ -1533,9 +1578,9 @@ def process_sg_number(sg_number, strain_gauge_data, E, v):
 
             # Matrix T and its inverse T_inv
             T = np.array([
-                [np.cos(theta_A)**2, np.sin(theta_A)**2, np.sin(theta_A) * np.cos(theta_A)],
-                [np.cos(theta_B)**2, np.sin(theta_B)**2, np.sin(theta_B) * np.cos(theta_B)],
-                [np.cos(theta_C)**2, np.sin(theta_C)**2, np.sin(theta_C) * np.cos(theta_C)]
+                [np.cos(theta_A) ** 2, np.sin(theta_A) ** 2, np.sin(theta_A) * np.cos(theta_A)],
+                [np.cos(theta_B) ** 2, np.sin(theta_B) ** 2, np.sin(theta_B) * np.cos(theta_B)],
+                [np.cos(theta_C) ** 2, np.sin(theta_C) ** 2, np.sin(theta_C) * np.cos(theta_C)]
             ])
             T_inv = np.linalg.inv(T)
 
@@ -1546,40 +1591,56 @@ def process_sg_number(sg_number, strain_gauge_data, E, v):
             # epsilon_x = global_strains[:, 0]
             # epsilon_y = global_strains[:, 1]
             C = (global_strains[:, 0] + global_strains[:, 1]) / 2
-            R = np.sqrt(((global_strains[:, 0] - global_strains[:, 1]) / 2)**2 + (global_strains[:, 2] / 2)**2)
+            R = np.sqrt(((global_strains[:, 0] - global_strains[:, 1]) / 2) ** 2 + (global_strains[:, 2] / 2) ** 2)
             principal_strains = np.stack((C + R, C - R), axis=-1)
 
             # Vectorized principal stresses calculation
             if material_input_dialog.is_temperature_dependent_properties_checked == False:
+                # Compute a constant S matrix for all time points
                 S = np.array([
                     [1, v[0]],
                     [v[0], 1]
-                ]) * E[0] / (1 - v[0]**2)
+                ]) * E[0] / (1 - v[0] ** 2)
                 principal_stresses = (principal_strains / 1e6) @ S.T / 1e6  # Convert to MPa
 
-            # if material_input_dialog.is_temperature_dependent_properties_checked == True:
-            
-            #     # Method 1
-            #     principal_stresses = np.zeros_like(principal_strains)
-            #     for i in range(principal_strains.shape[0]):
-            #         S = np.array([
-            #             [1, v[i]],
-            #             [v[i], 1]
-            #         ]) * E[i] / (1 - v[i]**2)
-            #         principal_stresses[i, :] = (principal_strains[i, :] / 1e6) @ S.T / 1e6  # Convert to MPa
-                    
-            #     # Method 2
-            #     S = np.array([
-            #         [1, v],
-            #         [v, 1]
-            #     ]).transpose((2, 0, 1)) * E[:, np.newaxis, np.newaxis] / (1 - v[:, np.newaxis]**2)
-            #     principal_stresses = (principal_strains / 1e6)[:, np.newaxis, :] @ S
-            #     principal_stresses = principal_stresses[:, 0, :] / 1e6  # Convert to MPa
+            if material_input_dialog.is_temperature_dependent_properties_checked == True:
 
-            # Vectorized principal strain orientation calculation
-            # gamma_xy  = global_strains[:, 2]
-            # epsilon_x = global_strains[:, 0]
-            # epsilon_y = global_strains[:, 1]
+                strain_time = data['Time'].values  # Time points of strain data
+                temp_time = material_input_dialog.temperature_measurement_data_df['Time'].values  # Time points of temperature data
+
+                # Construct column names for E and v
+                first_sg_col = sg_cols[0]
+                channel_identifier = "_".join(first_sg_col.split('_')[:2])  # e.g., 'SG1_1'
+
+                if f"{channel_identifier}_E" not in material_input_dialog.interpolated_material_data.columns or \
+                   f"{channel_identifier}_v" not in material_input_dialog.interpolated_material_data.columns:
+                    print(f"Skipping SG{sg_number} due to missing temperature data.")
+                    return []
+
+                # Retrieve the corresponding E and v for the current channel
+                E_channel_original = material_input_dialog.interpolated_material_data[f"{channel_identifier}_E"].values
+                v_channel_original = material_input_dialog.interpolated_material_data[f"{channel_identifier}_v"].values
+
+                # Interpolation functions
+                E_interp_func = interp1d(temp_time, E_channel_original, fill_value="extrapolate")
+                v_interp_func = interp1d(temp_time, v_channel_original, fill_value="extrapolate")
+
+                # Apply interpolation to get E and v values at strain time points
+                E_channel = E_interp_func(strain_time) / 1e6 # Convert from Pa to MPa
+                v_channel = v_interp_func(strain_time)
+
+
+                # Compute the principal stresses at each time step
+                S11 = (1 * E_channel) / (1 - v_channel ** 2)
+                S12 = (v_channel * E_channel) / (1 - v_channel ** 2)
+
+                # Calculate principal stresses
+                principal_stresses_1 = (S11 * principal_strains[:, 0] + S12 * principal_strains[:, 1]) / 1e6
+                principal_stresses_2 = (S12 * principal_strains[:, 0] + S11 * principal_strains[:, 1]) / 1e6
+
+                # Stack them together to form the principal stresses matrix
+                principal_stresses = np.stack((principal_stresses_1, principal_stresses_2), axis=-1)
+
             theta_p_rad = 0.5 * np.arctan2(global_strains[:, 2], global_strains[:, 0] - global_strains[:, 1])
             theta_p = np.degrees(theta_p_rad)
             theta_p[theta_p < 0] += 180
@@ -1592,10 +1653,13 @@ def process_sg_number(sg_number, strain_gauge_data, E, v):
             # Vectorized von Mises stress calculation
             # S1 = principal_stresses[:, 0]
             # S2 = principal_stresses[:, 1]
-            von_mises_stresses = np.sqrt(((principal_stresses[:, 0] - principal_stresses[:, 1])**2 + principal_stresses[:, 0]**2 + principal_stresses[:, 1]**2) / 2)
+            von_mises_stresses = np.sqrt(((principal_stresses[:, 0] - principal_stresses[:,
+                                                                      1]) ** 2 + principal_stresses[:,
+                                                                                 0] ** 2 + principal_stresses[:,
+                                                                                           1] ** 2) / 2)
 
             # Collect results into new columns
-            for i, strain_type in enumerate(['epsilon_x [µε]', 'epsilon_y [µε]', 'gamma_xy [µε]']):
+            for i, strain_type in enumerate(['epsilon_x [µe]', 'epsilon_y [µe]', 'gamma_xy [µe]']):
                 new_columns.append(pd.DataFrame({f'SG{sg_number}_{strain_type}': global_strains[:, i]}))
             new_columns.append(pd.DataFrame({
                 f'SG{sg_number}_sigma_1 [MPa]': principal_stresses[:, 0],
@@ -1611,6 +1675,7 @@ def process_sg_number(sg_number, strain_gauge_data, E, v):
         print(f'Unexpected number of columns for Rosette {sg_number}.')
     return new_columns
 
+
 def calculate_all_SG_variables(strain_gauge_data, rosette_angles_df):
     # Start the timer
     start_time = time_module.time()
@@ -1620,7 +1685,7 @@ def calculate_all_SG_variables(strain_gauge_data, rosette_angles_df):
 
     new_columns_list = []
     with concurrent.futures.ThreadPoolExecutor() as executor:
-        results = executor.map(lambda sg_number: process_sg_number(sg_number, strain_gauge_data, E, v), sg_numbers)
+        results = executor.map(lambda sg_number: process_sg_number(sg_number, strain_gauge_data), sg_numbers)
         for result in results:
             new_columns_list.extend(result)
 
@@ -1629,7 +1694,7 @@ def calculate_all_SG_variables(strain_gauge_data, rosette_angles_df):
         strain_gauge_data = pd.concat([strain_gauge_data] + new_columns_list, axis=1)
     else:
         pass
-        #QMessageBox.information(None, "Info", "No new columns generated during SG variable calculation.")
+        # QMessageBox.information(None, "Info", "No new columns generated during SG variable calculation.")
 
     # End the timer
     end_time = time_module.time()
@@ -1642,6 +1707,8 @@ def calculate_all_SG_variables(strain_gauge_data, rosette_angles_df):
     QMessageBox.information(None, "Info", f"Calculation is completed in {elapsed_time_formatted} seconds.")
 
     return strain_gauge_data
+
+
 # endregion
 
 # region Calculate the SG results
@@ -1650,10 +1717,6 @@ if file_path_SG_raw_data:
     output_SG_data_w_raw.insert(0, 'Time', time)
     output_SG_data_w_raw.set_index('Time', inplace=True)
     output_SG_data_w_raw
-# endregion
-
-# region Write the resulting dataframe to a CSV file inside the solution folder
-#output_SG_data_w_raw.to_csv(r'""" + file_path_of_SG_calculations + """')
 # endregion
 
 # region Show the results
@@ -1665,25 +1728,29 @@ try:
                     return port
         return None
 
+
     if __name__ == '__main__':
         app_plot = QApplication(sys.argv)
 
         # The plotly-resampler callback to update the graph after a relayout event (= zoom/pan)
         my_fig_main.register_update_graph_callback(app=my_dash_app, graph_id="graph-id")
         my_fig_compared_data.register_update_graph_callback(app=my_dash_app, graph_id="graph-compared-data-id")
-        my_fig_main_and_compared_data.register_update_graph_callback(app=my_dash_app, graph_id="graph-main-and-compared-data-id")
-        
+        my_fig_main_and_compared_data.register_update_graph_callback(app=my_dash_app,
+                                                                     graph_id="graph-main-and-compared-data-id")
+
         mainWindow = PlotWindow('""" + solution_directory_path + """', '""" + file_name_of_SG_calculations + """')
         mainWindow.show()
         available_port = find_available_port([8050, 8051, 8052, 8053])
         if available_port:
-            threading.Thread(target=my_dash_app.run_server, kwargs={'debug': False, 'use_reloader': False, 'port': available_port}, daemon=True).start()
+            threading.Thread(target=my_dash_app.run_server,
+                             kwargs={'debug': False, 'use_reloader': False, 'port': available_port},
+                             daemon=True).start()
             print('Available Port: ' + str(available_port))
         sys.exit(app_plot.exec_())
         # os.remove(cpython_script_path)
 except Exception as e:
-        print(f"An error occurred: {e}")
-        input("Press Enter to close...")
+    print(f"An error occurred: {e}")
+    input("Press Enter to close...")
 # endregion
 """
 
