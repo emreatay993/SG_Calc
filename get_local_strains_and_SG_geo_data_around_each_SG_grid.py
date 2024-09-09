@@ -16,9 +16,9 @@ import context_menu
 
 # region Definition of classes and global variables
 class ModernInputBox(Form):
-    def __init__(self, prompt, title="Input Required", default_value=""):
+    def __init__(self, prompt, title="Input Required", default_value="", width=400):
         self.Text = title
-        self.Width = 400  # Initial width
+        self.Width = width  # Use the specified width
         self.Height = 180  # Initial height
         self.StartPosition = FormStartPosition.CenterParent
         self.BackColor = Color.White  # Set background color to white
@@ -30,7 +30,7 @@ class ModernInputBox(Form):
         self.label.Text = prompt
         self.label.Font = Font("Segoe UI", 10, FontStyle.Regular)
         self.label.Location = Point(20, 20)
-        self.label.Size = Size(360, 20)  # Adjusted size to fit within the form
+        self.label.Size = Size(width - 40, 20)  # Adjust size to fit within the form based on width
         self.label.ForeColor = Color.FromArgb(50, 50, 50)  # Dark gray text
         self.label.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right  # Make label responsive to resizing
         self.label.Parent = self
@@ -38,7 +38,7 @@ class ModernInputBox(Form):
         # TextBox
         self.textBox = TextBox()
         self.textBox.Location = Point(20, 50)
-        self.textBox.Size = Size(360, 30)  # Adjusted size to fit within the form
+        self.textBox.Size = Size(width - 40, 30)  # Adjust size to fit within the form based on width
         self.textBox.Font = Font("Segoe UI", 10, FontStyle.Regular)
         self.textBox.ForeColor = Color.FromArgb(50, 50, 50)
         self.textBox.Text = default_value  # Default value
@@ -52,7 +52,7 @@ class ModernInputBox(Form):
         self.okButton.ForeColor = Color.White
         self.okButton.BackColor = Color.FromArgb(45, 156, 219)  # Blue button
         self.okButton.FlatStyle = System.Windows.Forms.FlatStyle.Flat
-        self.okButton.Location = Point(150, 100)  # Centered within the form
+        self.okButton.Location = Point((width - 100) // 2, 100)  # Center the button within the form
         self.okButton.Size = Size(100, 30)
         self.okButton.Anchor = AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right  # Make button responsive to resizing
         self.okButton.Parent = self
@@ -223,7 +223,7 @@ def create_NS_of_nodes_around_SG(NS_faces_test_parts, list_of_ids_of_each_CS_SG_
     return list_of_NS_test_part_strains
 
 # Prompt the user for time to be displayed in results
-def prompt_user_for_time():
+def prompt_user_for_displayed_time():
     prompt = "Enter the time to be displayed/extracted [in seconds]:"
     form = ModernInputBox(prompt, "Time Input", "0.777")
     time_str = form.get_input()
@@ -233,7 +233,35 @@ def prompt_user_for_time():
             return time_value
         except ValueError:
             MessageBox.Show("Invalid input. Please enter a numeric value.", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error)
-            return prompt_user_for_time()  # Retry input if invalid
+            return prompt_user_for_displayed_time()  # Retry input if invalid
+    else:
+        MessageBox.Show("Operation canceled. Please provide a valid time value.", "Information", MessageBoxButtons.OK, MessageBoxIcon.Information)
+        return None
+
+# Prompt the user for preload time
+def prompt_user_for_preload_time(time_value):
+    prompt = (
+        "Enter the reference time (preload step etc.) to zero the strain gauges. If no SG zeroing will be applied, set the value below as zero (0)."
+    )
+    form = ModernInputBox(prompt, "Preload Time Input", "0.000", width=900)
+    time_preload_str = form.get_input()
+    if time_preload_str is not None:
+        try:
+            time_preload = float(time_preload_str)
+            # Check if the preload time is valid
+            if time_preload >= 0 and time_preload < time_value:
+                return time_preload
+            else:
+                MessageBox.Show(
+                    "Invalid input. Please enter a value greater than or equal to 0 and less than "+ time_value,
+                    "Error",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Error
+                )
+                return prompt_user_for_preload_time(time_value)  # Retry input if invalid
+        except ValueError:
+            MessageBox.Show("Invalid input. Please enter a numeric value.", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error)
+            return prompt_user_for_preload_time(time_value)  # Retry input if invalid
     else:
         MessageBox.Show("Operation canceled. Please provide a valid time value.", "Information", MessageBoxButtons.OK, MessageBoxIcon.Information)
         return None
@@ -271,20 +299,24 @@ def evaluate_all_results():
     sol_selected_environment.EvaluateAllResults()
 
 # Create CSV files from each of these local SG strain results
-def create_CSV_files_from_strain_results(list_of_obj_of_StrainX_around):
-    solution_directory_path = sol_selected_environment.WorkingDir
-    subfolder = os.path.join(solution_directory_path, "StrainX_around_each_SG")
+def create_CSV_files_from_strain_results(list_of_obj_of_StrainX_around, time_preload, time_value):
+    if time_preload == 0:
+        solution_directory_path = sol_selected_environment.WorkingDir
+        subfolder = os.path.join(solution_directory_path, "StrainX_around_each_SG")
 
-    if not os.path.exists(subfolder):
-        os.makedirs(subfolder)
-        print("Folder '{}' created successfully.".format(subfolder))
-    else:
-        print("Folder '{}' already exists.".format(subfolder))
+        if not os.path.exists(subfolder):
+            os.makedirs(subfolder)
+            print("Folder '{}' created successfully.".format(subfolder))
+        else:
+            print("Folder '{}' already exists.".format(subfolder))
 
-    for i in range(len(list_of_obj_of_StrainX_around)):
-        file_name_of_StrainX_around_each_SG = list_of_obj_of_StrainX_around[i].Name + ".csv"
-        file_path = os.path.join(subfolder, file_name_of_StrainX_around_each_SG)
-        list_of_obj_of_StrainX_around[i].ExportToTextFile(file_path)
+        for i in range(len(list_of_obj_of_StrainX_around)):
+            file_name_of_StrainX_around_each_SG = list_of_obj_of_StrainX_around[i].Name + ".csv"
+            file_path = os.path.join(subfolder, file_name_of_StrainX_around_each_SG)
+            list_of_obj_of_StrainX_around[i].ExportToTextFile(file_path)
+            
+    if time_preload > 0 and time_preload < time_value:
+        print("Do stuff.")
 
 # Create CSV files containing the corner points of each SG grid body
 def create_CSV_files_for_SG_grid_bodies_in_global_CS():
@@ -358,8 +390,6 @@ def save_data_to_csv(coordinate_data, file_path):
             writer.writeheader()
         writer.writerow({key: coordinate_data.get(key, '') for key in fieldnames})
 
-    print("Data saved to {}".format(file_path))
-
 def create_CSV_files_for_coordinate_system():
     solution_directory_path = sol_selected_environment.WorkingDir
     subfolder = os.path.join(solution_directory_path, "StrainX_around_each_SG")
@@ -382,6 +412,7 @@ def create_CSV_files_for_coordinate_system():
         coordinate_data = get_SG_coordinate_data(channel_name)
         save_data_to_csv(coordinate_data, file_path)
 
+    print("Data saved to {}".format(file_path))
     #os.startfile(file_path)
 
 def parse_coordinate_matrix(file_path):
@@ -489,7 +520,8 @@ NS_faces_test_parts = ensure_test_piece_defined(NS_faces_test_parts, NS_faces_te
 list_of_ids_of_each_CS_SG_Ch_, list_of_names_of_each_CS_SG_Ch_ = get_CS_SG_ids_and_names()
 
 radius = prompt_user_for_radius()
-time_value = prompt_user_for_time()
+time_value = prompt_user_for_displayed_time()
+time_preload = prompt_user_for_preload_time(time_value)
 
 list_of_NS_test_part_strains = create_NS_of_nodes_around_SG(NS_faces_test_parts, list_of_ids_of_each_CS_SG_Ch_, list_of_names_of_each_CS_SG_Ch_, radius)
 create_contour_plot_of_strains(list_of_names_of_each_CS_SG_Ch_, list_of_ids_of_each_CS_SG_Ch_, list_of_NS_test_part_strains, time_value)
@@ -504,7 +536,7 @@ list_of_obj_of_StrainX_around = [
 group_existing_objects(list_of_obj_of_NS_of_nodes_around_each_SG, list_of_obj_of_StrainX_around)
 evaluate_all_results()
 
-create_CSV_files_from_strain_results(list_of_obj_of_StrainX_around)
+create_CSV_files_from_strain_results(list_of_obj_of_StrainX_around, time_preload, time_value)
 create_CSV_files_for_SG_grid_bodies_in_global_CS()
 create_CSV_files_for_coordinate_system()
 create_CSV_files_for_SG_grid_bodies_in_local_CS()
