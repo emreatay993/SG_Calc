@@ -267,7 +267,7 @@ def prompt_user_for_preload_time(time_value):
         return None
 
 # Create contour plot of strains for nodes around each CS_SG_Ch_
-def create_contour_plot_of_strains(list_of_names_of_each_CS_SG_Ch_, list_of_ids_of_each_CS_SG_Ch_, list_of_NS_test_part_strains, time_value):
+def create_contour_plot_of_strains(list_of_names_of_each_CS_SG_Ch_, list_of_ids_of_each_CS_SG_Ch_, list_of_NS_test_part_strains, selected_time_point):
     for i in range(len(list_of_names_of_each_CS_SG_Ch_)):
         try:
             obj_of_contour_of_nodes_around_each_SG_Ch = sol_selected_environment.AddNormalElasticStrain()
@@ -276,7 +276,7 @@ def create_contour_plot_of_strains(list_of_names_of_each_CS_SG_Ch_, list_of_ids_
             obj_of_contour_of_nodes_around_each_SG_Ch.Name = "StrainX_around_" + list_of_names_of_each_CS_SG_Ch_[i][3:]
             obj_of_contour_of_nodes_around_each_SG_Ch.CoordinateSystem = DataModel.GetObjectById(list_of_ids_of_each_CS_SG_Ch_[i])
             obj_of_contour_of_nodes_around_each_SG_Ch.CalculateTimeHistory = True
-            obj_of_contour_of_nodes_around_each_SG_Ch.DisplayTime = Quantity(time_value, "sec")
+            obj_of_contour_of_nodes_around_each_SG_Ch.DisplayTime = Quantity(selected_time_point, "sec")
         except:
             message = r"""Please define the solution environment of interest by running "Solution Object" button. """
             caption = "Error"
@@ -300,23 +300,77 @@ def evaluate_all_results():
 
 # Create CSV files from each of these local SG strain results
 def create_CSV_files_from_strain_results(list_of_obj_of_StrainX_around, time_preload, time_value):
+
+    # Initialize the subfolder
+    solution_directory_path = sol_selected_environment.WorkingDir
+    subfolder = os.path.join(solution_directory_path, "StrainX_around_each_SG")
+    if not os.path.exists(subfolder):
+        os.makedirs(subfolder)
+        print("Folder '{}' created successfully.".format(subfolder))
+    else:
+        print("Folder '{}' already exists.".format(subfolder))
+
     if time_preload == 0:
-        solution_directory_path = sol_selected_environment.WorkingDir
-        subfolder = os.path.join(solution_directory_path, "StrainX_around_each_SG")
-
-        if not os.path.exists(subfolder):
-            os.makedirs(subfolder)
-            print("Folder '{}' created successfully.".format(subfolder))
-        else:
-            print("Folder '{}' already exists.".format(subfolder))
-
+        # Get the local strains around SGs for a selected time point
         for i in range(len(list_of_obj_of_StrainX_around)):
             file_name_of_StrainX_around_each_SG = list_of_obj_of_StrainX_around[i].Name + ".csv"
             file_path = os.path.join(subfolder, file_name_of_StrainX_around_each_SG)
             list_of_obj_of_StrainX_around[i].ExportToTextFile(file_path)
             
-    if time_preload > 0 and time_preload < time_value:
-        print("Do stuff.")
+    elif time_preload > 0 and time_preload < time_value:
+        # Get the local strains around SGs for a selected time point
+        for i in range(len(list_of_obj_of_StrainX_around)):
+            file_name_of_StrainX_around_each_SG = list_of_obj_of_StrainX_around[i].Name + ".csv"
+            file_path = os.path.join(subfolder, file_name_of_StrainX_around_each_SG)
+            list_of_obj_of_StrainX_around[i].ExportToTextFile(file_path)
+        
+        # Get the local strains around SGs for a selected time point for zeroing stage
+        for obj_of_contour_of_nodes_around_each_SG_Ch in list_of_obj_of_StrainX_around:
+            obj_of_contour_of_nodes_around_each_SG_Ch.DisplayTime = Quantity(time_preload, "sec")
+        evaluate_all_results()
+        
+        for i in range(len(list_of_obj_of_StrainX_around)):
+            file_name_of_StrainX_around_each_SG_preload = "Preload_" + list_of_obj_of_StrainX_around[i].Name + ".csv"
+            file_path_preload = os.path.join(subfolder, file_name_of_StrainX_around_each_SG_preload)
+            list_of_obj_of_StrainX_around[i].ExportToTextFile(file_path_preload)
+        
+        # Perform the zeroing calculation for each SG channel
+        for i in range(len(list_of_obj_of_StrainX_around)):
+            # Construct the file paths
+            file_name_selected = list_of_obj_of_StrainX_around[i].Name + ".csv"
+            file_name_preload = "Preload_" + list_of_obj_of_StrainX_around[i].Name + ".csv"
+            file_path_selected = os.path.join(subfolder, file_name_selected)
+            file_path_preload = os.path.join(subfolder, file_name_preload)
+
+            # Perform the zeroing calculation and create new CSV files
+            file_name_zeroed = list_of_obj_of_StrainX_around[i].Name + "_zeroed.csv"
+            file_path_zeroed = os.path.join(subfolder, file_name_zeroed)
+
+            # Read the CSV files and perform the subtraction
+            with open(file_path_selected, 'r') as selected_file, open(file_path_preload, 'r') as preload_file, open(file_path_zeroed, 'wb') as zeroed_file:
+                reader_selected = csv.reader(selected_file, delimiter='\t')
+                reader_preload = csv.reader(preload_file, delimiter='\t')
+                writer = csv.writer(zeroed_file, delimiter='\t')
+
+                # Read headers
+                headers = next(reader_selected)
+                next(reader_preload)  # Skip header in preload file
+
+                # Write headers to the new zeroed file
+                writer.writerow(headers)
+
+                # Find the index of the "Normal Elastic Strain (mm/mm)" column
+                strain_index = headers.index("Normal Elastic Strain (mm/mm)")
+
+                # Subtract the values in the "Normal Elastic Strain (mm/mm)" column
+                for row_selected, row_preload in zip(reader_selected, reader_preload):
+                    # Subtract preload strain from selected strain
+                    row_selected[strain_index] = str(float(row_selected[strain_index]) - float(row_preload[strain_index]))
+                    # Write the modified row to the new CSV file
+                    writer.writerow(row_selected)
+        
+    else:
+        print("Invalid time_preload value. It must be either zero or a positive number smaller than time_value.")
 
 # Create CSV files containing the corner points of each SG grid body
 def create_CSV_files_for_SG_grid_bodies_in_global_CS():
