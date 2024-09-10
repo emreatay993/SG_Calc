@@ -8,6 +8,7 @@ from PyQt5.QtWidgets import QApplication, QMainWindow, QTabWidget, QWidget, QVBo
 from PyQt5.QtCore import Qt
 from scipy.interpolate import griddata
 import pyvista as pv
+import vtk
 from pyvistaqt import BackgroundPlotter
 
 class MainWindow(QMainWindow):
@@ -224,8 +225,24 @@ class VTKWidget(QWidget):
     def __init__(self, main_window):
         super().__init__()
         self.main_window = main_window
+
+        self.plotter = BackgroundPlotter(show=False)  # Initialize the PyVista plotter
+
+        self.refined_mesh = None
         self.refined_mesh_actor = None
         self.selected_points_actor = None
+
+        # Initialize the hover label using VTK
+        self.hover_label = vtk.vtkTextActor()
+        self.hover_label.GetTextProperty().SetFontSize(12)
+        self.hover_label.GetTextProperty().SetColor(0, 0, 0)  # Black color
+
+        # Add the hover label to the renderer but keep it invisible initially
+        self.plotter.renderer.AddActor(self.hover_label)
+        self.hover_label.VisibilityOff()
+
+        # Set a distance threshold to determine when to hide the hover label
+        self.distance_threshold = 1  # Adjust this value as needed
 
         # Initialize the directional vectors for the local coordinate system
         self.x_dir = None
@@ -301,7 +318,6 @@ class VTKWidget(QWidget):
 
         layout.addLayout(h_layout_3)
 
-        self.plotter = BackgroundPlotter(show=False)  # Initialize the PyVista plotter
         self.set_mouse_rotation_behavior()
         layout.addWidget(self.plotter.interactor)
 
@@ -340,6 +356,44 @@ class VTKWidget(QWidget):
         """Enable or disable centering the screen around the rotation center."""
         self.center_camera = (state == Qt.Checked)
 
+    def on_mouse_move(self, interactor, event):
+        """Handles mouse movement to display strain values on hover."""
+        # Get the mouse position in window coordinates
+        click_pos = interactor.GetEventPosition()
+
+        # Create a picker instance
+        picker = vtk.vtkPointPicker()
+
+        # Perform picking operation at the given mouse position
+        picker.Pick(click_pos[0], click_pos[1], 0, self.plotter.renderer)
+        pick_position = picker.GetPickPosition()
+
+        if pick_position and self.refined_mesh is not None:
+            # Find the closest point in the PolyData (refined mesh)
+            closest_point_id = self.refined_mesh.find_closest_point(pick_position)
+            if closest_point_id >= 0:  # Valid point found
+                # Calculate the distance to the closest point
+                closest_point = self.refined_mesh.points[closest_point_id]
+                distance = np.linalg.norm(np.array(pick_position) - np.array(closest_point))
+
+                # Check if the distance is within the threshold
+                if distance <= self.distance_threshold:
+                    strain_value = self.refined_mesh.point_data['Strain [µε]'][closest_point_id]
+
+                    # Update the text and position of the hover label
+                    self.hover_label.SetInput(f"Strain: {strain_value:.2f} µε")
+                    self.hover_label.SetPosition(click_pos[0] + 10, click_pos[1] - 10)
+                    self.hover_label.VisibilityOn()  # Make the label visible
+                else:
+                    self.hover_label.VisibilityOff()  # Hide the label if the mouse is far away
+            else:
+                self.hover_label.VisibilityOff()  # Hide the label if no valid point is found
+        else:
+            self.hover_label.VisibilityOff()  # Hide the label if not hovering over any point
+
+        # Render the plotter after updating
+        self.plotter.render()
+
     def set_mouse_rotation_behavior(self):
         """Customizes mouse rotation to use the clicked point as the center of rotation."""
 
@@ -374,6 +428,10 @@ class VTKWidget(QWidget):
         # Set the custom interaction behavior
         self.plotter.interactor.AddObserver("LeftButtonPressEvent", on_left_button_down)
         self.plotter.interactor.AddObserver("EndInteractionEvent", on_left_button_up)
+        self.plotter.interactor.AddObserver("MouseMoveEvent", self.on_mouse_move)
+
+        # Disable existing picking to avoid conflicts
+        self.plotter.disable_picking()
 
         # Explicitly set interaction style back after observers
         self.plotter.interactor.SetInteractorStyle(self.plotter.interactor.GetInteractorStyle())
@@ -566,6 +624,9 @@ class VTKWidget(QWidget):
             # Subdivide the mesh to increase resolution
             refined_mesh = mesh.subdivide(subdivide_level, subfilter='linear')
             refined_mesh = refined_mesh.sample(mesh)
+
+            # Store the refined mesh for later use
+            self.refined_mesh = refined_mesh
 
             # Apply bounding box filtering if the bounding box exists for this channel
             bounding_box_key = display_name.replace("SG_Ch_", "SG_Grid_Body_")
