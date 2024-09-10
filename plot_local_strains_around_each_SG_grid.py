@@ -320,11 +320,13 @@ class VTKWidget(QWidget):
         self.center_camera = True
 
     def add_sphere_at_click(self, pick_position):
-        """Adds a sphere at the given pick position."""
+        """Adds a transparent sphere at the given pick position."""
         if pick_position:
-            # Add a new sphere at the clicked position
+            # Add a new sphere at the clicked position with a specified opacity
             sphere = pv.Sphere(radius=1, center=pick_position)
-            self.rotation_sphere_actor = self.plotter.add_mesh(sphere, color="blue")
+            self.rotation_sphere_actor = self.plotter.add_mesh(
+                sphere, color="blue", opacity=0.3  # Set opacity to 50%
+            )
             self.plotter.render()
 
     def remove_sphere(self):
