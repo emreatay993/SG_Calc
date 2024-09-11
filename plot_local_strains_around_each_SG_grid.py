@@ -464,7 +464,16 @@ class VTKWidget(QWidget):
 
         def sort_key(display_name):
             try:
-                return tuple(map(int, display_name.replace("SG_Ch_", "").split('_')))
+                # Extract the base part (e.g., "SG_Ch_1_1") and ignore anything in parentheses
+                base_name = display_name.split('(')[0]
+
+                # Remove any non-numeric part at the end after the last underscore
+                parts = base_name.split('_')
+
+                # Convert the numeric parts to a tuple of integers
+                numeric_parts = tuple(int(part) for part in parts if part.isdigit())
+
+                return numeric_parts
             except ValueError as e:
                 print(f"Error parsing '{display_name}': {e}. This item will be sorted at the end of the combobox.")
                 return float('inf'), 0  # Move problematic entries to the end
