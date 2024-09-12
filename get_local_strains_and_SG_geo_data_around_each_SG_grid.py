@@ -342,12 +342,12 @@ def create_CSV_files_from_strain_results(list_of_obj_of_StrainX_around, time_pre
             file_path_selected = os.path.join(subfolder, file_name_selected)
             file_path_preload = os.path.join(subfolder, file_name_preload)
 
-            # Perform the zeroing calculation and create new CSV files
+            # Create a "_zeroed" file to store the results temporarily
             file_name_zeroed = list_of_obj_of_StrainX_around[i].Name + "_zeroed.csv"
             file_path_zeroed = os.path.join(subfolder, file_name_zeroed)
 
             # Read the CSV files and perform the subtraction
-            with open(file_path_selected, 'r') as selected_file, open(file_path_preload, 'r') as preload_file, open(file_path_zeroed, 'wb') as zeroed_file:
+            with open(file_path_selected, 'r') as selected_file, open(file_path_preload, 'r') as preload_file, open(file_path_zeroed, 'w', newline='') as zeroed_file:
                 reader_selected = csv.reader(selected_file, delimiter='\t')
                 reader_preload = csv.reader(preload_file, delimiter='\t')
                 writer = csv.writer(zeroed_file, delimiter='\t')
@@ -368,7 +368,14 @@ def create_CSV_files_from_strain_results(list_of_obj_of_StrainX_around, time_pre
                     row_selected[strain_index] = str(float(row_selected[strain_index]) - float(row_preload[strain_index]))
                     # Write the modified row to the new CSV file
                     writer.writerow(row_selected)
-        
+
+            # Remove the original source file
+            os.remove(file_path_selected)
+
+            # Rename the "_zeroed" file to the original filename
+            os.rename(file_path_zeroed, file_path_selected)
+
+            print(f"Zeroed data successfully written to {file_path_selected}")
     else:
         print("Invalid time_preload value. It must be either zero or a positive number smaller than time_value.")
 
