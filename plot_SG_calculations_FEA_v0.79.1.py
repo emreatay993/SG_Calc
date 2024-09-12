@@ -442,7 +442,7 @@ class PlotlyViewer(QWebEngineView):
 class PlotWindow(QMainWindow):
     def __init__(self, folder_name, file_name):
         super().__init__()
-        self.setWindowTitle('SG Calculations : All Loads Applied at Once')
+        self.setWindowTitle('SG Calculations : """ + sol_selected_environment.Parent.Name + """')
         self.setGeometry(100, 100, 1000, 550)
         self.folder_name = folder_name
         self.file_name = file_name
@@ -635,7 +635,7 @@ class PlotWindow(QMainWindow):
 
     def save_current_plot(self):
         # Retrieve the parent name from the environment for the filename
-        parent_name = '''All Loads Applied at Once'''
+        parent_name = '''""" + sol_selected_environment.Parent.Name + """'''
         active_tab = self.get_active_tab()
 
         if active_tab == 'tab-main':
@@ -981,7 +981,7 @@ def plot_graph(n_clicks):
             mainWindow.plot_progress.emit(progress)  # Emit the plot progress signal
 
             my_fig_main.update_layout(
-                title_text='SG Calculations : All Loads Applied at Once ' + "( " + selected_group + " )",
+                title_text='SG Calculations : """ + sol_selected_environment.Parent.Name + """ ' + "( " + selected_group + " )",
                 title_x=0.45,
                 title_y=0.95,
                 legend_title_text='Result',
@@ -1166,7 +1166,7 @@ def plot_compared_data_graph(n_clicks):
                 mainWindow.plot_progress.emit(progress)  # Emit the plot progress signal
 
                 my_fig_compared_data.update_layout(
-                    title_text='Compared Data : All Loads Applied at Once ' + " (" + selected_group + ")",
+                    title_text='Compared Data : """ + sol_selected_environment.Parent.Name + """ ' + " (" + selected_group + ")",
                     title_x=0.45,
                     title_y=0.95,
                     legend_title_text='Result',
@@ -1270,7 +1270,7 @@ def plot_main_and_compared_data_graph(n_clicks):
                 mainWindow.plot_progress.emit(progress)  # Emit the plot progress signal
 
                 my_fig_main_and_compared_data.update_layout(
-                    title_text='Overlay Plot : All Loads Applied at Once ' + " (" + selected_group + ")",
+                    title_text='Overlay Plot : """ + sol_selected_environment.Parent.Name + """ ' + " (" + selected_group + ")",
                     title_x=0.45,
                     title_y=0.95,
                     legend_title_text='Result',
@@ -1366,7 +1366,7 @@ def plot_comparison_graph(n_clicks):
                 mainWindow.plot_progress.emit(progress)  # Emit the plot progress signal
 
                 my_fig_comparison.update_layout(
-                    title_text='Comparison : All Loads Applied at Once ' + " (" + selected_group + ")",
+                    title_text='Comparison : """ + sol_selected_environment.Parent.Name + """ ' + " (" + selected_group + ")",
                     title_x=0.45,
                     title_y=0.95,
                     legend_title_text='Result',
@@ -1462,7 +1462,7 @@ def plot_comparison_percent_graph(n_clicks):
                 mainWindow.plot_progress.emit(progress)  # Emit the plot progress signal
 
                 my_fig_comparison_percent.update_layout(
-                    title_text='Comparison : All Loads Applied at Once ' + " (" + selected_group + ")",
+                    title_text='Comparison : """ + sol_selected_environment.Parent.Name + """ ' + " (" + selected_group + ")",
                     title_x=0.45,
                     title_y=0.95,
                     legend_title_text='Result',
