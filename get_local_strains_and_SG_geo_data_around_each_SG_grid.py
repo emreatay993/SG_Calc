@@ -347,7 +347,7 @@ def create_CSV_files_from_strain_results(list_of_obj_of_StrainX_around, time_pre
             file_path_zeroed = os.path.join(subfolder, file_name_zeroed)
 
             # Read the CSV files and perform the subtraction
-            with open(file_path_selected, 'r') as selected_file, open(file_path_preload, 'r') as preload_file, open(file_path_zeroed, 'w', newline='') as zeroed_file:
+            with open(file_path_selected, 'r') as selected_file, open(file_path_preload, 'r') as preload_file, open(file_path_zeroed, 'wb') as zeroed_file:
                 reader_selected = csv.reader(selected_file, delimiter='\t')
                 reader_preload = csv.reader(preload_file, delimiter='\t')
                 writer = csv.writer(zeroed_file, delimiter='\t')
