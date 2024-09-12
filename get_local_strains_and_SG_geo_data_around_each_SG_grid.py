@@ -375,7 +375,7 @@ def create_CSV_files_from_strain_results(list_of_obj_of_StrainX_around, time_pre
             # Rename the "_zeroed" file to the original filename
             os.rename(file_path_zeroed, file_path_selected)
 
-            print(f"Zeroed data successfully written to {file_path_selected}")
+            print("Zeroed data successfully written to " + file_path_selected)
     else:
         print("Invalid time_preload value. It must be either zero or a positive number smaller than time_value.")
 
