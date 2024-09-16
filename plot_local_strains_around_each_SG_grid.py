@@ -298,7 +298,7 @@ class VTKWidget(QWidget):
 
         h_layout_3 = QHBoxLayout()
 
-        self.label_offset_x = QLabel("X Offset:")
+        self.label_offset_x = QLabel("X Offset (Local Coord) :")
         self.offset_x_spinbox = QDoubleSpinBox()
         self.offset_x_spinbox.setRange(-50, 50)
         self.offset_x_spinbox.setValue(0)
@@ -307,7 +307,7 @@ class VTKWidget(QWidget):
         h_layout_3.addWidget(self.label_offset_x)
         h_layout_3.addWidget(self.offset_x_spinbox)
 
-        self.label_offset_y = QLabel("Y Offset:")
+        self.label_offset_y = QLabel("Y Offset (Local Coord) :")
         self.offset_y_spinbox = QDoubleSpinBox()
         self.offset_y_spinbox.setRange(-50, 50)
         self.offset_y_spinbox.setValue(0)
@@ -452,16 +452,6 @@ class VTKWidget(QWidget):
         # Transform bounding boxes to local coordinates
         self.bounding_boxes = self._transform_to_local_coordinates(global_bounding_boxes)
 
-
-        # Load each CSV file that starts with "StrainX_around_"
-        items = []
-        for file_name in os.listdir(folder_path):
-            if file_name.startswith("StrainX_around_") and file_name.endswith(".csv"):
-                file_path = os.path.join(folder_path, file_name)
-                data = pd.read_csv(file_path, sep='\t')
-                display_name = file_name.replace("StrainX_around_", "").replace(".csv", "")
-                items.append((display_name, data, file_name))
-
         def sort_key(display_name):
             try:
                 # Extract the base part (e.g., "SG_Ch_1_1") and ignore anything in parentheses
@@ -478,14 +468,54 @@ class VTKWidget(QWidget):
                 print(f"Error parsing '{display_name}': {e}. This item will be sorted at the end of the combobox.")
                 return float('inf'), 0  # Move problematic entries to the end
 
+        # Initialize dictionaries to store strain, preload, and zeroed files
+        strain_items = []
+        preload_items = {}
+        zeroed_items = {}
+
+        # Load each CSV file that starts with "StrainX_around_", "Preload_StrainX_around_", or ends with "_zeroed"
+        for file_name in os.listdir(folder_path):
+            if file_name.startswith("StrainX_around_") and file_name.endswith(".csv"):
+                # Handle strain files
+                file_path = os.path.join(folder_path, file_name)
+                data = pd.read_csv(file_path, sep='\t')
+                display_name = file_name.replace("StrainX_around_", "").replace(".csv", "")
+                strain_items.append((display_name, data, file_name))
+
+            elif file_name.startswith("Preload_StrainX_around_") and file_name.endswith(".csv"):
+                # Handle preload files
+                file_path = os.path.join(folder_path, file_name)
+                data = pd.read_csv(file_path, sep='\t')
+                display_name = file_name.replace("Preload_StrainX_around_", "").replace(".csv", "")
+                preload_items[display_name] = data  # Store preload files
+
+            elif file_name.endswith("_zeroed.csv"):
+                # Handle zeroed files
+                file_path = os.path.join(folder_path, file_name)
+                data = pd.read_csv(file_path, sep='\t')
+                display_name = file_name.replace("_zeroed.csv", "")
+                zeroed_items[display_name] = data  # Store zeroed files
+
         # Sort items based on SG and channel numbers
-        sorted_items = sorted(items, key=lambda x: sort_key(x[0]))
+        sorted_strain_items = sorted(strain_items, key=lambda x: sort_key(x[0]))
 
         # Add sorted items to the combobox and store data
-        for display_name, data, file_name in sorted_items:
+        for display_name, data, file_name in sorted_strain_items:
             self.data_frames[display_name] = data
             self.file_mapping[display_name] = file_name
             self.comboBox.addItem(display_name)
+
+            # Check if there is a corresponding preload file and store it
+            if display_name in preload_items:
+                preload_display_name = f"Preload_{display_name}"
+                self.data_frames[preload_display_name] = preload_items[display_name]
+                self.comboBox.addItem(preload_display_name)
+
+            # Check if there is a corresponding zeroed file and store it
+            if display_name in zeroed_items:
+                zeroed_display_name = f"{display_name}_zeroed"
+                self.data_frames[zeroed_display_name] = zeroed_items[display_name]
+                self.comboBox.addItem(zeroed_display_name)
 
         # Notify settings tab to load STL files
         self.main_window.loadStlFiles(folder_path)
@@ -569,8 +599,24 @@ class VTKWidget(QWidget):
 
     def updatePlot(self):
         selected_display_name = self.comboBox.currentText()
-        if selected_display_name in self.data_frames:
-            self.plotData(self.data_frames[selected_display_name], selected_display_name)
+
+        # Determine if this is a preload or zeroed file
+        is_preload = selected_display_name.startswith("Preload_")
+        is_zeroed = selected_display_name.endswith("_zeroed")
+
+        # Determine the base display name
+        if is_preload:
+            base_display_name = selected_display_name.replace("Preload_", "")
+        elif is_zeroed:
+            base_display_name = selected_display_name.replace("_zeroed", "")
+        else:
+            base_display_name = selected_display_name
+
+        # Use the same SG grid bodies and local coordinates for preload or zeroed data
+        if base_display_name in self.data_frames:
+            self.plotData(self.data_frames[selected_display_name], base_display_name)
+        else:
+            QMessageBox.warning(self, "Data Error", f"No data found for {selected_display_name}.")
 
     def plotData(self, data, display_name):
         try:
@@ -591,8 +637,14 @@ class VTKWidget(QWidget):
             nodes = np.c_[x.ravel(), y.ravel(), z.ravel()]
             strain = (data['Normal Elastic Strain (mm/mm)'].values) * 1e6
 
-            # Retrieve the local coordinate system from the SG data
-            sg_row = self.sg_data[self.sg_data['CS Name'] == f"CS_{display_name}"]
+            if display_name.startswith("Preload_") or display_name.endswith("_zeroed"):
+                base_display_name = display_name.replace("Preload_", "").replace("_zeroed", "")
+            else:
+                base_display_name = display_name
+
+            # Retrieve the local coordinate system and grid bodies data
+            sg_row = self.sg_data[self.sg_data['CS Name'] == f"CS_{base_display_name}"]
+
             if not sg_row.empty:
                 self.origin = sg_row[['Origin_X', 'Origin_Y', 'Origin_Z']].values.flatten()
                 self.x_dir = sg_row[['X_dir_i', 'X_dir_j', 'X_dir_k']].values.flatten()
@@ -739,7 +791,6 @@ class VTKWidget(QWidget):
             self.plotter.camera.clipping_range = camera_clipping_range
 
             # Render the plot
-            self.plotter.view_isometric()
             self.plotter.show()
 
         except Exception as e:
