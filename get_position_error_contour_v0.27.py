@@ -313,15 +313,15 @@ for i in range(len(list_of_obj_of_extensions)):
 if is_csv_plot_enabled:
     output_file_path = os.path.join(solution_directory_path, "SG_positioning_errors.csv")
 
-    contour_object_of_Static_CF_result = sol_selected_environment.Parent.CreateResultObject("csvPlot", "CSV Plot")
-    contour_object_of_Static_CF_result.Caption = "Relative Error around Each SG Reference Position" + ": " + string_of_result_type_identifier_suffix
-    contour_object_of_Static_CF_result.Properties[0].Properties[0].InternalValue = 'ID_NamedSelection'
+    contour_object_of_error_result = sol_selected_environment.Parent.CreateResultObject("csvPlot", "CSV Plot")
+    contour_object_of_error_result.Caption = "Relative Error around Each SG Reference Position" + ": " + string_of_result_type_identifier_suffix
+    contour_object_of_error_result.Properties[0].Properties[0].InternalValue = 'ID_NamedSelection'
     if NS_of_faces_of_SG_test_parts:
-        contour_object_of_Static_CF_result.Properties[0].Properties[0].Properties[1].InternalValue = NS_of_faces_of_SG_test_parts.ObjectId.ToString()
-    contour_object_of_Static_CF_result.Properties[1].InternalValue = output_file_path
-    contour_object_of_Static_CF_result.Properties[3].InternalValue = 'Relative Error'
-    contour_object_of_Static_CF_result.Properties[4].InternalValue = 'Node'
-    contour_object_of_Static_CF_result.Properties[5].InternalValue = 'No'
-    contour_object_of_Static_CF_result.Suppressed = 1
-    contour_object_of_Static_CF_result.Suppressed = 0
+        contour_object_of_error_result.Properties[0].Properties[0].Properties[1].InternalValue = NS_of_faces_of_SG_test_parts.ObjectId.ToString()
+    contour_object_of_error_result.Properties[1].InternalValue = output_file_path
+    contour_object_of_error_result.Properties[3].InternalValue = 'Relative Error'
+    contour_object_of_error_result.Properties[4].InternalValue = 'Node'
+    contour_object_of_error_result.Properties[5].InternalValue = 'No'
+    contour_object_of_error_result.Suppressed = 1
+    contour_object_of_error_result.Suppressed = 0
 # endregion
