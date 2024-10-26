@@ -11,6 +11,13 @@ from System.Diagnostics import Process, ProcessWindowStyle
 import os
 # endregion
 
+# region Check whether NS_of_faces_of_SG_test_parts is defined inside the memory.
+if 'NS_of_faces_of_SG_test_parts' not in locals():
+    MessageBox.Show("The named selection called 'NS_of_faces_of_SG_test_parts' is not either found in the tree  or not called into memory. Please define the required surfaces by running Test Parts button.", 
+                "Error", MessageBoxButtons.OK, MessageBoxIcon.Error)
+    raise RuntimeError("Condition not met. Exiting the script.")
+# endregion
+
 # region Set the unit system as N.mm
 ExtAPI.Application.ActiveUnitSystem = MechanicalUnitSystem.StandardNMM
 # endregion
