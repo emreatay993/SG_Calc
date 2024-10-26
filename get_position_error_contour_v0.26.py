@@ -13,7 +13,7 @@ import os
 
 # region Check whether NS_of_faces_of_SG_test_parts is defined inside the memory.
 if 'NS_of_faces_of_SG_test_parts' not in locals():
-    MessageBox.Show("The named selection called 'NS_of_faces_of_SG_test_parts' is not either found in the tree  or not called into memory. Please define the required surfaces by running Test Parts button.", 
+    MessageBox.Show("The named selection called 'NS_of_faces_of_SG_test_parts' is not either found in the tree or not called into the memory. Please define required surfaces by running Test Parts button.", 
                 "Error", MessageBoxButtons.OK, MessageBoxIcon.Error)
     raise RuntimeError("Condition not met. Exiting the script.")
 # endregion
@@ -125,6 +125,11 @@ elif len(Tree.ActiveObjects) == 1:
                  string_of_result_type_identifier_suffix = "UserDefinedResult"
 
             print("Input CSV file is written to the solution directory")
+        
+        else:
+            MessageBox.Show("The selected object in the tree is not a valid result object. Ensure that it is not under-defined and is evaluated correctly.", 
+                            "Error", MessageBoxButtons.OK, MessageBoxIcon.Error)
+            raise RuntimeError("Condition not met. Exiting the script.")
 # endregion
 
 # region Define the CPython code to be run for calculating the errors
@@ -222,9 +227,9 @@ for idx, ref_coord in enumerate(reference_coordinates):
             max_rel_error = max(max_rel_error, relative_error)
             node_data = {
                 'Node Number': row['Node Number'],
-                'X [mm]': row['X Location (mm)'],
-                'Y [mm]': row['Y Location (mm)'],
-                'Z [mm]': row['Z Location (mm)'],
+                'X [mm]': row['X Location [mm]'],
+                'Y [mm]': row['Y Location [mm]'],
+                'Z [mm]': row['Z Location [mm]'],
                 'Absolute Error': round(absolute_error, 2),
                 'Relative Error': round(relative_error, 2)
             }
@@ -235,9 +240,9 @@ for idx, ref_coord in enumerate(reference_coordinates):
         'Reference Point': f"Reference Point {idx + 1}",
         'Closest Node': {
             'Node Number': closest_node['Node Number'],
-            'X [mm]': closest_node['X Location (mm)'],
-            'Y [mm]': closest_node['Y Location (mm)'],
-            'Z [mm]': closest_node['Z Location (mm)'],
+            'X [mm]': closest_node['X Location [mm]'],
+            'Y [mm]': closest_node['Y Location [mm]'],
+            'Z [mm]': closest_node['Z Location [mm]'],
             'Field Value': closest_value
         },
         'Nodes Within Radius': nodes_within_radius
