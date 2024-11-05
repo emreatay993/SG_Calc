@@ -1024,8 +1024,8 @@ def load_comparison_csv(n_clicks):
         if file_path:
             comparison_data = pd.read_csv(file_path)
 
-            # Drop columns starting with "%" or "*"
-            comparison_data = comparison_data.loc[:, ~comparison_data.columns.str.startswith(('%', '*'))]
+            # Drop columns starting with "%" or "Δ"
+            comparison_data = comparison_data.loc[:, ~comparison_data.columns.str.startswith(('%', 'Δ'))]
 
             comparison_trace_columns_all = [col for col in comparison_data.columns if col != 'Time']
             if selected_group == "All":
@@ -1060,7 +1060,7 @@ def load_comparison_csv(n_clicks):
                     compare_data_full = output_data[common_columns].values - interpolated_comparison_data[
                         common_columns].values
                     compare_data_full = pd.DataFrame(compare_data_full,
-                                                     columns=['*' + col for col in comparison_trace_columns_all])
+                                                     columns=['Δ' + col for col in comparison_trace_columns_all])
                     compare_data_full.insert(0, 'Time', main_time)
 
                     compare_data_percent_full = ((output_data[common_columns].values / interpolated_comparison_data[
@@ -1082,7 +1082,7 @@ def load_comparison_csv(n_clicks):
                     compare_data_full = interpolated_main_data[common_columns].values - comparison_data[
                         common_columns].values
                     compare_data_full = pd.DataFrame(compare_data_full,
-                                                     columns=['*' + col for col in comparison_trace_columns_all])
+                                                     columns=['Δ' + col for col in comparison_trace_columns_all])
                     compare_data_full.insert(0, 'Time', comparison_time)
 
                     compare_data_percent_full = ((interpolated_main_data[common_columns].values / comparison_data[
@@ -1356,7 +1356,7 @@ def plot_comparison_graph(n_clicks):
                 my_fig_comparison.add_trace(go.Scattergl(
                     x=time_data_in_x_axis,
                     y=compare_data[col],
-                    name="*" + col,
+                    name="Δ" + col,
                     line=dict(color=my_discrete_color_scheme[color_idx]),
                     hovertemplate='%{meta}<br>Time = %{x:.2f} s<br>Data = %{y:.1f}<extra></extra>',
                     hoverlabel=dict(font_size=14, bgcolor='rgba(255, 255, 255, 0.5)'),
