@@ -790,7 +790,7 @@ class QDash(QtCore.QObject):
                         selected_style=selected_tab_style),
                 dcc.Tab(label='Main & Compared Data', value='tab-main-and-compared-data', style=tab_style,
                         selected_style=selected_tab_style),
-                dcc.Tab(label='Comparison(*)', value='tab-comparison', style=tab_style,
+                dcc.Tab(label='Comparison(Δ)', value='tab-comparison', style=tab_style,
                         selected_style=selected_tab_style),
                 dcc.Tab(label='Comparison(%)', value='tab-comparison-percent', style=tab_style,
                         selected_style=selected_tab_style),
