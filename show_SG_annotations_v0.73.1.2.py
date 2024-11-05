@@ -348,7 +348,7 @@ def classify_headers_by_measurement(file_path):
             match = pattern_measurement.search(header)
             if match:
                 measurement = match.group(2)  # Extracts the measurement type without the SG identifier
-                if match.group(1).startswith(('?', '%')):
+                if match.group(1).startswith(('Δ', '%')):
                     measurement = match.group(1)[0] + measurement
                 if measurement not in measurements:
                     measurements[measurement] = []
@@ -407,28 +407,28 @@ def prepare_data(file_path):
 # endregion
 
 measurement_suffixes = {
-    'epsilon_x': ', ex',
-    'epsilon_y': ' , ey',
-    'gamma_xy': ' , ?xy',
-    'sigma_1': ' , s1',
-    'sigma_2': ' , s2',
-    'theta_p': ' , ?p',
+    'epsilon_x': ', εx',
+    'epsilon_y': ' , εy',
+    'gamma_xy': ' , γxy',
+    'sigma_1': ' , σ1',
+    'sigma_2': ' , σ2',
+    'theta_p': ' , θp',
     'Biaxiality_Ratio': ' , BR',
     'von_Mises': ' , VM',
-    '?epsilon_x': ' , ?ex',
-    '?epsilon_y': ' , ?ey',
-    '?gamma_xy': ' , ??xy',
-    '?sigma_1': ' , ?s1',
-    '?sigma_2': ' , ?s2',
-    '?theta_p': ' , ??p',
-    '?Biaxiality_Ratio': ' , ?BR',
-    '?von_Mises': ' , ?VM',
-    '%epsilon_x': ' , %ex',
-    '%epsilon_y': ' , %ey',
-    '%gamma_xy': ' , %?xy',
-    '%sigma_1': ' , %s1',
-    '%sigma_2': ' , %s2',
-    '%theta_p': ' , %?p',
+    'Δepsilon_x': ' , Δεx',
+    'Δepsilon_y': ' , Δεy',
+    'Δgamma_xy': ' , Δγxy',
+    'Δsigma_1': ' , Δσ1',
+    'Δsigma_2': ' , Δσ2',
+    'Δtheta_p': ' , Δθp',
+    'ΔBiaxiality_Ratio': ' , ΔBR',
+    'Δvon_Mises': ' , ΔVM',
+    '%epsilon_x': ' , %εx',
+    '%epsilon_y': ' , %εy',
+    '%gamma_xy': ' , %γxy',
+    '%sigma_1': ' , %σ1',
+    '%sigma_2': ' , %σ2',
+    '%theta_p': ' , %θp',
     '%Biaxiality_Ratio': ' , %BR',
     '%von_Mises': ' , %VM'
 }
