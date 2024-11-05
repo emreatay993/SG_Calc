@@ -467,8 +467,8 @@ class PlotWindow(QMainWindow):
                 )
                 if reply == QMessageBox.Yes:
                     output_data = pd.read_csv(file_path)
-                    # Drop columns starting with uppercase delta symbol (?)
-                    output_data = output_data.loc[:, ~output_data.columns.str.startswith('?')]
+                    # Drop columns starting with star symbol (*)
+                    output_data = output_data.loc[:, ~output_data.columns.str.startswith('*')]
                     if 'Time' in output_data.columns:
                         output_data = output_data.drop(columns=['Time'])
                 else:
@@ -790,7 +790,7 @@ class QDash(QtCore.QObject):
                         selected_style=selected_tab_style),
                 dcc.Tab(label='Main & Compared Data', value='tab-main-and-compared-data', style=tab_style,
                         selected_style=selected_tab_style),
-                dcc.Tab(label='Comparison(?)', value='tab-comparison', style=tab_style,
+                dcc.Tab(label='Comparison(*)', value='tab-comparison', style=tab_style,
                         selected_style=selected_tab_style),
                 dcc.Tab(label='Comparison(%)', value='tab-comparison-percent', style=tab_style,
                         selected_style=selected_tab_style),
@@ -1024,8 +1024,8 @@ def load_comparison_csv(n_clicks):
         if file_path:
             comparison_data = pd.read_csv(file_path)
 
-            # Drop columns starting with "%" or "?"
-            comparison_data = comparison_data.loc[:, ~comparison_data.columns.str.startswith(('%', '?'))]
+            # Drop columns starting with "%" or "*"
+            comparison_data = comparison_data.loc[:, ~comparison_data.columns.str.startswith(('%', '*'))]
 
             comparison_trace_columns_all = [col for col in comparison_data.columns if col != 'Time']
             if selected_group == "All":
@@ -1060,7 +1060,7 @@ def load_comparison_csv(n_clicks):
                     compare_data_full = output_data[common_columns].values - interpolated_comparison_data[
                         common_columns].values
                     compare_data_full = pd.DataFrame(compare_data_full,
-                                                     columns=['?' + col for col in comparison_trace_columns_all])
+                                                     columns=['*' + col for col in comparison_trace_columns_all])
                     compare_data_full.insert(0, 'Time', main_time)
 
                     compare_data_percent_full = ((output_data[common_columns].values / interpolated_comparison_data[
@@ -1082,7 +1082,7 @@ def load_comparison_csv(n_clicks):
                     compare_data_full = interpolated_main_data[common_columns].values - comparison_data[
                         common_columns].values
                     compare_data_full = pd.DataFrame(compare_data_full,
-                                                     columns=['?' + col for col in comparison_trace_columns_all])
+                                                     columns=['*' + col for col in comparison_trace_columns_all])
                     compare_data_full.insert(0, 'Time', comparison_time)
 
                     compare_data_percent_full = ((interpolated_main_data[common_columns].values / comparison_data[
@@ -1160,7 +1160,7 @@ def plot_compared_data_graph(n_clicks):
                     line=dict(color=my_discrete_color_scheme[color_idx]),
                     hovertemplate='%{meta}<br>Time = %{x:.2f} s<br>Data = %{y:.1f}<extra></extra>',
                     hoverlabel=dict(font_size=14, bgcolor='rgba(255, 255, 255, 0.5)'),
-                    meta="?" + col
+                    meta="*" + col
                 ))
                 progress = int((idx + 1) / total_no_of_traces_to_add * 100)
                 mainWindow.plot_progress.emit(progress)  # Emit the plot progress signal
@@ -1356,7 +1356,7 @@ def plot_comparison_graph(n_clicks):
                 my_fig_comparison.add_trace(go.Scattergl(
                     x=time_data_in_x_axis,
                     y=compare_data[col],
-                    name="?" + col,
+                    name="*" + col,
                     line=dict(color=my_discrete_color_scheme[color_idx]),
                     hovertemplate='%{meta}<br>Time = %{x:.2f} s<br>Data = %{y:.1f}<extra></extra>',
                     hoverlabel=dict(font_size=14, bgcolor='rgba(255, 255, 255, 0.5)'),
