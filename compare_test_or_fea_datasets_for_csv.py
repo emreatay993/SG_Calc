@@ -1,14 +1,16 @@
 import sys
+import os
 import pandas as pd
 import numpy as np
 from PyQt5.QtWidgets import (
     QApplication, QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLabel,
     QLineEdit, QFileDialog, QTabWidget, QListWidget, QSplitter, QSizePolicy,
-    QDoubleSpinBox, QMessageBox, QComboBox
+    QDoubleSpinBox, QMessageBox, QComboBox, QDialog, QTextBrowser
 )
 from PyQt5.QtWebEngineWidgets import QWebEngineView
 from PyQt5.QtCore import QUrl, Qt
 from PyQt5.QtGui import QGuiApplication
+import markdown
 import plotly.graph_objects as go
 from scipy.interpolate import interp1d
 from scipy.stats import linregress
@@ -84,9 +86,16 @@ class MetricsCalculator(QWidget):
         self.end_time_spinbox_tab1.setRange(0, 999999)
         self.end_time_spinbox_tab1.valueChanged.connect(self.update_tab1_plot)
 
+        # Add Help Button in Statistical Metrics Tab
+        help_button_tab1 = QPushButton("?")
+        help_button_tab1.setFixedSize(48, 24)
+        help_button_tab1.setToolTip("Click to open a help document about the metrics.")
+        help_button_tab1.clicked.connect(self.open_help_document)
+
         tab1_time_layout.addWidget(self.start_time_spinbox_tab1)
         tab1_time_layout.addWidget(self.end_time_spinbox_tab1)
         tab1_layout.addLayout(tab1_time_layout)
+        tab1_time_layout.addWidget(help_button_tab1)
 
         # List widget for Tab1
         self.column_list_widget_tab1 = QListWidget()
@@ -335,7 +344,7 @@ class MetricsCalculator(QWidget):
         return df1_interp, df2_interp
 
     # --------------------------------------------------------------------------------
-    #                           TAB1 LOGIC: Old Metrics
+    #                           TAB1 LOGIC: Statistical Metrics
     # --------------------------------------------------------------------------------
     def update_tab1_plot(self):
         try:
@@ -365,6 +374,13 @@ class MetricsCalculator(QWidget):
     def compare_datasets_statistical(self, df1, df2):
         metrics_list = []
         columns = [col for col in df1.columns if col != "Time"]
+
+        # -- Compute approximate dt (assuming df1 is aligned & fairly uniform)
+        if len(df1) > 1:
+            dt = df1["Time"].iloc[1] - df1["Time"].iloc[0]
+        else:
+            dt = 0.0
+
         for col in columns:
             x = df1[col].values
             y = df2[col].values
@@ -376,11 +392,19 @@ class MetricsCalculator(QWidget):
             max_corr = np.max(cross_corr)
             lag_at_max_corr = np.argmax(cross_corr) - (len(x) - 1)
 
+            # Time shift in seconds
+            time_shift_sec = lag_at_max_corr * dt
+
             # MSE + RMSE
             mse = np.mean((x - y) ** 2)
             rmse = np.sqrt(mse)
 
-            # Pearson Correlation Coefficient (PCC)
+            # R^2 (Coefficient of Determination)
+            ss_total = np.sum((x - np.mean(x)) ** 2)
+            ss_residual = np.sum((x - y) ** 2)
+            r_squared = 1 - (ss_residual / ss_total) if ss_total != 0 else np.nan
+
+            # Pearson Correlation Coefficient (PCC or R)
             pearson_corr = np.corrcoef(x, y)[0, 1]
 
             # Absolute Error
@@ -394,22 +418,23 @@ class MetricsCalculator(QWidget):
             with np.errstate(divide='ignore', invalid='ignore'):  # Handle division by zero
                 smape = np.nanmean(2 * np.abs(x - y) / (np.abs(x) + np.abs(y)) * 100)
 
-            # Coefficient of Determination (R^2)
-            ss_total = np.sum((x - np.mean(x)) ** 2)
-            ss_residual = np.sum((x - y) ** 2)
-            r_squared = 1 - (ss_residual / ss_total) if ss_total != 0 else np.nan
+            # WMAPE
+            with np.errstate(divide='ignore', invalid='ignore'):
+                wmape = np.sum(abs_error) / np.sum(np.abs(x)) * 100 if np.sum(np.abs(x)) != 0 else np.nan
 
             metrics_list.append({
                 "Channel": col,
                 "Max Correlation": max_corr,
-                "Lag at Max Correlation": lag_at_max_corr,
-                "MSE": mse,
-                "RMSE": rmse,
+                "Lag at Max Correlation (samples)": lag_at_max_corr,  # Store sample-based lag
+                "Time Shift (s)": time_shift_sec,  # Store time-based shift in seconds
+                "MSE": mse,  # Mean Square Error
+                "RMSE": rmse,  # Root Mean Square Error
+                "R^2": r_squared,  # Coefficient of Determination
                 "Pearson Correlation": pearson_corr,
                 "Absolute Error": abs_error.mean(),  # Average absolute error
                 "Percentage Error": np.nanmean(perc_error),  # Average percentage error
                 "SMAPE": smape,  # Symmetric Mean Absolute Percentage Error
-                "R^2": r_squared  # Coefficient of Determination
+                "WMAPE": wmape  # Weighted Mean Absolute Percentage Error
             })
 
         return metrics_list
@@ -433,59 +458,80 @@ class MetricsCalculator(QWidget):
 
             channels = [m["Channel"] for m in metrics]
             max_corr = [m["Max Correlation"] for m in metrics]
-            lag_corr = [m["Lag at Max Correlation"] for m in metrics]
+
+            # Instead of 'lag_corr', let's store both:
+            sample_lags = [m["Lag at Max Correlation (samples)"] for m in metrics]
+            time_shifts = [m["Time Shift (s)"] for m in metrics]
+
             mse_vals = [m["MSE"] for m in metrics]
             rmse_vals = [m["RMSE"] for m in metrics]
-            pearson_vals = [m["Pearson Correlation"] for m in metrics]
             r_squared_vals = [m["R^2"] for m in metrics]
+            pearson_vals = [m["Pearson Correlation"] for m in metrics]
             abs_error_vals = [m["Absolute Error"] for m in metrics]
             perc_error_vals = [m["Percentage Error"] for m in metrics]
             smape_vals = [m["SMAPE"] for m in metrics]
+            wmape_vals = [m["WMAPE"] for m in metrics]
 
             fig = go.Figure()
 
             # Bar: Max Correlation
             fig.add_trace(go.Bar(
                 x=channels, y=max_corr,
-                name="Maximum Correlation Coefficient"
+                name="Max Correlation",
+                marker_color="#3498db"
             ))
-            # Line: Lag at Max Correlation
-            fig.add_trace(go.Scatter(
-                x=channels, y=lag_corr,
-                name="Lag at Maximum Correlation",
-                mode="lines+markers"
-            ))
-            # Bar: Pearson Correlation
+
+            # Bar: Sample Lag
             fig.add_trace(go.Bar(
-                x=channels, y=pearson_vals,
-                name="PCC (Pearson Correlation Coefficient)",
-                marker_color="purple"
+                x=channels, y=sample_lags,
+                name="Lag at Max Corr (Samples)",
+                marker_color="red"
             ))
-            # Line: R^2
+
+            # Bar: Time Shift
+            #   NEW -> show how many seconds correspond to that lag
+            fig.add_trace(go.Bar(
+                x=channels, y=time_shifts,
+                name="Time Shift (s)",
+                marker_color="orange"
+            ))
+
+            # Bar: R^2
             fig.add_trace(go.Bar(
                 x=channels, y=r_squared_vals,
-                name="R^2 (Coefficient of Determination)",
-                marker_color="teal"
+                name="R^2 (Coeff. of Determination)",
+                marker_color="magenta"
             ))
+
+            # Bar: PCC or R
+            fig.add_trace(go.Bar(
+                x=channels, y=pearson_vals,
+                name="R (Pearson Corr.)",
+                marker_color="purple"
+            ))
+
             # Line: MSE
             fig.add_trace(go.Scatter(
                 x=channels, y=mse_vals,
-                name="MSE (Mean Square Error)",
+                name="MSE",
                 mode="lines+markers"
             ))
+
             # Line: RMSE
             fig.add_trace(go.Scatter(
                 x=channels, y=rmse_vals,
-                name="RMSE (Root Mean Square Error)",
+                name="RMSE",
                 mode="lines+markers"
             ))
+
             # Line: Absolute Error
             fig.add_trace(go.Scatter(
                 x=channels, y=abs_error_vals,
-                name="Absolute Error (Δ)",
+                name="Absolute Error",
                 mode="lines+markers",
                 line=dict(color='orange', dash='dot')
             ))
+
             # Line: Percentage Error
             fig.add_trace(go.Scatter(
                 x=channels, y=perc_error_vals,
@@ -493,12 +539,21 @@ class MetricsCalculator(QWidget):
                 mode="lines+markers",
                 line=dict(color='green', dash='dash')
             ))
+
             # Line: SMAPE
             fig.add_trace(go.Scatter(
                 x=channels, y=smape_vals,
-                name="SMAPE (Symmetric Mean Absolute Percentage Error)",
+                name="SMAPE",
                 mode="lines+markers",
                 line=dict(color='blue', dash='dash')
+            ))
+
+            # Line: WMAPE
+            fig.add_trace(go.Scatter(
+                x=channels, y=wmape_vals,
+                name="WMAPE",
+                mode="lines+markers",
+                line=dict(color='red', dash='dot')
             ))
 
             fig.update_layout(
@@ -534,6 +589,10 @@ class MetricsCalculator(QWidget):
             QMessageBox.critical(self, "Error", f"Error in plotting Tab1 metrics: {str(e)}")
             import traceback
             traceback.print_exc()
+
+    def open_help_document(self):
+        help_dialog = HelpDialog(self)
+        help_dialog.exec_()
 
     # --------------------------------------------------------------------------------
     #                       TAB2 LOGIC: Scale & Offset
@@ -821,6 +880,163 @@ class MetricsCalculator(QWidget):
             import traceback
             traceback.print_exc()
 
+class HelpDialog(QDialog):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("Statistical Metrics Help")
+        self.setMinimumSize(800, 600)
+
+        # Layout
+        layout = QVBoxLayout()
+
+        # MarkdownView for displaying Markdown content
+        self.markdown_view = MarkdownView(self)
+
+        # Load the Markdown content
+        markdown_content = """
+        # Statistical Metrics Help Document
+
+        ## 1. Mean Squared Error (MSE)
+        **Formula:**
+        $$ \\text{MSE} = \\frac{1}{n} \\sum_{i=1}^{n} (x_i - y_i)^2 $$
+
+        **Meaning:**  
+        MSE measures the average squared difference between actual values \(x\) and predicted values \(y\). Smaller MSE values indicate better model accuracy.
+
+        **Practical Use Case:**  
+        - Evaluating the accuracy of stress-strain predictions in finite element analysis.  
+        - Quantifying the error in temperature sensor measurements compared to a standard reference.
+
+        ---
+
+        ## 2. Root Mean Squared Error (RMSE)
+        **Formula:**
+        $$ \\text{RMSE} = \\sqrt{\\text{MSE}} $$
+
+        **Meaning:**  
+        RMSE is the square root of MSE. It provides the error magnitude in the same units as the data.
+
+        **Practical Use Case:**  
+        - Comparing vibration amplitude predictions against measured data.  
+        - Assessing the accuracy of dynamic pressure models in fluid mechanics.
+
+        ---
+
+        ## 3. Absolute Error (\(\Delta\))
+        **Formula:**
+        $$ \\text{Absolute Error} = |x - y| $$
+
+        **Meaning:**  
+        Measures the absolute difference between actual and predicted values without considering the direction of the error.
+
+        **Practical Use Case:**  
+        - Evaluating alignment errors in rotating machinery measurements.  
+        - Comparing load cell readings during tensile testing.
+
+        ---
+
+        ## 4. Percentage Error
+        **Formula:**
+        $$ \\text{Percentage Error} = \\frac{|x - y|}{x} \\times 100\\% $$
+
+        **Meaning:**  
+        Quantifies errors as a percentage of the actual values. Helps normalize error measurement.
+
+        **Practical Use Case:**  
+        - Analyzing deviation in power output between simulated and experimental results for turbines.  
+        - Evaluating error percentages in fatigue life predictions.
+
+        ---
+
+        ## 5. Symmetric Mean Absolute Percentage Error (SMAPE)
+        **Formula:**
+        $$ \\text{SMAPE} = \\frac{1}{n} \\sum_{i=1}^{n} \\frac{|x_i - y_i|}{\\frac{|x_i| + |y_i|}{2}} \\times 100\\% $$
+
+        **Meaning:**  
+        Normalizes percentage errors and avoids large values caused by near-zero actual values.
+
+        **Practical Use Case:**  
+        - Comparing strain gauge measurements across different time periods.  
+        - Evaluating thermal expansion model predictions versus experimental data.
+
+        ---
+
+        ## 6. Pearson Correlation Coefficient (PCC or R)
+        **Formula:**
+        $$ \\text{PCC} = \\frac{\\text{Cov}(x, y)}{\\sigma_x \\cdot \\sigma_y} $$
+
+        Where:
+        - \(\\text{Cov}(x, y)\\): Covariance of \(x\) and \(y\).  
+        - \(\\sigma_x, \\sigma_y\\): Standard deviations of \(x\\) and \(y\\).
+
+        **Meaning:**  
+        Measures the linear relationship between two datasets. Values range from -1 (perfect negative correlation) to 1 (perfect positive correlation).
+
+        **Practical Use Case:**  
+        - Identifying relationships between torque and rotational speed in engines.  
+        - Analyzing time lag correlations between hydraulic system pressure and flow rates.
+
+        ---
+
+        ## 7. Coefficient of Determination (\(R^2\))
+        **Formula:**
+        $$ R^2 = 1 - \\frac{\\text{SS}_{\\text{residual}}}{\\text{SS}_{\\text{total}}} $$
+
+        Where:
+        - \(\\text{SS}_{\\text{residual}} = \\sum (x - y)^2\\): Residual sum of squares.  
+        - \(\\text{SS}_{\\text{total}} = \\sum (x - \\bar{x})^2\\): Total sum of squares.
+
+        **Meaning:**  
+        Indicates the proportion of variance in the dependent variable explained by the independent variable.
+
+        **Values:**  
+        - \(R^2 = 1\): Perfect fit.  
+        - \(R^2 = 0\): Model explains no variance.  
+        - \(R^2 < 0\): Model performs worse than a horizontal line at the mean of the data.
+
+        **Practical Use Case:**  
+        - Evaluating the goodness-of-fit for force-displacement models in structural analysis.  
+        - Comparing predicted and measured stress-strain curves.
+
+        ---
+
+        ## 8. Maximum Correlation Coefficient
+        **Formula:**
+        $$ \\text{Max Correlation} = \\max(\\text{Cross Correlation Coefficients}) $$
+
+        **Meaning:**  
+        Identifies the strongest linear correlation between two datasets across all lags.
+
+        **Practical Use Case:**  
+        - Synchronizing signal measurements from two sensors placed at different locations.  
+        - Determining the phase relationship in oscillatory systems.
+
+        ---
+
+        ## 9. Lag at Maximum Correlation
+        **Meaning:**  
+        The time shift (lag) at which the maximum correlation occurs.
+
+        **Practical Use Case:**  
+        - Identifying time delays in the response of a system to an applied load.  
+        - Analyzing phase shifts in vibration or acoustic signals.
+
+        ---
+
+        ## Practical Notes
+        - **Data Scaling:** Ensure data is normalized or standardized where necessary.  
+        - **Outlier Handling:** Remove or analyze outliers separately as they can significantly affect metrics.  
+        - **Choose Metrics Wisely:** The choice of metric depends on the specific use case and dataset characteristics.
+        """
+        self.markdown_view.setValue(markdown_content)
+        layout.addWidget(self.markdown_view)
+
+        # Close Button
+        close_button = QPushButton("Close", self)
+        close_button.clicked.connect(self.close)
+        layout.addWidget(close_button)
+
+        self.setLayout(layout)
 
 # --------------------------------------------------------------------------
 #                                  MAIN
