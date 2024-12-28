@@ -380,7 +380,7 @@ class MetricsCalculator(QWidget):
             mse = np.mean((x - y) ** 2)
             rmse = np.sqrt(mse)
 
-            # Pearson correlation
+            # Pearson Correlation Coefficient (PCC)
             pearson_corr = np.corrcoef(x, y)[0, 1]
 
             # Absolute Error
@@ -390,6 +390,10 @@ class MetricsCalculator(QWidget):
             with np.errstate(divide='ignore', invalid='ignore'):  # Handle division by zero
                 perc_error = np.where(x != 0, np.abs((x - y) / x) * 100, np.nan)
 
+            # SMAPE
+            with np.errstate(divide='ignore', invalid='ignore'):  # Handle division by zero
+                smape = np.nanmean(2 * np.abs(x - y) / (np.abs(x) + np.abs(y)) * 100)
+
             metrics_list.append({
                 "Channel": col,
                 "Max Correlation": max_corr,
@@ -398,7 +402,8 @@ class MetricsCalculator(QWidget):
                 "RMSE": rmse,
                 "Pearson Correlation": pearson_corr,
                 "Absolute Error": abs_error.mean(),  # Average absolute error
-                "Percentage Error": np.nanmean(perc_error)  # Average percentage error
+                "Percentage Error": np.nanmean(perc_error),  # Average percentage error
+                "SMAPE": smape  # Symmetric Mean Absolute Percentage Error
             })
 
         return metrics_list
@@ -428,6 +433,7 @@ class MetricsCalculator(QWidget):
             pearson_vals = [m["Pearson Correlation"] for m in metrics]
             abs_error_vals = [m["Absolute Error"] for m in metrics]
             perc_error_vals = [m["Percentage Error"] for m in metrics]
+            smape_vals = [m["SMAPE"] for m in metrics]
 
             fig = go.Figure()
 
@@ -445,25 +451,25 @@ class MetricsCalculator(QWidget):
             # Line: MSE
             fig.add_trace(go.Scatter(
                 x=channels, y=mse_vals,
-                name="MSE",
+                name="MSE (Mean Square Error)",
                 mode="lines+markers"
             ))
             # Line: RMSE
             fig.add_trace(go.Scatter(
                 x=channels, y=rmse_vals,
-                name="RMSE",
+                name="RMSE (Root Mean Square Error)",
                 mode="lines+markers"
             ))
             # Bar: Pearson
             fig.add_trace(go.Bar(
                 x=channels, y=pearson_vals,
-                name="Pearson Corr",
+                name="PCC (Pearson Correlation)",
                 marker_color="purple"
             ))
             # Line: Absolute Error
             fig.add_trace(go.Scatter(
                 x=channels, y=abs_error_vals,
-                name="Absolute Error",
+                name="Absolute Error (Δ)",
                 mode="lines+markers",
                 line=dict(color='orange', dash='dot')
             ))
@@ -473,6 +479,14 @@ class MetricsCalculator(QWidget):
                 name="Percentage Error (%)",
                 mode="lines+markers",
                 line=dict(color='green', dash='dash')
+            ))
+
+            # Line: SMAPE
+            fig.add_trace(go.Scatter(
+                x=channels, y=smape_vals,
+                name="SMAPE (Symmetric Mean Absolute Percentage Error)",
+                mode="lines+markers",
+                line=dict(color='blue', dash='dash')
             ))
 
             fig.update_layout(
