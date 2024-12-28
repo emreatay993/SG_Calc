@@ -394,6 +394,11 @@ class MetricsCalculator(QWidget):
             with np.errstate(divide='ignore', invalid='ignore'):  # Handle division by zero
                 smape = np.nanmean(2 * np.abs(x - y) / (np.abs(x) + np.abs(y)) * 100)
 
+            # Coefficient of Determination (R^2)
+            ss_total = np.sum((x - np.mean(x)) ** 2)
+            ss_residual = np.sum((x - y) ** 2)
+            r_squared = 1 - (ss_residual / ss_total) if ss_total != 0 else np.nan
+
             metrics_list.append({
                 "Channel": col,
                 "Max Correlation": max_corr,
@@ -403,7 +408,8 @@ class MetricsCalculator(QWidget):
                 "Pearson Correlation": pearson_corr,
                 "Absolute Error": abs_error.mean(),  # Average absolute error
                 "Percentage Error": np.nanmean(perc_error),  # Average percentage error
-                "SMAPE": smape  # Symmetric Mean Absolute Percentage Error
+                "SMAPE": smape,  # Symmetric Mean Absolute Percentage Error
+                "R^2": r_squared  # Coefficient of Determination
             })
 
         return metrics_list
@@ -431,6 +437,7 @@ class MetricsCalculator(QWidget):
             mse_vals = [m["MSE"] for m in metrics]
             rmse_vals = [m["RMSE"] for m in metrics]
             pearson_vals = [m["Pearson Correlation"] for m in metrics]
+            r_squared_vals = [m["R^2"] for m in metrics]
             abs_error_vals = [m["Absolute Error"] for m in metrics]
             perc_error_vals = [m["Percentage Error"] for m in metrics]
             smape_vals = [m["SMAPE"] for m in metrics]
@@ -440,13 +447,25 @@ class MetricsCalculator(QWidget):
             # Bar: Max Correlation
             fig.add_trace(go.Bar(
                 x=channels, y=max_corr,
-                name="Max Correlation"
+                name="Maximum Correlation Coefficient"
             ))
             # Line: Lag at Max Correlation
             fig.add_trace(go.Scatter(
                 x=channels, y=lag_corr,
-                name="Lag at Max Corr",
+                name="Lag at Maximum Correlation",
                 mode="lines+markers"
+            ))
+            # Bar: Pearson Correlation
+            fig.add_trace(go.Bar(
+                x=channels, y=pearson_vals,
+                name="PCC (Pearson Correlation Coefficient)",
+                marker_color="purple"
+            ))
+            # Line: R^2
+            fig.add_trace(go.Bar(
+                x=channels, y=r_squared_vals,
+                name="R^2 (Coefficient of Determination)",
+                marker_color="teal"
             ))
             # Line: MSE
             fig.add_trace(go.Scatter(
@@ -459,12 +478,6 @@ class MetricsCalculator(QWidget):
                 x=channels, y=rmse_vals,
                 name="RMSE (Root Mean Square Error)",
                 mode="lines+markers"
-            ))
-            # Bar: Pearson
-            fig.add_trace(go.Bar(
-                x=channels, y=pearson_vals,
-                name="PCC (Pearson Correlation)",
-                marker_color="purple"
             ))
             # Line: Absolute Error
             fig.add_trace(go.Scatter(
@@ -480,7 +493,6 @@ class MetricsCalculator(QWidget):
                 mode="lines+markers",
                 line=dict(color='green', dash='dash')
             ))
-
             # Line: SMAPE
             fig.add_trace(go.Scatter(
                 x=channels, y=smape_vals,
@@ -502,7 +514,7 @@ class MetricsCalculator(QWidget):
                     tickfont=dict(size=tick_font_size)
                 ),
                 yaxis=dict(
-                    title=dict(text="Metrics Value", font=dict(size=axis_label_font_size)),
+                    title=dict(text="Metric Value", font=dict(size=axis_label_font_size)),
                     tickfont=dict(size=tick_font_size),
                     nticks=11
                 ),
