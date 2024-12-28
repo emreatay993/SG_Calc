@@ -143,7 +143,7 @@ class MetricsCalculator(QWidget):
         # Reference dataset selector
         ref_layout = QHBoxLayout()
         self.reference_selector = QComboBox()
-        self.reference_selector.addItems(["Dataset 1 (Reference)", "Dataset 2 (Reference)"])
+        self.reference_selector.addItems(["Dataset 1", "Dataset 2"])
         self.reference_selector.currentIndexChanged.connect(self.update_tab2_plot)
         ref_layout.addWidget(QLabel("Select Reference Dataset:"))
         ref_layout.addWidget(self.reference_selector)
