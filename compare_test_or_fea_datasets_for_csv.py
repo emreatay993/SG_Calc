@@ -405,6 +405,16 @@ class MetricsCalculator(QWidget):
         tab1_layout.addLayout(tab1_time_layout)
         tab1_time_layout.addWidget(help_button_tab1)
 
+        # Reference dataset selector for Tab1
+        tab1_ref_layout = QHBoxLayout()
+        self.reference_selector_tab1 = QComboBox()
+        self.reference_selector_tab1.addItems(["Dataset 1", "Dataset 2"])
+        self.reference_selector_tab1.currentIndexChanged.connect(self.update_tab1_plot)
+
+        tab1_ref_layout.addWidget(QLabel("Select Reference Dataset:"))
+        tab1_ref_layout.addWidget(self.reference_selector_tab1)
+        tab1_layout.addLayout(tab1_ref_layout)
+
         # List widget for Tab1
         self.column_list_widget_tab1 = QListWidget()
         self.column_list_widget_tab1.setSelectionMode(QListWidget.ExtendedSelection)
@@ -503,7 +513,7 @@ class MetricsCalculator(QWidget):
         # Reference dataset selector for Tab3
         ref_layout_tab3 = QHBoxLayout()
         self.reference_selector_tab3 = QComboBox()
-        self.reference_selector_tab3.addItems(["Dataset 1 (Reference)", "Dataset 2 (Reference)"])
+        self.reference_selector_tab3.addItems(["Dataset 1", "Dataset 2"])
         self.reference_selector_tab3.currentIndexChanged.connect(self.update_tab3_plot)
         ref_layout_tab3.addWidget(QLabel("Select Reference Dataset:"))
         ref_layout_tab3.addWidget(self.reference_selector_tab3)
@@ -702,18 +712,26 @@ class MetricsCalculator(QWidget):
             if not selected_columns:
                 return
 
-            # time range
+            # Time range
             st = self.start_time_spinbox_tab1.value()
             et = self.end_time_spinbox_tab1.value()
 
-            df1_f = self.df1_aligned[(self.df1_aligned["Time"] >= st) & (self.df1_aligned["Time"] <= et)]
-            df2_f = self.df2_aligned[(self.df2_aligned["Time"] >= st) & (self.df2_aligned["Time"] <= et)]
+            # Choose reference dataset
+            if self.reference_selector_tab1.currentIndex() == 0:
+                reference_df = self.df1_aligned
+                target_df = self.df2_aligned
+            else:
+                reference_df = self.df2_aligned
+                target_df = self.df1_aligned
 
-            df1_f = df1_f[["Time"] + selected_columns]
-            df2_f = df2_f[["Time"] + selected_columns]
+            ref_f = reference_df[(reference_df["Time"] >= st) & (reference_df["Time"] <= et)]
+            tgt_f = target_df[(target_df["Time"] >= st) & (target_df["Time"] <= et)]
 
-            # Calculate old metrics
-            metrics = self.compare_datasets_statistical(df1_f, df2_f)
+            ref_f = ref_f[["Time"] + selected_columns]
+            tgt_f = tgt_f[["Time"] + selected_columns]
+
+            # Calculate metrics
+            metrics = self.compare_datasets_statistical(ref_f, tgt_f)
             self.plot_metrics_tab1(metrics)
         except Exception as e:
             QMessageBox.critical(self, "Error", f"Error updating Tab1 plot: {str(e)}")
@@ -956,8 +974,8 @@ class MetricsCalculator(QWidget):
             st = self.start_time_spinbox_tab2.value()
             et = self.end_time_spinbox_tab2.value()
 
-            # Choose reference
-            if self.reference_selector.currentIndex() == 0:
+            # Choose reference dataset
+            if self.reference_selector_tab1.currentIndex() == 0:
                 reference_df = self.df1_aligned
                 target_df = self.df2_aligned
             else:
@@ -1141,10 +1159,9 @@ class MetricsCalculator(QWidget):
         for each selected channel.
         """
         try:
-            plot_title = (f"Comparison:\n"
-                          f"{ref_name} (Reference), {tgt_name} (Original), "
-                          f"{tgt_name} (Scaled-Only), {tgt_name} (Offset-Only), "
-                          f"{tgt_name} (Scaled+Offset)")
+            plot_title = (f"Overlay Plot:\n"
+                          f"{ref_name} (Reference), {tgt_name} (Compared), "
+                         )
 
             screen = QGuiApplication.primaryScreen()
             dpi = screen.logicalDotsPerInch()
