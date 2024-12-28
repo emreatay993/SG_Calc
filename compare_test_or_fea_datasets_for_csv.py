@@ -5,7 +5,8 @@ import numpy as np
 from PyQt5.QtWidgets import (
     QApplication, QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLabel,
     QLineEdit, QFileDialog, QTabWidget, QListWidget, QSplitter, QSizePolicy,
-    QDoubleSpinBox, QMessageBox, QComboBox, QDialog, QTextBrowser
+    QDoubleSpinBox, QMessageBox, QComboBox, QDialog, QTextBrowser,
+    QGridLayout, QTableWidget, QTableWidgetItem, QHeaderView, QAbstractItemView
 )
 from PyQt5.QtWebEngineWidgets import QWebEngineView
 from PyQt5.QtCore import QUrl, Qt
@@ -15,10 +16,317 @@ import plotly.graph_objects as go
 from scipy.interpolate import interp1d
 from scipy.stats import linregress
 from tempfile import NamedTemporaryFile
+import warnings
+warnings.filterwarnings("ignore", category=DeprecationWarning)
 
 # Enable High DPI scaling
 QGuiApplication.setAttribute(Qt.AA_EnableHighDpiScaling, True)
 QGuiApplication.setAttribute(Qt.AA_UseHighDpiPixmaps, True)
+
+class ColumnMatchingDialog(QDialog):
+    """
+    Lets the user reorder or remove columns from Dataset1 and Dataset2
+    so that the final lists line up one-to-one in the correct order.
+    """
+    def __init__(self, dataset1_cols, dataset2_cols, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("Match Columns Between Dataset1 & Dataset2")
+
+        # Copy in case we want to manipulate them
+        self.dataset1_cols = dataset1_cols[:]
+        self.dataset2_cols = dataset2_cols[:]
+
+        # Final results stored here
+        self.final_dataset1_cols = []
+        self.final_dataset2_cols = []
+
+        self.init_ui()
+
+    def init_ui(self):
+        layout = QVBoxLayout()
+
+        instructions = QLabel(
+            "Reorder/remove columns so they match 1-to-1.\n"
+            "The i-th column in Dataset1 will align with the i-th column in Dataset2.\n"
+            "Click OK when finished."
+        )
+        instructions.setWordWrap(True)
+        layout.addWidget(instructions)
+
+        lists_layout = QHBoxLayout()
+
+        # Left list (Dataset1 columns)
+        self.left_list = QListWidget()
+        self.left_list.addItems(self.dataset1_cols)
+        self.left_list.setSelectionMode(QListWidget.ExtendedSelection)
+
+        # Right list (Dataset2 columns)
+        self.right_list = QListWidget()
+        self.right_list.addItems(self.dataset2_cols)
+        self.right_list.setSelectionMode(QListWidget.ExtendedSelection)
+
+        lists_layout.addWidget(self.left_list)
+        lists_layout.addWidget(self.right_list)
+        layout.addLayout(lists_layout)
+
+        # Buttons to move up/down or remove items
+        buttons_layout = QGridLayout()
+
+        self.btn_left_up = QPushButton("Move Up (Left)")
+        self.btn_left_down = QPushButton("Move Down (Left)")
+        self.btn_left_remove = QPushButton("Remove (Left)")
+
+        self.btn_right_up = QPushButton("Move Up (Right)")
+        self.btn_right_down = QPushButton("Move Down (Right)")
+        self.btn_right_remove = QPushButton("Remove (Right)")
+
+        matching_dialog_button_style = """
+        QPushButton {
+            background-color: lightgrey;
+            color: black;
+            border: 1px solid #cccccc;
+            padding: 4px 8px;
+        }
+        QPushButton:hover {
+            background-color: #a9a9a9; /* Darker grey for better visibility */
+            color: black; /* Keep text black on hover */
+        }
+        QPushButton:pressed {
+            background-color: #808080; /* Even darker grey when pressed */
+        }
+        """
+
+        self.btn_left_up.setStyleSheet(matching_dialog_button_style)
+        self.btn_left_down.setStyleSheet(matching_dialog_button_style)
+        self.btn_left_remove.setStyleSheet(matching_dialog_button_style)
+        self.btn_right_up.setStyleSheet(matching_dialog_button_style)
+        self.btn_right_down.setStyleSheet(matching_dialog_button_style)
+        self.btn_right_remove.setStyleSheet(matching_dialog_button_style)
+
+        buttons_layout.addWidget(self.btn_left_up, 0, 0)
+        buttons_layout.addWidget(self.btn_left_down, 1, 0)
+        buttons_layout.addWidget(self.btn_left_remove, 2, 0)
+
+        buttons_layout.addWidget(self.btn_right_up, 0, 1)
+        buttons_layout.addWidget(self.btn_right_down, 1, 1)
+        buttons_layout.addWidget(self.btn_right_remove, 2, 1)
+
+        # Connect signals
+        self.btn_left_up.clicked.connect(lambda: self.move_up(self.left_list))
+        self.btn_left_down.clicked.connect(lambda: self.move_down(self.left_list))
+        self.btn_left_remove.clicked.connect(lambda: self.remove_selected(self.left_list))
+
+        self.btn_right_up.clicked.connect(lambda: self.move_up(self.right_list))
+        self.btn_right_down.clicked.connect(lambda: self.move_down(self.right_list))
+        self.btn_right_remove.clicked.connect(lambda: self.remove_selected(self.right_list))
+
+        layout.addLayout(buttons_layout)
+
+        # OK / Cancel
+        btn_layout = QHBoxLayout()
+        btn_ok = QPushButton("OK")
+        btn_cancel = QPushButton("Cancel")
+        btn_ok.clicked.connect(self.accept)
+        btn_cancel.clicked.connect(self.reject)
+        btn_layout.addWidget(btn_ok)
+        btn_layout.addWidget(btn_cancel)
+        layout.addLayout(btn_layout)
+
+        self.setLayout(layout)
+
+    def move_up(self, list_widget):
+        """
+        Moves the selected items up in the list while maintaining their relative order.
+        """
+        selected_items = list_widget.selectedItems()
+        if not selected_items:
+            return
+
+        # Get indices of the selected items
+        selected_indices = [list_widget.row(item) for item in selected_items]
+
+        # Check if any item is at the top (cannot move further up)
+        if min(selected_indices) == 0:
+            return
+
+        # Move items up while maintaining relative order
+        for index in selected_indices:
+            item = list_widget.takeItem(index)
+            list_widget.insertItem(index - 1, item)
+
+        # Reselect the moved items
+        for i, index in enumerate(selected_indices):
+            list_widget.item(index - 1).setSelected(True)
+
+    def move_down(self, list_widget):
+        """
+        Moves the selected items down in the list while maintaining their relative order.
+        """
+        selected_items = list_widget.selectedItems()
+        if not selected_items:
+            return
+
+        # Get indices of the selected items
+        selected_indices = [list_widget.row(item) for item in selected_items]
+
+        # Check if any item is at the bottom (cannot move further down)
+        if max(selected_indices) == list_widget.count() - 1:
+            return
+
+        # Move items down while maintaining relative order (process reversed)
+        for index in reversed(selected_indices):
+            item = list_widget.takeItem(index)
+            list_widget.insertItem(index + 1, item)
+
+        # Reselect the moved items
+        for i, index in enumerate(selected_indices):
+            list_widget.item(index + 1).setSelected(True)
+
+    def remove_selected(self, list_widget):
+        for item in list_widget.selectedItems():
+            row = list_widget.row(item)
+            list_widget.takeItem(row)
+
+    def accept(self):
+        """
+        Build final lists from each list widget, then accept.
+        """
+        self.final_dataset1_cols = [self.left_list.item(i).text()
+                                    for i in range(self.left_list.count())]
+        self.final_dataset2_cols = [self.right_list.item(i).text()
+                                    for i in range(self.right_list.count())]
+        super().accept()
+
+    def get_results(self):
+        """
+        :return: (list_of_cols_for_dataset1, list_of_cols_for_dataset2)
+        """
+        return self.final_dataset1_cols, self.final_dataset2_cols
+
+class ColumnNameDialog(QDialog):
+    """
+    Lets the user pick the final name for each pair of columns, e.g.:
+     (SG_001_1, SG1_1) --> user can choose "SG_001_1", "SG1_1", or custom.
+    """
+    def __init__(self, col_pairs, parent=None):
+        """
+        :param col_pairs: list of (df1_col, df2_col)
+        """
+        super().__init__(parent)
+        self.setWindowTitle("Choose Final Column Names")
+
+        self.col_pairs = col_pairs  # list of tuples
+        self.final_names = []       # store results after user picks
+
+        self.init_ui()
+
+    def init_ui(self):
+        layout = QVBoxLayout()
+
+        instructions = QLabel(
+            "For each pair of columns, choose the final name to use.\n"
+            "You can manually edit the cell in 'Final Name' column, or\n"
+            "use the 'Use Left Names'/'Use Right Names' buttons.\n"
+            "Click OK when done."
+        )
+        instructions.setWordWrap(True)
+        layout.addWidget(instructions)
+
+        # We'll build a small table with 3 columns:
+        #   - col0: Dataset1 column
+        #   - col1: Dataset2 column
+        #   - col2: Final Name (editable)
+        self.table = QTableWidget(len(self.col_pairs), 3)
+        self.table.setHorizontalHeaderLabels(["Dataset1", "Dataset2", "Final Name"])
+        self.table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
+        self.table.setEditTriggers(QAbstractItemView.AllEditTriggers)
+
+        for row, (left_name, right_name) in enumerate(self.col_pairs):
+            # col 0: left_name (read-only)
+            item0 = QTableWidgetItem(left_name)
+            item0.setFlags(Qt.ItemIsSelectable | Qt.ItemIsEnabled)
+            self.table.setItem(row, 0, item0)
+
+            # col 1: right_name (read-only)
+            item1 = QTableWidgetItem(right_name)
+            item1.setFlags(Qt.ItemIsSelectable | Qt.ItemIsEnabled)
+            self.table.setItem(row, 1, item1)
+
+            # col 2: final name (editable)
+            # by default, pick left_name (you can pick right_name or blank if you prefer)
+            item2 = QTableWidgetItem(left_name)
+            self.table.setItem(row, 2, item2)
+
+        layout.addWidget(self.table)
+
+        # Buttons at bottom
+        btn_layout = QHBoxLayout()
+        self.btn_use_left = QPushButton("Use Column Names from Dataset1")
+        self.btn_use_right = QPushButton("Use Column Names from Dataset2")
+        self.btn_ok = QPushButton("OK")
+        self.btn_cancel = QPushButton("Cancel")
+
+        # Set background color, black text, and hover effect only for the specified buttons
+        name_dialog_button_style = """
+    QPushButton {
+        background-color: lightgrey;
+        color: black;
+        border: 1px solid #cccccc;
+        padding: 4px 8px;
+    }
+    QPushButton:hover {
+        background-color: #a9a9a9; /* Darker grey for better visibility */
+        color: black; /* Keep text black on hover */
+    }
+    QPushButton:pressed {
+        background-color: #808080; /* Even darker grey when pressed */
+    }
+"""
+
+        self.btn_use_left.setStyleSheet(name_dialog_button_style)
+        self.btn_use_right.setStyleSheet(name_dialog_button_style)
+
+        self.btn_use_left.clicked.connect(self.use_left_names)
+        self.btn_use_right.clicked.connect(self.use_right_names)
+        self.btn_ok.clicked.connect(self.accept)
+        self.btn_cancel.clicked.connect(self.reject)
+
+        btn_layout.addWidget(self.btn_use_left)
+        btn_layout.addWidget(self.btn_use_right)
+        btn_layout.addWidget(self.btn_ok)
+        btn_layout.addWidget(self.btn_cancel)
+
+        layout.addLayout(btn_layout)
+        self.setLayout(layout)
+
+    def use_left_names(self):
+        """
+        Overwrite the 'Final Name' column with the left (Dataset1) name for each row
+        """
+        for row in range(self.table.rowCount()):
+            left_name = self.table.item(row, 0).text()
+            self.table.setItem(row, 2, QTableWidgetItem(left_name))
+
+    def use_right_names(self):
+        """
+        Overwrite the 'Final Name' column with the right (Dataset2) name for each row
+        """
+        for row in range(self.table.rowCount()):
+            right_name = self.table.item(row, 1).text()
+            self.table.setItem(row, 2, QTableWidgetItem(right_name))
+
+    def accept(self):
+        """
+        Gather final names from the third column
+        """
+        self.final_names = []
+        for row in range(self.table.rowCount()):
+            final_name = self.table.item(row, 2).text()
+            self.final_names.append(final_name)
+        super().accept()
+
+    def get_final_names(self):
+        return self.final_names
 
 class MetricsCalculator(QWidget):
     def __init__(self):
@@ -226,7 +534,7 @@ class MetricsCalculator(QWidget):
         #
         main_layout.addWidget(self.tab_widget)
         self.setLayout(main_layout)
-        self.setWindowTitle("Test Comparison Tool v0.15")
+        self.setWindowTitle("Test Comparison Tool v0.4")
 
     def select_file(self, line_edit):
         file_path, _ = QFileDialog.getOpenFileName(self, "Select CSV File", "", "CSV Files (*.csv)")
@@ -248,6 +556,47 @@ class MetricsCalculator(QWidget):
 
             df1 = pd.read_csv(path1)
             df2 = pd.read_csv(path2)
+
+            # Validate 'Time' col
+            if df1.columns[0] != "Time" or df2.columns[0] != "Time":
+                QMessageBox.critical(self, "Error", "The first column of both datasets must be named 'Time'.")
+                return
+
+            # Separate out 'Time'
+            df1_cols = [c for c in df1.columns if c != "Time"]
+            df2_cols = [c for c in df2.columns if c != "Time"]
+
+            # Open the ColumnMatchingDialog
+            dlg_match = ColumnMatchingDialog(df1_cols, df2_cols, parent=self)
+            if dlg_match.exec_() != QDialog.Accepted:
+                return  # user canceled
+            matched_cols1, matched_cols2 = dlg_match.get_results()
+
+            # Check if we have same length
+            if len(matched_cols1) != len(matched_cols2):
+                QMessageBox.critical(self, "Error",
+                                     "After matching, the two column lists differ in length. Cannot proceed.")
+                return
+
+            # Next, let user finalize column names
+            col_pairs = list(zip(matched_cols1, matched_cols2))
+            dlg_names = ColumnNameDialog(col_pairs, parent=self)
+            if dlg_names.exec_() != QDialog.Accepted:
+                return  # user canceled
+
+            final_names = dlg_names.get_final_names()
+            if len(final_names) != len(col_pairs):
+                QMessageBox.critical(self, "Error", "No final names found. Cannot proceed.")
+                return
+
+            # Reorder df1, df2 in the new order, then rename
+            df1 = df1[["Time"] + matched_cols1]
+            df2 = df2[["Time"] + matched_cols2]
+
+            # Create final columns list: first is "Time", then the user-chosen final names
+            new_cols = ["Time"] + final_names
+            df1.columns = new_cols
+            df2.columns = new_cols
 
             # Validate the presence of "Time" column
             if df1.columns[0] != "Time" or df2.columns[0] != "Time":
@@ -442,8 +791,8 @@ class MetricsCalculator(QWidget):
     def plot_metrics_tab1(self, metrics):
         try:
             # Grab dataset names for the title
-            d1_name = self.dataset1_name.text() if self.dataset1_name.text() else "Test1"
-            d2_name = self.dataset2_name.text() if self.dataset2_name.text() else "Test2"
+            d1_name = self.dataset1_name.text() if self.dataset1_name.text() else "Dataset1"
+            d2_name = self.dataset2_name.text() if self.dataset2_name.text() else "Dataset2"
             plot_title = f"Statistical Metrics - {d1_name} vs {d2_name}"
 
             screen = QGuiApplication.primaryScreen()
@@ -644,8 +993,8 @@ class MetricsCalculator(QWidget):
 
     def plot_scale_offset_tab2(self, metrics):
         try:
-            d1_name = self.dataset1_name.text() if self.dataset1_name.text() else "Test1"
-            d2_name = self.dataset2_name.text() if self.dataset2_name.text() else "Test2"
+            d1_name = self.dataset1_name.text() if self.dataset1_name.text() else "Dataset1"
+            d2_name = self.dataset2_name.text() if self.dataset2_name.text() else "Dataset2"
             if self.reference_selector.currentIndex() == 0:
                 plot_title = f"Scale & Offset Coefficients: {d1_name} as Reference"
             else:
@@ -736,13 +1085,13 @@ class MetricsCalculator(QWidget):
             if self.reference_selector_tab3.currentIndex() == 0:
                 reference_df = self.df1_aligned
                 target_df = self.df2_aligned
-                ref_name = self.dataset1_name.text() if self.dataset1_name.text() else "Test1"
-                tgt_name = self.dataset2_name.text() if self.dataset2_name.text() else "Test2"
+                ref_name = self.dataset1_name.text() if self.dataset1_name.text() else "Dataset1"
+                tgt_name = self.dataset2_name.text() if self.dataset2_name.text() else "Dataset2"
             else:
                 reference_df = self.df2_aligned
                 target_df = self.df1_aligned
-                ref_name = self.dataset2_name.text() if self.dataset2_name.text() else "Test2"
-                tgt_name = self.dataset1_name.text() if self.dataset1_name.text() else "Test1"
+                ref_name = self.dataset2_name.text() if self.dataset2_name.text() else "Dataset1"
+                tgt_name = self.dataset1_name.text() if self.dataset1_name.text() else "Dataset2"
 
             ref_f = reference_df[(reference_df["Time"] >= st) & (reference_df["Time"] <= et)]
             tgt_f = target_df[(target_df["Time"] >= st) & (target_df["Time"] <= et)]
