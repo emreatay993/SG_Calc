@@ -355,14 +355,14 @@ class MetricsCalculator(QWidget):
             df2_f = df2_f[["Time"] + selected_columns]
 
             # Calculate old metrics
-            metrics = self.compare_datasets_old(df1_f, df2_f)
+            metrics = self.compare_datasets_statistical(df1_f, df2_f)
             self.plot_metrics_tab1(metrics)
         except Exception as e:
             QMessageBox.critical(self, "Error", f"Error updating Tab1 plot: {str(e)}")
             import traceback
             traceback.print_exc()
 
-    def compare_datasets_old(self, df1, df2):
+    def compare_datasets_statistical(self, df1, df2):
         metrics_list = []
         columns = [col for col in df1.columns if col != "Time"]
         for col in columns:
@@ -383,13 +383,22 @@ class MetricsCalculator(QWidget):
             # Pearson correlation
             pearson_corr = np.corrcoef(x, y)[0, 1]
 
+            # Absolute Error
+            abs_error = np.abs(x - y)
+
+            # Percentage Error
+            with np.errstate(divide='ignore', invalid='ignore'):  # Handle division by zero
+                perc_error = np.where(x != 0, np.abs((x - y) / x) * 100, np.nan)
+
             metrics_list.append({
                 "Channel": col,
                 "Max Correlation": max_corr,
                 "Lag at Max Correlation": lag_at_max_corr,
                 "MSE": mse,
                 "RMSE": rmse,
-                "Pearson Correlation": pearson_corr
+                "Pearson Correlation": pearson_corr,
+                "Absolute Error": abs_error.mean(),  # Average absolute error
+                "Percentage Error": np.nanmean(perc_error)  # Average percentage error
             })
 
         return metrics_list
@@ -417,6 +426,8 @@ class MetricsCalculator(QWidget):
             mse_vals = [m["MSE"] for m in metrics]
             rmse_vals = [m["RMSE"] for m in metrics]
             pearson_vals = [m["Pearson Correlation"] for m in metrics]
+            abs_error_vals = [m["Absolute Error"] for m in metrics]
+            perc_error_vals = [m["Percentage Error"] for m in metrics]
 
             fig = go.Figure()
 
@@ -449,6 +460,20 @@ class MetricsCalculator(QWidget):
                 name="Pearson Corr",
                 marker_color="purple"
             ))
+            # Line: Absolute Error
+            fig.add_trace(go.Scatter(
+                x=channels, y=abs_error_vals,
+                name="Absolute Error",
+                mode="lines+markers",
+                line=dict(color='orange', dash='dot')
+            ))
+            # Line: Percentage Error
+            fig.add_trace(go.Scatter(
+                x=channels, y=perc_error_vals,
+                name="Percentage Error (%)",
+                mode="lines+markers",
+                line=dict(color='green', dash='dash')
+            ))
 
             fig.update_layout(
                 title=dict(
@@ -463,8 +488,9 @@ class MetricsCalculator(QWidget):
                     tickfont=dict(size=tick_font_size)
                 ),
                 yaxis=dict(
-                    title=dict(text="Metric Value", font=dict(size=axis_label_font_size)),
-                    tickfont=dict(size=tick_font_size)
+                    title=dict(text="Metrics Value", font=dict(size=axis_label_font_size)),
+                    tickfont=dict(size=tick_font_size),
+                    nticks=11
                 ),
                 legend=dict(font=dict(size=legend_font_size)),
                 barmode="group",
@@ -580,7 +606,8 @@ class MetricsCalculator(QWidget):
                 ),
                 yaxis=dict(
                     title=dict(text="Coefficient Value", font=dict(size=axis_label_font_size)),
-                    tickfont=dict(size=tick_font_size)
+                    tickfont=dict(size=tick_font_size),
+                    nticks=11
                 ),
                 legend=dict(font=dict(size=legend_font_size)),
                 barmode="group",
@@ -747,8 +774,9 @@ class MetricsCalculator(QWidget):
                     tickfont=dict(size=tick_font_size)
                 ),
                 yaxis=dict(
-                    title=dict(text="Data Value", font=dict(size=axis_label_font_size)),
-                    tickfont=dict(size=tick_font_size)
+                    title=dict(text="Coefficient Value", font=dict(size=axis_label_font_size)),
+                    tickfont=dict(size=tick_font_size),
+                    nticks=11
                 ),
                 legend=dict(font=dict(size=legend_font_size)),
                 template="plotly_white",
@@ -791,6 +819,10 @@ if __name__ == "__main__":
     }
     QPushButton:hover {
         background-color: #2980b9; /* darker bluish */
+    }
+
+    QLineEdit[readOnly="true"] {
+        color: #a0a0a0;  /* Light gray text color */
     }
 
     /* Tabs (QTabBar) */
