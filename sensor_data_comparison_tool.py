@@ -5,7 +5,7 @@ import numpy as np
 from PyQt5.QtWidgets import (
     QApplication, QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLabel,
     QLineEdit, QFileDialog, QTabWidget, QListWidget, QSplitter, QSizePolicy,
-    QDoubleSpinBox, QMessageBox, QComboBox, QDialog, QTextBrowser,
+    QDoubleSpinBox, QMessageBox, QComboBox, QDialog, QTextBrowser, QCheckBox,
     QGridLayout, QTableWidget, QTableWidgetItem, QHeaderView, QAbstractItemView
 )
 from PyQt5.QtWebEngineWidgets import QWebEngineView
@@ -371,6 +371,71 @@ class MetricsCalculator(QWidget):
         calculate_button.clicked.connect(self.calculate_metrics)
         main_layout.addWidget(calculate_button)
 
+        # ---- Reference Dataset Selector UI ----
+        reference_selector_layout = QHBoxLayout()
+
+        reference_label = QLabel("Select Reference Dataset:")
+        self.reference_selector = QComboBox()
+        self.reference_selector.addItems(["Dataset 1", "Dataset 2"])  # Default to Dataset 1
+        self.reference_selector.setCurrentIndex(0)
+
+        reference_selector_layout.addWidget(reference_label)
+        reference_selector_layout.addWidget(self.reference_selector)
+
+        # Connect reference selection to plot updates
+        self.reference_selector.currentIndexChanged.connect(self.update_all_plots)
+
+        main_layout.addLayout(reference_selector_layout)
+
+        # ---- Synchronization UI ----
+        sync_layout = QHBoxLayout()
+
+        sync_label = QLabel("Select Reference Time Points to Synchronize the Datasets:")
+        self.sync_checkbox = QCheckBox()
+        self.sync_checkbox.setChecked(False)  # default unchecked
+        self.sync_checkbox.stateChanged.connect(self.toggle_sync_widgets)  # Connect to the toggle function
+
+        self.sync_time1 = QDoubleSpinBox()
+        self.sync_time1.setPrefix("Ref Time1: ")
+        self.sync_time1.setDecimals(3)
+        self.sync_time1.setRange(0, 999999)
+        self.sync_time1.setVisible(False)  # Hidden by default
+
+        self.sync_time2 = QDoubleSpinBox()
+        self.sync_time2.setPrefix("Ref Time2: ")
+        self.sync_time2.setDecimals(3)
+        self.sync_time2.setRange(0, 999999)
+        self.sync_time2.setVisible(False)  # Hidden by default
+
+        # Combobox to choose which dataset to shift
+        self.dataset_shift_label = QLabel("Select Which Dataset to Shift:")
+        self.dataset_shift_label.setVisible(False)  # Hidden by default
+
+        self.sync_dataset_combo = QComboBox()
+        self.sync_dataset_combo.addItems(["Dataset 1", "Dataset 2"])
+        self.sync_dataset_combo.setVisible(False)  # Hidden by default
+
+        # Synchronize and Revert buttons
+        self.sync_button = QPushButton("Synchronize")
+        self.sync_button.clicked.connect(self.synchronize_datasets)
+        self.sync_button.setVisible(False)  # Hidden by default
+
+        self.revert_button = QPushButton("Revert")
+        self.revert_button.clicked.connect(self.revert_datasets)
+        self.revert_button.setVisible(False)  # Hidden by default
+
+        sync_layout.addWidget(sync_label)
+        sync_layout.addWidget(self.sync_checkbox)
+        sync_layout.addWidget(self.sync_time1)
+        sync_layout.addWidget(self.sync_time2)
+        sync_layout.addWidget(self.dataset_shift_label)
+        sync_layout.addWidget(self.sync_dataset_combo)
+        sync_layout.addWidget(self.sync_button)
+        sync_layout.addWidget(self.revert_button)
+
+        main_layout.addLayout(sync_layout)
+        # ---- End of global sync UI ----
+
         # ---- Tab Widget
         self.tab_widget = QTabWidget()
 
@@ -404,16 +469,6 @@ class MetricsCalculator(QWidget):
         tab1_time_layout.addWidget(self.end_time_spinbox_tab1)
         tab1_layout.addLayout(tab1_time_layout)
         tab1_time_layout.addWidget(help_button_tab1)
-
-        # Reference dataset selector for Tab1
-        tab1_ref_layout = QHBoxLayout()
-        self.reference_selector_tab1 = QComboBox()
-        self.reference_selector_tab1.addItems(["Dataset 1", "Dataset 2"])
-        self.reference_selector_tab1.currentIndexChanged.connect(self.update_tab1_plot)
-
-        tab1_ref_layout.addWidget(QLabel("Select Reference Dataset:"))
-        tab1_ref_layout.addWidget(self.reference_selector_tab1)
-        tab1_layout.addLayout(tab1_ref_layout)
 
         # List widget for Tab1
         self.column_list_widget_tab1 = QListWidget()
@@ -458,15 +513,6 @@ class MetricsCalculator(QWidget):
         tab2_time_layout.addWidget(self.end_time_spinbox_tab2)
         tab2_layout.addLayout(tab2_time_layout)
 
-        # Reference dataset selector
-        ref_layout = QHBoxLayout()
-        self.reference_selector = QComboBox()
-        self.reference_selector.addItems(["Dataset 1", "Dataset 2"])
-        self.reference_selector.currentIndexChanged.connect(self.update_tab2_plot)
-        ref_layout.addWidget(QLabel("Select Reference Dataset:"))
-        ref_layout.addWidget(self.reference_selector)
-        tab2_layout.addLayout(ref_layout)
-
         # List widget for Tab2
         self.column_list_widget_tab2 = QListWidget()
         self.column_list_widget_tab2.setSelectionMode(QListWidget.ExtendedSelection)
@@ -510,14 +556,15 @@ class MetricsCalculator(QWidget):
         tab3_time_layout.addWidget(self.end_time_spinbox_tab3)
         tab3_layout.addLayout(tab3_time_layout)
 
-        # Reference dataset selector for Tab3
-        ref_layout_tab3 = QHBoxLayout()
-        self.reference_selector_tab3 = QComboBox()
-        self.reference_selector_tab3.addItems(["Dataset 1", "Dataset 2"])
-        self.reference_selector_tab3.currentIndexChanged.connect(self.update_tab3_plot)
-        ref_layout_tab3.addWidget(QLabel("Select Reference Dataset:"))
-        ref_layout_tab3.addWidget(self.reference_selector_tab3)
-        tab3_layout.addLayout(ref_layout_tab3)
+        self.hide_scaled_checkbox_tab3 = QCheckBox("Hide Scaled/Offset")
+        self.hide_scaled_checkbox_tab3.setToolTip(
+            "When checked, hides scaled-only, offset-only, and scaled+offset plots.")
+        # Connect it so that toggling re-plots
+        self.hide_scaled_checkbox_tab3.stateChanged.connect(self.update_tab3_plot)
+
+        tab3_time_layout.addWidget(self.hide_scaled_checkbox_tab3)
+
+        tab3_layout.addLayout(tab3_time_layout)
 
         # List widget for Tab3
         self.column_list_widget_tab3 = QListWidget()
@@ -536,15 +583,15 @@ class MetricsCalculator(QWidget):
         tab3_layout.addWidget(splitter_tab3)
         self.tab3.setLayout(tab3_layout)
 
-        # Finally add Tab3 to tab widget
-        self.tab_widget.addTab(self.tab3, "Comparison with Scaled/Offset")
+        # Add Tab3 to tab widget
+        self.tab_widget.addTab(self.tab3, "Overlay Plot")
 
         #
         # Add the tab widget to main layout
         #
         main_layout.addWidget(self.tab_widget)
         self.setLayout(main_layout)
-        self.setWindowTitle("Test Comparison Tool v0.4")
+        self.setWindowTitle("Sensor Data Comparison Tool v0.5")
 
     def select_file(self, line_edit):
         file_path, _ = QFileDialog.getOpenFileName(self, "Select CSV File", "", "CSV Files (*.csv)")
@@ -635,8 +682,16 @@ class MetricsCalculator(QWidget):
                 df1.columns = col_names
                 df2.columns = col_names
 
+            # For safety, store raw copies (if you want raw reversion):
+            self.df1_original = df1.copy()
+            self.df2_original = df2.copy()
+
             # Interpolate and align
             self.df1_aligned, self.df2_aligned = self.interpolate_and_align(df1, df2)
+
+            # Store "aligned" backups, so we can revert to them:
+            self.df1_aligned_original = self.df1_aligned.copy()
+            self.df2_aligned_original = self.df2_aligned.copy()
 
             # Clear old items in tabs
             self.column_list_widget_tab1.clear()
@@ -678,6 +733,110 @@ class MetricsCalculator(QWidget):
             import traceback
             traceback.print_exc()
 
+    def synchronize_datasets(self):
+        """
+        Shift the chosen dataset's time so that 'sync_time2' aligns with 'sync_time1'.
+        Zero-pad on the newly exposed side with 1e-8, crop the opposite side
+        to retain the same length. Then re-plot.
+        """
+        if not self.sync_checkbox.isChecked():
+            QMessageBox.information(self, "Sync not active",
+                                    "Synchronization checkbox is not checked. No shift applied.")
+            return
+
+        try:
+            ref_t1 = self.sync_time1.value()
+            ref_t2 = self.sync_time2.value()
+            shift_seconds = ref_t1 - ref_t2
+
+            # Decide which aligned DataFrame to shift
+            if self.sync_dataset_combo.currentIndex() == 0:
+                df_to_shift = self.df1_aligned
+                dataset_str = "Dataset1"
+            else:
+                df_to_shift = self.df2_aligned
+                dataset_str = "Dataset2"
+
+            if df_to_shift.empty:
+                QMessageBox.warning(self, "No Data", f"{dataset_str} is empty!")
+                return
+
+            # 1) Figure out approximate dt
+            if len(df_to_shift) < 2:
+                QMessageBox.warning(self, "Insufficient Data", "Not enough points to shift.")
+                return
+            dt = df_to_shift["Time"].iloc[1] - df_to_shift["Time"].iloc[0]
+
+            # 2) Convert shift in seconds to integer shift in samples
+            shift_samples = int(round(shift_seconds / dt))
+            n = len(df_to_shift)
+
+            if shift_samples == 0:
+                QMessageBox.information(self, "No Shift", "Shift is effectively zero samples.")
+                return
+
+            # Save old data columns
+            data_cols = [c for c in df_to_shift.columns if c != "Time"]
+            data_array = df_to_shift[data_cols].values  # shape (n, #columns)
+
+            if shift_samples > 0:
+                # SHIFT RIGHT: we pad the left with 1e-8, drop some on the right
+                pad_block = np.full((shift_samples, data_array.shape[1]), 1e-8)
+
+                # Example: new_data = [pad_block, data_array[:-shift_samples]]
+                # Because we remove the last 'shift_samples' rows to keep length the same
+                if shift_samples >= n:
+                    QMessageBox.warning(self, "Large Shift", "Shift is too large, bigger than dataset length.")
+                    return
+
+                new_data = np.vstack([pad_block, data_array[:-shift_samples]])
+                df_to_shift[data_cols] = new_data
+
+            else:
+                # SHIFT LEFT: shift_samples < 0
+                shift_samples_abs = abs(shift_samples)
+
+                if shift_samples_abs >= n:
+                    QMessageBox.warning(self, "Large Shift", "Shift is too large, bigger than dataset length.")
+                    return
+
+                pad_block = np.full((shift_samples_abs, data_array.shape[1]), 1e-8)
+                # new_data = [data_array[shift_samples_abs:], pad_block]
+                new_data = np.vstack([data_array[shift_samples_abs:], pad_block])
+                df_to_shift[data_cols] = new_data
+
+            # QMessageBox.information(
+            #     self, "Datasets Synchronized",
+            #     f"{dataset_str} was shifted by {shift_samples} samples (~{shift_seconds:.3f} sec)."
+            # )
+
+            # Re-plot all tabs to show effect
+            self.update_tab1_plot()
+            self.update_tab2_plot()
+            self.update_tab3_plot()
+
+        except Exception as e:
+            QMessageBox.critical(self, "Error", f"Error during synchronization: {str(e)}")
+
+    def revert_datasets(self):
+        """
+        Restore df1_aligned, df2_aligned to their original aligned state
+        (i.e., undo any time shifts or zero-padding).
+        """
+        if not hasattr(self, 'df1_aligned_original') or not hasattr(self, 'df2_aligned_original'):
+            QMessageBox.warning(self, "Not Available", "No original alignment data to revert to.")
+            return
+
+        self.df1_aligned = self.df1_aligned_original.copy()
+        self.df2_aligned = self.df2_aligned_original.copy()
+
+        #QMessageBox.information(self, "Reverted", "Datasets have been reverted to the original alignment.")
+
+        # Re-plot each tab
+        self.update_tab1_plot()
+        self.update_tab2_plot()
+        self.update_tab3_plot()
+
     def interpolate_and_align(self, df1, df2):
         """
         Uses interp1d to align df1 & df2 along a common 'Time' axis.
@@ -712,15 +871,26 @@ class MetricsCalculator(QWidget):
             if not selected_columns:
                 return
 
+            if self.reference_selector.currentIndex() == 0:
+                reference_df = self.df1_aligned
+                target_df = self.df2_aligned
+                ref_name = self.dataset1_name.text() if self.dataset1_name.text() else "Dataset1"
+                tgt_name = self.dataset2_name.text() if self.dataset2_name.text() else "Dataset2"
+            elif self.reference_selector.currentIndex() == 1:
+                reference_df = self.df2_aligned
+                target_df = self.df1_aligned
+                ref_name = self.dataset2_name.text() if self.dataset2_name.text() else "Dataset2"
+                tgt_name = self.dataset1_name.text() if self.dataset1_name.text() else "Dataset1"
+
             # Time range
             st = self.start_time_spinbox_tab1.value()
             et = self.end_time_spinbox_tab1.value()
 
             # Choose reference dataset
-            if self.reference_selector_tab1.currentIndex() == 0:
+            if self.reference_selector.currentIndex() == 0:
                 reference_df = self.df1_aligned
                 target_df = self.df2_aligned
-            else:
+            elif self.reference_selector.currentIndex() == 1:
                 reference_df = self.df2_aligned
                 target_df = self.df1_aligned
 
@@ -975,10 +1145,10 @@ class MetricsCalculator(QWidget):
             et = self.end_time_spinbox_tab2.value()
 
             # Choose reference dataset
-            if self.reference_selector_tab1.currentIndex() == 0:
+            if self.reference_selector.currentIndex() == 0:
                 reference_df = self.df1_aligned
                 target_df = self.df2_aligned
-            else:
+            elif self.reference_selector.currentIndex() == 1:
                 reference_df = self.df2_aligned
                 target_df = self.df1_aligned
 
@@ -1099,13 +1269,13 @@ class MetricsCalculator(QWidget):
             st = self.start_time_spinbox_tab3.value()
             et = self.end_time_spinbox_tab3.value()
 
-            # Choose reference
-            if self.reference_selector_tab3.currentIndex() == 0:
+            # Choose which dataset to shift
+            if self.sync_dataset_combo.currentIndex() == 0:
                 reference_df = self.df1_aligned
                 target_df = self.df2_aligned
                 ref_name = self.dataset1_name.text() if self.dataset1_name.text() else "Dataset1"
                 tgt_name = self.dataset2_name.text() if self.dataset2_name.text() else "Dataset2"
-            else:
+            elif self.sync_dataset_combo.currentIndex() == 1:
                 reference_df = self.df2_aligned
                 target_df = self.df1_aligned
                 ref_name = self.dataset2_name.text() if self.dataset2_name.text() else "Dataset1"
@@ -1159,9 +1329,9 @@ class MetricsCalculator(QWidget):
         for each selected channel.
         """
         try:
+            # Update plot title to include the current reference dataset
             plot_title = (f"Overlay Plot:\n"
-                          f"{ref_name} (Reference), {tgt_name} (Compared), "
-                         )
+                          f"Reference: {ref_name}, Compared: {tgt_name}")
 
             screen = QGuiApplication.primaryScreen()
             dpi = screen.logicalDotsPerInch()
@@ -1183,34 +1353,43 @@ class MetricsCalculator(QWidget):
                     mode="lines",
                     name=f"{ref_name} - {col}"
                 ))
+
                 # 2) Plot original target
+                if self.hide_scaled_checkbox_tab3.isChecked():
+                    original_trace_name = f"{tgt_name} - {col}"
+                else:
+                    original_trace_name = f"{tgt_name} (Original) - {col}"
+
                 fig.add_trace(go.Scatter(
                     x=tgt_df["Time"], y=tgt_df[col],
                     mode="lines",
-                    name=f"{tgt_name} (Original) - {col}",
+                    name=original_trace_name,  # Updated here
                     line=dict(dash='dot')
                 ))
-                # 3) Plot scaled-only
-                fig.add_trace(go.Scatter(
-                    x=scaled_only_df["Time"], y=scaled_only_df[col],
-                    mode="lines",
-                    name=f"{tgt_name} (Scaled only) - {col}",
-                    line=dict(dash='dash')
-                ))
-                # 4) Plot offset-only
-                fig.add_trace(go.Scatter(
-                    x=offset_only_df["Time"], y=offset_only_df[col],
-                    mode="lines",
-                    name=f"{tgt_name} (Offset only) - {col}",
-                    line=dict(dash='dashdot')
-                ))
-                # 5) Plot scaled+offset
-                fig.add_trace(go.Scatter(
-                    x=scaled_offset_df["Time"], y=scaled_offset_df[col],
-                    mode="lines",
-                    name=f"{tgt_name} (Scaled+Offset) - {col}",
-                    line=dict(dash='longdash')
-                ))
+
+                # If "Hide Scaled/Offset" is checked, skip the next three lines
+                if not self.hide_scaled_checkbox_tab3.isChecked():
+                    # 3) Plot scaled-only
+                    fig.add_trace(go.Scatter(
+                        x=scaled_only_df["Time"], y=scaled_only_df[col],
+                        mode="lines",
+                        name=f"{tgt_name} (Scaled only) - {col}",
+                        line=dict(dash='dash')
+                    ))
+                    # 4) Plot offset-only
+                    fig.add_trace(go.Scatter(
+                        x=offset_only_df["Time"], y=offset_only_df[col],
+                        mode="lines",
+                        name=f"{tgt_name} (Offset only) - {col}",
+                        line=dict(dash='dashdot')
+                    ))
+                    # 5) Plot scaled+offset
+                    fig.add_trace(go.Scatter(
+                        x=scaled_offset_df["Time"], y=scaled_offset_df[col],
+                        mode="lines",
+                        name=f"{tgt_name} (Scaled+Offset) - {col}",
+                        line=dict(dash='longdash')
+                    ))
 
             fig.update_layout(
                 title=dict(
@@ -1245,6 +1424,29 @@ class MetricsCalculator(QWidget):
             QMessageBox.critical(self, "Error", f"Error plotting Tab3: {str(e)}")
             import traceback
             traceback.print_exc()
+
+    def update_all_plots(self):
+        """
+        Update all plots when invoked.
+        """
+        try:
+            self.update_tab1_plot()
+            self.update_tab2_plot()
+            self.update_tab3_plot()
+        except Exception as e:
+            QMessageBox.critical(self, "Error", f"Error updating plots: {str(e)}")
+            import traceback
+            traceback.print_exc()
+
+    def toggle_sync_widgets(self, state):
+        """
+        Toggles the visibility of synchronization widgets based on the checkbox state.
+        """
+        widgets = [self.sync_time1, self.sync_time2, self.sync_dataset_combo,
+                   self.sync_button, self.revert_button, self.dataset_shift_label]
+
+        for widget in widgets:
+            widget.setVisible(state == Qt.Checked)
 
 class HelpDialog(QDialog):
     def __init__(self, parent=None):
@@ -1431,6 +1633,26 @@ if __name__ == "__main__":
 
     QLineEdit[readOnly="true"] {
         color: #a0a0a0;  /* Light gray text color */
+    }
+
+    /* ComboBoxes */
+    QComboBox {
+        background-color: #ffffff; /* white background */
+        border: 1px solid #cccccc; /* light grey border */
+        padding: 2px 8px; /* padding inside the box */
+        border-radius: 4px; /* rounded corners */
+        color: #2c3e50; /* text color */
+    }
+    QComboBox:hover {
+        border: 1px solid #2980b9; /* blue border on hover */
+    }
+    
+    /* ComboBox Popup Menu */
+    QComboBox QAbstractItemView {
+        background-color: #ffffff; /* white background */
+        color: #2c3e50; /* text color */
+        selection-background-color: #2980b9; /* blue highlight */
+        selection-color: #ffffff; /* white text on highlight */
     }
 
     /* Tabs (QTabBar) */
