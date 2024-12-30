@@ -10,7 +10,7 @@ from PyQt5.QtWidgets import (
 )
 from PyQt5.QtWebEngineWidgets import QWebEngineView
 from PyQt5.QtCore import QUrl, Qt
-from PyQt5.QtGui import QGuiApplication
+from PyQt5.QtGui import QGuiApplication, QDesktopServices
 import markdown
 import plotly.graph_objects as go
 from scipy.interpolate import interp1d
@@ -1134,8 +1134,11 @@ class MetricsCalculator(QWidget):
             traceback.print_exc()
 
     def open_help_document(self):
-        help_dialog = HelpDialog(self)
-        help_dialog.exec_()
+        pdf_path = "Help_Doc_Statistical_Metrics.pdf"
+        if os.path.exists(pdf_path):
+            QDesktopServices.openUrl(QUrl.fromLocalFile(pdf_path))
+        else:
+            print("File not found.")
 
     # --------------------------------------------------------------------------------
     #                       TAB2 LOGIC: Scale & Offset
@@ -1453,165 +1456,6 @@ class MetricsCalculator(QWidget):
 
         for widget in widgets:
             widget.setVisible(state == Qt.Checked)
-
-
-class HelpDialog(QDialog):
-    def __init__(self, parent=None):
-        super().__init__(parent)
-        self.setWindowTitle("Statistical Metrics Help")
-        self.setMinimumSize(800, 600)
-
-        # Layout
-        layout = QVBoxLayout()
-
-        # MarkdownView for displaying Markdown content
-        self.markdown_view = MarkdownView(self)
-
-        # Load the Markdown content
-        markdown_content = """
-        # Statistical Metrics Help Document
-
-        ## 1. Mean Squared Error (MSE)
-        **Formula:**
-        $$ \\text{MSE} = \\frac{1}{n} \\sum_{i=1}^{n} (x_i - y_i)^2 $$
-
-        **Meaning:**  
-        MSE measures the average squared difference between actual values \(x\) and predicted values \(y\). Smaller MSE values indicate better model accuracy.
-
-        **Practical Use Case:**  
-        - Evaluating the accuracy of stress-strain predictions in finite element analysis.  
-        - Quantifying the error in temperature sensor measurements compared to a standard reference.
-
-        ---
-
-        ## 2. Root Mean Squared Error (RMSE)
-        **Formula:**
-        $$ \\text{RMSE} = \\sqrt{\\text{MSE}} $$
-
-        **Meaning:**  
-        RMSE is the square root of MSE. It provides the error magnitude in the same units as the data.
-
-        **Practical Use Case:**  
-        - Comparing vibration amplitude predictions against measured data.  
-        - Assessing the accuracy of dynamic pressure models in fluid mechanics.
-
-        ---
-
-        ## 3. Absolute Error (\(\Delta\))
-        **Formula:**
-        $$ \\text{Absolute Error} = |x - y| $$
-
-        **Meaning:**  
-        Measures the absolute difference between actual and predicted values without considering the direction of the error.
-
-        **Practical Use Case:**  
-        - Evaluating alignment errors in rotating machinery measurements.  
-        - Comparing load cell readings during tensile testing.
-
-        ---
-
-        ## 4. Percentage Error
-        **Formula:**
-        $$ \\text{Percentage Error} = \\frac{|x - y|}{x} \\times 100\\% $$
-
-        **Meaning:**  
-        Quantifies errors as a percentage of the actual values. Helps normalize error measurement.
-
-        **Practical Use Case:**  
-        - Analyzing deviation in power output between simulated and experimental results for turbines.  
-        - Evaluating error percentages in fatigue life predictions.
-
-        ---
-
-        ## 5. Symmetric Mean Absolute Percentage Error (SMAPE)
-        **Formula:**
-        $$ \\text{SMAPE} = \\frac{1}{n} \\sum_{i=1}^{n} \\frac{|x_i - y_i|}{\\frac{|x_i| + |y_i|}{2}} \\times 100\\% $$
-
-        **Meaning:**  
-        Normalizes percentage errors and avoids large values caused by near-zero actual values.
-
-        **Practical Use Case:**  
-        - Comparing strain gauge measurements across different time periods.  
-        - Evaluating thermal expansion model predictions versus experimental data.
-
-        ---
-
-        ## 6. Pearson Correlation Coefficient (PCC or R)
-        **Formula:**
-        $$ \\text{PCC} = \\frac{\\text{Cov}(x, y)}{\\sigma_x \\cdot \\sigma_y} $$
-
-        Where:
-        - \(\\text{Cov}(x, y)\\): Covariance of \(x\) and \(y\).  
-        - \(\\sigma_x, \\sigma_y\\): Standard deviations of \(x\\) and \(y\\).
-
-        **Meaning:**  
-        Measures the linear relationship between two datasets. Values range from -1 (perfect negative correlation) to 1 (perfect positive correlation).
-
-        **Practical Use Case:**  
-        - Identifying relationships between torque and rotational speed in engines.  
-        - Analyzing time lag correlations between hydraulic system pressure and flow rates.
-
-        ---
-
-        ## 7. Coefficient of Determination (\(R^2\))
-        **Formula:**
-        $$ R^2 = 1 - \\frac{\\text{SS}_{\\text{residual}}}{\\text{SS}_{\\text{total}}} $$
-
-        Where:
-        - \(\\text{SS}_{\\text{residual}} = \\sum (x - y)^2\\): Residual sum of squares.  
-        - \(\\text{SS}_{\\text{total}} = \\sum (x - \\bar{x})^2\\): Total sum of squares.
-
-        **Meaning:**  
-        Indicates the proportion of variance in the dependent variable explained by the independent variable.
-
-        **Values:**  
-        - \(R^2 = 1\): Perfect fit.  
-        - \(R^2 = 0\): Model explains no variance.  
-        - \(R^2 < 0\): Model performs worse than a horizontal line at the mean of the data.
-
-        **Practical Use Case:**  
-        - Evaluating the goodness-of-fit for force-displacement models in structural analysis.  
-        - Comparing predicted and measured stress-strain curves.
-
-        ---
-
-        ## 8. Maximum Correlation Coefficient
-        **Formula:**
-        $$ \\text{Max Correlation} = \\max(\\text{Cross Correlation Coefficients}) $$
-
-        **Meaning:**  
-        Identifies the strongest linear correlation between two datasets across all lags.
-
-        **Practical Use Case:**  
-        - Synchronizing signal measurements from two sensors placed at different locations.  
-        - Determining the phase relationship in oscillatory systems.
-
-        ---
-
-        ## 9. Lag at Maximum Correlation
-        **Meaning:**  
-        The time shift (lag) at which the maximum correlation occurs.
-
-        **Practical Use Case:**  
-        - Identifying time delays in the response of a system to an applied load.  
-        - Analyzing phase shifts in vibration or acoustic signals.
-
-        ---
-
-        ## Practical Notes
-        - **Data Scaling:** Ensure data is normalized or standardized where necessary.  
-        - **Outlier Handling:** Remove or analyze outliers separately as they can significantly affect metrics.  
-        - **Choose Metrics Wisely:** The choice of metric depends on the specific use case and dataset characteristics.
-        """
-        self.markdown_view.setValue(markdown_content)
-        layout.addWidget(self.markdown_view)
-
-        # Close Button
-        close_button = QPushButton("Close", self)
-        close_button.clicked.connect(self.close)
-        layout.addWidget(close_button)
-
-        self.setLayout(layout)
 
 
 # --------------------------------------------------------------------------
