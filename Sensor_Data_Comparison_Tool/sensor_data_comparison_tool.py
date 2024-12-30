@@ -11,7 +11,6 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtWebEngineWidgets import QWebEngineView
 from PyQt5.QtCore import QUrl, Qt
 from PyQt5.QtGui import QGuiApplication, QDesktopServices
-import markdown
 import plotly.graph_objects as go
 from scipy.interpolate import interp1d
 from scipy.stats import linregress
@@ -1167,7 +1166,7 @@ class MetricsCalculator(QWidget):
             ref_f = ref_f[["Time"] + selected_columns]
             tgt_f = tgt_f[["Time"] + selected_columns]
 
-            scale_offset_metrics = self.calculate_scale_offset(ref_f, tgt_f)
+            scale_offset_metrics = self.calculate_scale_offset(tgt_f, ref_f)
             self.plot_scale_offset_tab2(scale_offset_metrics)
         except Exception as e:
             QMessageBox.critical(self, "Error", f"Error updating Tab2 plot: {str(e)}")
@@ -1318,7 +1317,7 @@ class MetricsCalculator(QWidget):
                 # offset-only: target - intercept
                 offset_only_df[col] = tgt_f[col] - intercept
                 # scaled+offset: (target - intercept) / slope
-                scaled_offset_df[col] = (tgt_f[col] - intercept) / slope if slope != 0 else np.nan
+                scaled_offset_df[col] = tgt_f[col] / slope - intercept if slope != 0 else np.nan
 
             # Now plot everything in a single figure
             self.plot_tab3(ref_f, tgt_f, scaled_only_df, offset_only_df, scaled_offset_df, ref_name, tgt_name)
@@ -1340,7 +1339,7 @@ class MetricsCalculator(QWidget):
         try:
             # Update plot title to include the current reference dataset
             plot_title = (f"Overlay Plot:\n"
-                          f"Reference: {ref_name}, Compared: {tgt_name}")
+                          f"Reference: {ref_name}, Checked: {tgt_name}")
 
             screen = QGuiApplication.primaryScreen()
             dpi = screen.logicalDotsPerInch()
@@ -1373,7 +1372,6 @@ class MetricsCalculator(QWidget):
                     x=tgt_df["Time"], y=tgt_df[col],
                     mode="lines",
                     name=original_trace_name,  # Updated here
-                    line=dict(dash='dot')
                 ))
 
                 # If "Hide Scaled/Offset" is checked, skip the next three lines
