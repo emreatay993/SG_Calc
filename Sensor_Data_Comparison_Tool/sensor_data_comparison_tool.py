@@ -17,17 +17,20 @@ from scipy.interpolate import interp1d
 from scipy.stats import linregress
 from tempfile import NamedTemporaryFile
 import warnings
+
 warnings.filterwarnings("ignore", category=DeprecationWarning)
 
 # Enable High DPI scaling
 QGuiApplication.setAttribute(Qt.AA_EnableHighDpiScaling, True)
 QGuiApplication.setAttribute(Qt.AA_UseHighDpiPixmaps, True)
 
+
 class ColumnMatchingDialog(QDialog):
     """
     Lets the user reorder or remove columns from Dataset1 and Dataset2
     so that the final lists line up one-to-one in the correct order.
     """
+
     def __init__(self, dataset1_cols, dataset2_cols, parent=None):
         super().__init__(parent)
         self.setWindowTitle("Match Columns Between Dataset1 & Dataset2")
@@ -203,11 +206,13 @@ class ColumnMatchingDialog(QDialog):
         """
         return self.final_dataset1_cols, self.final_dataset2_cols
 
+
 class ColumnNameDialog(QDialog):
     """
     Lets the user pick the final name for each pair of columns, e.g.:
      (SG_001_1, SG1_1) --> user can choose "SG_001_1", "SG1_1", or custom.
     """
+
     def __init__(self, col_pairs, parent=None):
         """
         :param col_pairs: list of (df1_col, df2_col)
@@ -216,7 +221,7 @@ class ColumnNameDialog(QDialog):
         self.setWindowTitle("Choose Final Column Names")
 
         self.col_pairs = col_pairs  # list of tuples
-        self.final_names = []       # store results after user picks
+        self.final_names = []  # store results after user picks
 
         self.init_ui()
 
@@ -327,6 +332,7 @@ class ColumnNameDialog(QDialog):
 
     def get_final_names(self):
         return self.final_names
+
 
 class MetricsCalculator(QWidget):
     def __init__(self):
@@ -830,7 +836,7 @@ class MetricsCalculator(QWidget):
         self.df1_aligned = self.df1_aligned_original.copy()
         self.df2_aligned = self.df2_aligned_original.copy()
 
-        #QMessageBox.information(self, "Reverted", "Datasets have been reverted to the original alignment.")
+        # QMessageBox.information(self, "Reverted", "Datasets have been reverted to the original alignment.")
 
         # Re-plot each tab
         self.update_tab1_plot()
@@ -1256,9 +1262,9 @@ class MetricsCalculator(QWidget):
         Plots:
           - Reference data (no transform)
           - Original target data
-          - Scaled-only data (slope * target)
-          - Offset-only data (intercept + target)
-          - Scaled+offset (slope * target + intercept)
+          - Scaled-only data (target / slope)
+          - Offset-only data (target - intercept)
+          - Scaled+offset (target / slope - intercept)
         """
         try:
             selected_items = self.column_list_widget_tab3.selectedItems()
@@ -1270,12 +1276,12 @@ class MetricsCalculator(QWidget):
             et = self.end_time_spinbox_tab3.value()
 
             # Choose which dataset to shift
-            if self.sync_dataset_combo.currentIndex() == 0:
+            if self.reference_selector.currentIndex() == 0:
                 reference_df = self.df1_aligned
                 target_df = self.df2_aligned
                 ref_name = self.dataset1_name.text() if self.dataset1_name.text() else "Dataset1"
                 tgt_name = self.dataset2_name.text() if self.dataset2_name.text() else "Dataset2"
-            elif self.sync_dataset_combo.currentIndex() == 1:
+            elif self.reference_selector.currentIndex() == 1:
                 reference_df = self.df2_aligned
                 target_df = self.df1_aligned
                 ref_name = self.dataset2_name.text() if self.dataset2_name.text() else "Dataset1"
@@ -1304,12 +1310,12 @@ class MetricsCalculator(QWidget):
                 slope = m["Scale"]
                 intercept = m["Offset"]
 
-                # scaled-only: slope * (original)
-                scaled_only_df[col] = slope * tgt_f[col]
-                # offset-only: intercept + (original)
-                offset_only_df[col] = intercept + tgt_f[col]
-                # scaled+offset
-                scaled_offset_df[col] = slope * tgt_f[col] + intercept
+                # scaled-only: target / slope
+                scaled_only_df[col] = tgt_f[col] / slope if slope != 0 else np.nan
+                # offset-only: target - intercept
+                offset_only_df[col] = tgt_f[col] - intercept
+                # scaled+offset: (target - intercept) / slope
+                scaled_offset_df[col] = (tgt_f[col] - intercept) / slope if slope != 0 else np.nan
 
             # Now plot everything in a single figure
             self.plot_tab3(ref_f, tgt_f, scaled_only_df, offset_only_df, scaled_offset_df, ref_name, tgt_name)
@@ -1447,6 +1453,7 @@ class MetricsCalculator(QWidget):
 
         for widget in widgets:
             widget.setVisible(state == Qt.Checked)
+
 
 class HelpDialog(QDialog):
     def __init__(self, parent=None):
@@ -1606,6 +1613,7 @@ class HelpDialog(QDialog):
 
         self.setLayout(layout)
 
+
 # --------------------------------------------------------------------------
 #                                  MAIN
 # --------------------------------------------------------------------------
@@ -1646,7 +1654,7 @@ if __name__ == "__main__":
     QComboBox:hover {
         border: 1px solid #2980b9; /* blue border on hover */
     }
-    
+
     /* ComboBox Popup Menu */
     QComboBox QAbstractItemView {
         background-color: #ffffff; /* white background */
