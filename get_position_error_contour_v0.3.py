@@ -1,3 +1,4 @@
+# Get position error
 # region Import necessary libraries
 import clr
 import re
@@ -140,12 +141,15 @@ cpython_script_path = sol_selected_environment.WorkingDir + cpython_script_name
 cpython_code = """
 import numpy as np
 import pandas as pd
-import re
-import math
 import sys
+import math
+import re
+
 from PyQt5.QtWidgets import QApplication, QDialog, QVBoxLayout, QLabel, QLineEdit, QPushButton
 
-# Define classes for dialog windows etc.
+###############################################################################
+# Dialog classes for user input
+###############################################################################
 class RadiusDialog(QDialog):
     def __init__(self):
         super().__init__()
@@ -179,102 +183,120 @@ def get_user_radius():
         return dialog.radius
     return None
 
-# Define the function to calculate the distance between two points
-def calculate_distance(point1, point2):
-    return np.linalg.norm(np.array(point1) - np.array(point2))
+###############################################################################
+# Main logic
+###############################################################################
+def main():
+    # Read the dataset
+    file_name = r'""" + solution_directory_path + """' + "\\\\distance_error.txt"
+    data = pd.read_csv(file_name, delimiter='\\t')
 
-# Read the dataset
-file_name = r'""" + solution_directory_path + """' + "\\distance_error.txt"
-data = pd.read_csv(file_name, delimiter='\t')
-
-# Define the reference coordinates
-reference_coordinates = """ + str(list_of_coordinates_of_all_filtered_names_of_CS_SG_channels) + """
-
-# User-specified radius
-radius = get_user_radius()
-
-if radius is None:
-    print("No radius specified.")
-    sys.exit()
-
-# Function to find the closest node
-def find_closest_node(ref_coord, data):
-    distances = data.apply(lambda row: calculate_distance(ref_coord, [row['X Location (mm)'], row['Y Location (mm)'], row['Z Location (mm)']]), axis=1)
-    closest_index = distances.idxmin()
-    return data.loc[closest_index]
-
-# Iterate over each reference coordinate and find nodes within the radius
-all_nodes_with_errors = []
-max_errors = []
-results = []
-for idx, ref_coord in enumerate(reference_coordinates):
-    nodes_within_radius = []
-    closest_node = find_closest_node(ref_coord, data)
-    closest_value = closest_node[closest_node.index[-1]]
+    # Convert relevant columns to NumPy arrays for faster computation
+    node_numbers = data['Node Number'].values
+    x_vals = data['X Location (mm)'].values
+    y_vals = data['Y Location (mm)'].values
+    z_vals = data['Z Location (mm)'].values
     
-    max_abs_error = 0
-    max_rel_error = 0
-    
-    for _, row in data.iterrows():
-        # if row['Node Number'] == closest_node['Node Number']:
-        #     continue
-        node_coord = [row['X Location (mm)'], row['Y Location (mm)'], row['Z Location (mm)']]
-        distance = calculate_distance(ref_coord, node_coord)
-        if distance <= radius:
-            absolute_error = closest_value - row[row.index[-1]]
-            relative_error = (absolute_error / closest_value) * 100
-            max_abs_error = max(max_abs_error, absolute_error)
-            max_rel_error = max(max_rel_error, relative_error)
-            node_data = {
-                'Node Number': row['Node Number'],
-                'X [mm]': row['X Location [mm]'],
-                'Y [mm]': row['Y Location [mm]'],
-                'Z [mm]': row['Z Location [mm]'],
-                'Absolute Error': round(absolute_error, 2),
-                'Relative Error': round(relative_error, 2)
-            }
-            nodes_within_radius.append(node_data)
-            all_nodes_with_errors.append(node_data)
-    
-    results.append({
-        'Reference Point': f"Reference Point {idx + 1}",
-        'Closest Node': {
-            'Node Number': closest_node['Node Number'],
-            'X [mm]': closest_node['X Location [mm]'],
-            'Y [mm]': closest_node['Y Location [mm]'],
-            'Z [mm]': closest_node['Z Location [mm]'],
-            'Field Value': closest_value
-        },
-        'Nodes Within Radius': nodes_within_radius
-    })
-    
-    max_errors.append({
-        'Reference Point': f"Reference Point {idx + 1}",
-        'X [mm]': ref_coord[0],
-        'Y [mm]': ref_coord[1],
-        'Z [mm]': ref_coord[2],
-        'Max Absolute Error': round(max_abs_error, 2),
-        'Max Relative Error': round(max_rel_error, 2)
-    })
+    # The final result column is assumed to be the last column in the dataframe
+    field_values = data.iloc[:, -1].values
 
-# Convert the results to DataFrames
-errors_df = pd.DataFrame(all_nodes_with_errors)
-max_errors_df = pd.DataFrame(max_errors)
+    # Store node coordinates in a single NumPy array of shape (N,3)
+    node_coords = np.column_stack((x_vals, y_vals, z_vals))
 
-# Save the results to CSV files
-errors_csv = r'""" + solution_directory_path + """\\SG_positioning_errors.csv'
-max_errors_csv = r'""" + solution_directory_path + """\\SG_max_positioning_errors.csv'
+    # Define the reference coordinates (injected from IronPython)
+    reference_coordinates = """ + str(list_of_coordinates_of_all_filtered_names_of_CS_SG_channels) + """
 
-errors_df.to_csv(errors_csv, index=False)
-max_errors_df.to_csv(max_errors_csv, index=False)
+    # Get user-specified radius
+    radius = get_user_radius()
+    if radius is None:
+        print("No radius specified. Exiting.")
+        sys.exit()
 
-# Print the results
-for result in results:
-    print(f"{result['Reference Point']}:")
-    print(f"  Closest Node: {result['Closest Node']}")
-    print("  Nodes Within Radius:")
-    for node in result['Nodes Within Radius']:
-        print(f"    {node}")
+    all_nodes_with_errors = []
+    max_errors = []
+    results = []
+
+    # Loop over each reference coordinate
+    for idx, ref_coord in enumerate(reference_coordinates):
+        ref_coord_np = np.array(ref_coord, dtype=float)
+
+        # Vectorized distance calculation from ref_coord to all node_coords
+        dists = np.linalg.norm(node_coords - ref_coord_np, axis=1)
+
+        # Find the closest node quickly with argmin
+        closest_idx = np.argmin(dists)
+        closest_node_number = node_numbers[closest_idx]
+        closest_node_coord = node_coords[closest_idx]
+        closest_value = field_values[closest_idx]
+
+        # Identify nodes that lie within the user-specified radius
+        within_radius_mask = (dists <= radius)
+        sub_indices = np.where(within_radius_mask)[0]  # indices of rows within radius
+
+        # Calculate errors only for those nodes
+        sub_abs_errors = closest_value - field_values[sub_indices]
+        # Avoid division by zero if closest_value=0 by checking:
+        if abs(closest_value) < 1e-15:
+            sub_rel_errors = np.zeros_like(sub_abs_errors)
+        else:
+            sub_rel_errors = (sub_abs_errors / closest_value) * 100
+
+        # Prepare node-by-node dictionary data
+        for i, row_idx in enumerate(sub_indices):
+            all_nodes_with_errors.append({
+                'Node Number': int(node_numbers[row_idx]),
+                'X [mm]': round(node_coords[row_idx, 0], 3),
+                'Y [mm]': round(node_coords[row_idx, 1], 3),
+                'Z [mm]': round(node_coords[row_idx, 2], 3),
+                'Absolute Error': round(sub_abs_errors[i], 4),
+                'Relative Error': round(sub_rel_errors[i], 4)
+            })
+
+        # Compute maxima for this reference point
+        max_abs_error = round(np.max(sub_abs_errors), 4)
+        max_rel_error = round(np.max(sub_rel_errors), 4)
+
+        # Store aggregated results
+        results.append({
+            'Reference Point': f"Reference Point {idx + 1}",
+            'Closest Node': {
+                'Node Number': int(closest_node_number),
+                'X [mm]': round(closest_node_coord[0], 3),
+                'Y [mm]': round(closest_node_coord[1], 3),
+                'Z [mm]': round(closest_node_coord[2], 3),
+                'Field Value': round(closest_value, 4)
+            },
+            'Nodes Within Radius': sub_indices.size
+        })
+
+        max_errors.append({
+            'Reference Point': f"Reference Point {idx + 1}",
+            'X [mm]': round(ref_coord[0], 3),
+            'Y [mm]': round(ref_coord[1], 3),
+            'Z [mm]': round(ref_coord[2], 3),
+            'Max Absolute Error': max_abs_error,
+            'Max Relative Error': max_rel_error
+        })
+
+    # Convert lists of dicts to DataFrames
+    errors_df = pd.DataFrame(all_nodes_with_errors)
+    max_errors_df = pd.DataFrame(max_errors)
+
+    # Write the results to CSV
+    errors_csv = r'""" + solution_directory_path + """\\\\SG_positioning_errors.csv'
+    max_errors_csv = r'""" + solution_directory_path + """\\\\SG_max_positioning_errors.csv'
+
+    errors_df.to_csv(errors_csv, index=False)
+    max_errors_df.to_csv(max_errors_csv, index=False)
+
+    # Print some results
+    for result in results:
+        print(f"{result['Reference Point']}:")
+        print(f"  Closest Node: {result['Closest Node']}")
+        print(f"  Number of Nodes Within Radius: {result['Nodes Within Radius']}")
+
+if __name__ == '__main__':
+    main()
 """
 
 # Use StreamWriter with FileStream to write the file with UTF-8 encoding
