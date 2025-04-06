@@ -177,7 +177,7 @@ def save_strain_results(output_filename, nodes, coords, strains, header_full):
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("Strain Gage Positioning Tool v0.25")
+        self.setWindowTitle("Strain Gage Positioning Tool v0.3")
         self.resize(1200, 800)
         self.project_dir = None
         self.input_file = None
@@ -265,6 +265,11 @@ class MainWindow(QMainWindow):
         self.combo_quality.addItems(["original", "squared", "exponential", "snr"])
         cp_layout.addWidget(self.combo_quality)
 
+        cp_layout.addWidget(QLabel("Aggregation Method:"))
+        self.combo_agg = QComboBox()
+        self.combo_agg.addItems(["Max", "Average"])
+        cp_layout.addWidget(self.combo_agg)
+
         cp_layout.addWidget(QLabel("Candidate Count:"))
         self.spin_candidate_count = QSpinBox()
         self.spin_candidate_count.setRange(1, 1000)
@@ -282,12 +287,6 @@ class MainWindow(QMainWindow):
         self.dspin_uniformity_radius.setRange(0, 1000)
         self.dspin_uniformity_radius.setValue(10.0)
         cp_layout.addWidget(self.dspin_uniformity_radius)
-
-        cp_layout.addWidget(QLabel("Cloud Point Size:"))
-        self.dspin_cloud_point_size = QDoubleSpinBox()
-        self.dspin_cloud_point_size.setRange(1.0, 50.0)
-        self.dspin_cloud_point_size.setValue(10.0)
-        cp_layout.addWidget(self.dspin_cloud_point_size)
 
         self.btn_update = QPushButton("Update")
         self.btn_update.clicked.connect(self.updateSimulation)
@@ -312,6 +311,12 @@ class MainWindow(QMainWindow):
         graphicalControlsLayout.setContentsMargins(5, 5, 5, 5)
         graphicalControlsLayout.setSpacing(10)
 
+        graphicalControlsLayout.addWidget(QLabel("Cloud Point Size:"))
+        self.dspin_cloud_point_size = QDoubleSpinBox()
+        self.dspin_cloud_point_size.setRange(1.0, 50.0)
+        self.dspin_cloud_point_size.setValue(10.0)
+        graphicalControlsLayout.addWidget(self.dspin_cloud_point_size)
+
         graphicalControlsLayout.addWidget(QLabel("Candidate Point Size:"))
         self.dspin_candidate_point_size = QDoubleSpinBox()
         self.dspin_candidate_point_size.setRange(1.0, 50.0)
@@ -324,35 +329,66 @@ class MainWindow(QMainWindow):
         self.spin_label_font_size.setValue(20)
         graphicalControlsLayout.addWidget(self.spin_label_font_size)
 
-        graphicalControlsLayout.addWidget(QLabel("Upper Limit Value:"))
+        graphicalControlsLayout.addStretch(1)
+
+        # b) Legend Controls Group (for upper/lower limit and color)
+        self.legendControlsGroup = QGroupBox("Legend Controls")
+        self.legendControlsGroup.setStyleSheet(group_box_style)
+        legendControlsLayout = QHBoxLayout(self.legendControlsGroup)
+        legendControlsLayout.setContentsMargins(5, 5, 5, 5)
+        legendControlsLayout.setSpacing(10)
+
+        legendControlsLayout.addWidget(QLabel("Upper Limit Value:"))
         self.dspin_above_limit = QDoubleSpinBox()
         self.dspin_above_limit.setRange(-1e9, 1e9)
         self.dspin_above_limit.setValue(1.0)
-        graphicalControlsLayout.addWidget(self.dspin_above_limit)
+        legendControlsLayout.addWidget(self.dspin_above_limit)
 
-        graphicalControlsLayout.addWidget(QLabel("Lower Limit Value:"))
+        legendControlsLayout.addWidget(QLabel("Lower Limit Value:"))
         self.dspin_below_limit = QDoubleSpinBox()
         self.dspin_below_limit.setRange(-1e9, 1e9)
         self.dspin_below_limit.setValue(0.0)
-        graphicalControlsLayout.addWidget(self.dspin_below_limit)
+        legendControlsLayout.addWidget(self.dspin_below_limit)
 
-        graphicalControlsLayout.addWidget(QLabel("Upper Limit Color:"))
+        legendControlsLayout.addWidget(QLabel("Upper Limit Color:"))
         self.combo_above_color = QComboBox()
         self.combo_above_color.addItems(["Purple", "White"])
-        graphicalControlsLayout.addWidget(self.combo_above_color)
+        legendControlsLayout.addWidget(self.combo_above_color)
 
-        graphicalControlsLayout.addWidget(QLabel("Lower Limit Color:"))
+        legendControlsLayout.addWidget(QLabel("Lower Limit Color:"))
         self.combo_below_color = QComboBox()
         self.combo_below_color.addItems(["Gray", "White"])
-        graphicalControlsLayout.addWidget(self.combo_below_color)
+        legendControlsLayout.addWidget(self.combo_below_color)
 
-        graphicalControlsLayout.addStretch(1)
-        # Add the graphical controls group to the right side (top).
+        legendControlsLayout.addStretch(1)
+
+        # Connect immediate update signals so that any change re-renders using the current camera view.
+        self.dspin_cloud_point_size.valueChanged.connect(self.refreshVisualization)
+        self.dspin_candidate_point_size.valueChanged.connect(self.refreshVisualization)
+        self.spin_label_font_size.valueChanged.connect(self.refreshVisualization)
+        self.dspin_above_limit.valueChanged.connect(self.refreshVisualization)
+        self.dspin_below_limit.valueChanged.connect(self.refreshVisualization)
+        self.combo_above_color.currentIndexChanged.connect(self.refreshVisualization)
+        self.combo_below_color.currentIndexChanged.connect(self.refreshVisualization)
+
+        # Add the graphical and legend controls group to the right side (top).
         right_side_layout.addWidget(self.graphicalGroup)
+        right_side_layout.addWidget(self.legendControlsGroup)
 
-        # b) Main Screen: PyVista Interactor.
+
+        # c) Main Screen: PyVista Interactor.
         self.vtk_widget = QtInteractor(right_side_widget)
         right_side_layout.addWidget(self.vtk_widget.interactor)
+
+        # Create persistent actors and widgets:
+        self.global_axes = self.vtk_widget.add_axes(
+            line_width=2,
+            color='black',
+            xlabel="", ylabel="", zlabel="",
+            interactive=False
+        )
+        self.camera_widget = self.vtk_widget.add_camera_orientation_widget()
+        self.camera_widget.EnabledOn()
 
         # Add the right side widget to the main layout.
         main_layout.addWidget(right_side_widget)
@@ -409,13 +445,25 @@ class MainWindow(QMainWindow):
             self.lbl_file.setText(os.path.basename(fname))
             QMessageBox.information(self, "File Loaded", f"Loaded file:\n{fname}")
 
-    def clearVisualization(self):
+    def clearVisualization(self, preserve_camera=False):
+        # Clear dynamic actors
         self.vtk_widget.clear()
-        self.vtk_widget.reset_camera()
+
+        # Re‑add the persistent axes
+        if hasattr(self, 'global_axes') and self.global_axes is not None:
+            self.vtk_widget.renderer.AddActor(self.global_axes)
+
+        # Re‑enable the persistent camera widget (if needed)
+        if hasattr(self, 'camera_widget') and self.camera_widget is not None:
+            self.camera_widget.EnabledOn()
+
+        if not preserve_camera:
+            self.vtk_widget.reset_camera()
 
     def display_strain_with_candidates(self, coords, vm_strains, candidates_df, cloud_point_size,
-                                       candidate_point_size, label_font_size, title="Visualization"):
-        self.clearVisualization()
+                                       candidate_point_size, label_font_size, title="Visualization",
+                                       preserve_camera=False):
+        self.clearVisualization(preserve_camera)
 
         # Retrieve color choices from the user inputs
         above_color = self.combo_above_color.currentText().lower()  # "purple" or "white"
@@ -448,7 +496,9 @@ class MainWindow(QMainWindow):
                                          font_size=label_font_size, text_color="black",
                                          shape='rounded_rect', shape_color="#E9E1D4", margin=2,
                                          always_visible=True, shadow=True, name="Quality Labels")
-        self.vtk_widget.reset_camera()
+        # Only reset the camera if not preserving it.
+        if not preserve_camera:
+            self.vtk_widget.reset_camera()
         self.vtk_widget.render()
 
     def display_kmeans(self, coords, candidate_count, cloud_point_size, title="KMeans Clustering"):
@@ -521,14 +571,16 @@ class MainWindow(QMainWindow):
             self.updateSimulation()
 
     def refreshVisualization(self):
+        # Re-display using the currently stored data and the updated control values.
         if self.last_coords is not None and self.last_scalars is not None and self.last_candidates_df is not None:
             self.display_strain_with_candidates(
                 self.last_coords,
                 self.last_scalars,
                 self.last_candidates_df,
-                self.last_cloud_point_size,
-                self.last_candidate_point_size,
-                self.last_label_font_size
+                self.dspin_cloud_point_size.value(),  # Use current value
+                self.dspin_candidate_point_size.value(),  # Use current value
+                self.spin_label_font_size.value(),  # Use current value
+                preserve_camera=True
             )
 
     def updateSimulation(self):
@@ -646,7 +698,8 @@ class MainWindow(QMainWindow):
         self.display_strain_with_candidates(coords,
                                             current_scalars,
                                             candidates_df, cloud_point_size,
-                                            candidate_point_size, label_font_size)
+                                            candidate_point_size, label_font_size,
+                                            preserve_camera=True)
         if self.actionShowTable.isChecked():
             self.updateCandidateTable("strain_candidate_points.csv")
 
