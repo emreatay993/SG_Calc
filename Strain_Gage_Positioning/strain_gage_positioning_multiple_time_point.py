@@ -27,7 +27,8 @@ def compute_normal_strains(strain_data, angles):
     exy = strain_data[:, 2][:, np.newaxis]
     return exx * cos_t ** 2 + eyy * sin_t ** 2 + 1.0 * exy * sin_t * cos_t
 
-def compute_quality_metrics(nodes, coords, strains, angles, quality_mode="snr", uniformity_radius=1.0):
+def compute_quality_metrics(nodes, coords, strains, angles, quality_mode="Signal-Noise Ratio: |ε|/(σ+1e-12)",
+                            uniformity_radius=1.0):
     """
     Computes the best strain, best angle, local standard deviation, and quality metric.
     Returns a DataFrame with the node information.
@@ -43,13 +44,13 @@ def compute_quality_metrics(nodes, coords, strains, angles, quality_mode="snr", 
         indices = tree.query_ball_point(point, uniformity_radius)
         local_std[i] = np.std(best_strains[indices])
     abs_strain = np.abs(best_strains)
-    if quality_mode == "original":
+    if quality_mode == "Default: |ε|/(1+σ)":
         quality = abs_strain / (1.0 + local_std)
-    elif quality_mode == "squared":
+    elif quality_mode == "Squared: |ε|/(1+σ²)":
         quality = abs_strain / (1.0 + local_std ** 2)
-    elif quality_mode == "exponential":
+    elif quality_mode == "Exponential: |ε|·exp(–1000σ)":
         quality = abs_strain * np.exp(-1000 * local_std)
-    elif quality_mode == "snr":
+    elif quality_mode == "Signal-Noise Ratio: |ε|/(σ+1e-12)":
         epsilon = 1e-12
         quality = abs_strain / (local_std + epsilon)
     else:
@@ -120,7 +121,8 @@ def select_candidate_points(nodes, coords, strains, angles, candidate_count,
 
 # MODIFIED: Added optional precomputed_df parameter.
 def select_candidate_points_spatial_quality(nodes, coords, strains, angles, candidate_count,
-                                            uniformity_radius, quality_mode="snr", precomputed_df=None):
+                                            uniformity_radius, quality_mode="Signal-Noise Ratio: |ε|/(σ+1e-12)",
+                                            precomputed_df=None):
     """
     Improved candidate selection that uses KMeans clustering to partition nodes.
     If precomputed_df is provided, it will be used instead of computing quality metrics.
@@ -146,6 +148,7 @@ def select_candidate_points_spatial_quality(nodes, coords, strains, angles, cand
 def load_data(input_filename):
     """Reads the input file and returns node, coordinate, and strain tensor information.
     Supports multiple strain tensor inputs if present.
+    Assumes txt files to be in text export format of ANSYS Mechanical Result Objects.
     File format: first 4 columns: node, x, y, z; then groups of 4 columns for each strain measurement:
     exx, eyy, (dummy), exy.
     """
@@ -177,7 +180,7 @@ def save_strain_results(output_filename, nodes, coords, strains, header_full):
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("Strain Gage Positioning Tool v0.3")
+        self.setWindowTitle("Strain Gage Positioning Tool v0.4")
         self.resize(1200, 800)
         self.project_dir = None
         self.input_file = None
@@ -236,7 +239,7 @@ class MainWindow(QMainWindow):
         # -------------------------------
         # Create a QGroupBox for the left panel.
         self.positioningGroup = QGroupBox("Positioning Controls")
-        self.positioningGroup.setFixedWidth(200)
+        self.positioningGroup.setFixedWidth(251)
         self.positioningGroup.setStyleSheet(group_box_style)
 
         cp_layout = QVBoxLayout(self.positioningGroup)
@@ -252,17 +255,22 @@ class MainWindow(QMainWindow):
 
         cp_layout.addWidget(QLabel("Measurement Mode:"))
         self.combo_measurement = QComboBox()
-        self.combo_measurement.addItems(["rosette", "uniaxial"])
+        self.combo_measurement.addItems(["Rosette", "Uniaxial"])
         cp_layout.addWidget(self.combo_measurement)
 
         cp_layout.addWidget(QLabel("Selection Strategy:"))
         self.combo_strategy = QComboBox()
-        self.combo_strategy.addItems(["quality", "spatial"])
+        self.combo_strategy.addItems(["Quality-based (Greedy Search)", "Max Spatial Coverage (K-Means Clustering)"])
         cp_layout.addWidget(self.combo_strategy)
 
         cp_layout.addWidget(QLabel("Quality Metrics Mode:"))
         self.combo_quality = QComboBox()
-        self.combo_quality.addItems(["original", "squared", "exponential", "snr"])
+        self.combo_quality.addItems([
+            "Default: |ε|/(1+σ)",  # Original: Q = |ε|/(1+σ)
+            "Squared: |ε|/(1+σ²)",  # Squared: Q = |ε|/(1+σ²)
+            "Exponential: |ε|·exp(–1000σ)",  # Exponential: Q = |ε|·exp(–1000σ)
+            "Signal-Noise Ratio: |ε|/(σ+1e-12)"  # SNR: Q = |ε|/(σ+1e-12)
+        ])
         cp_layout.addWidget(self.combo_quality)
 
         cp_layout.addWidget(QLabel("Aggregation Method:"))
@@ -270,19 +278,19 @@ class MainWindow(QMainWindow):
         self.combo_agg.addItems(["Max", "Average"])
         cp_layout.addWidget(self.combo_agg)
 
-        cp_layout.addWidget(QLabel("Candidate Count:"))
+        cp_layout.addWidget(QLabel("Candidate Points Requested:"))
         self.spin_candidate_count = QSpinBox()
         self.spin_candidate_count.setRange(1, 1000)
         self.spin_candidate_count.setValue(10)
         cp_layout.addWidget(self.spin_candidate_count)
 
-        cp_layout.addWidget(QLabel("Min Distance [mm]:"))
+        cp_layout.addWidget(QLabel("Min Distance Between Candidate Points [mm]:"))
         self.dspin_min_distance = QDoubleSpinBox()
         self.dspin_min_distance.setRange(0, 10000)
         self.dspin_min_distance.setValue(10.0)
         cp_layout.addWidget(self.dspin_min_distance)
 
-        cp_layout.addWidget(QLabel("Uniformity Radius [mm]:"))
+        cp_layout.addWidget(QLabel("Search Radius for Uniformity [mm]:"))
         self.dspin_uniformity_radius = QDoubleSpinBox()
         self.dspin_uniformity_radius.setRange(0, 1000)
         self.dspin_uniformity_radius.setValue(10.0)
@@ -485,8 +493,8 @@ class MainWindow(QMainWindow):
         # Candidate points.
         candidate_coords = candidates_df[['X', 'Y', 'Z']].values
         candidate_points = pv.PolyData(candidate_coords)
-        self.vtk_widget.add_mesh(candidate_points, color="red", point_size=candidate_point_size,
-                                 render_points_as_spheres=True, label="Candidate Points")
+        self.vtk_widget.add_mesh(candidate_points, color="purple", point_size=candidate_point_size,
+                                 render_points_as_spheres=False, label="Candidate Points")
         # Quality labels.
         qualities = candidates_df['Quality'].values
         max_quality = qualities.max() if len(qualities) > 0 else 1
@@ -501,7 +509,7 @@ class MainWindow(QMainWindow):
             self.vtk_widget.reset_camera()
         self.vtk_widget.render()
 
-    def display_kmeans(self, coords, candidate_count, cloud_point_size, title="KMeans Clustering"):
+    def display_kmeans(self, coords, candidate_count, cloud_point_size, title="K-Means Clustering"):
         self.clearVisualization()
         kmeans = KMeans(n_clusters=candidate_count, random_state=42).fit(coords)
         labels = kmeans.labels_
@@ -608,7 +616,7 @@ class MainWindow(QMainWindow):
         # Determine aggregation method from GUI.
         agg_method = self.combo_agg.currentText().lower()
 
-        if measurement_mode == "rosette":
+        if measurement_mode == "Rosette":
             quality_dfs = []
             vm_strains_list = []
             for key in strain_tensors:
@@ -631,11 +639,11 @@ class MainWindow(QMainWindow):
                 vm_strains_agg = np.mean(np.column_stack(vm_strains_list), axis=1)
             else:
                 vm_strains_agg = np.max(np.column_stack(vm_strains_list), axis=1)
-            if selection_strategy == "quality":
+            if selection_strategy == "Quality-based (Greedy Search)":
                 candidates_df = select_candidate_points(nodes, coords, None, angles_i, candidate_count,
                                                         min_distance, uniformity_radius, quality_mode,
                                                         precomputed_df=agg_quality_df)
-            elif selection_strategy == "spatial":
+            elif selection_strategy == "Max Spatial Coverage (K-Means Clustering)":
                 if self.spatial_update_count == 0:
                     self.display_kmeans(coords, candidate_count, cloud_point_size)
                     self.spatial_update_count += 1
@@ -646,7 +654,7 @@ class MainWindow(QMainWindow):
                                                                             precomputed_df=agg_quality_df)
                     self.spatial_update_count = 0
             current_scalars = vm_strains_agg
-        else:  # uniaxial (non-rosette)
+        else:  # Uniaxial (non-rosette)
             interval = 15
             angles = [0] + list(range(interval, 360, interval))
             quality_dfs = []
@@ -664,11 +672,11 @@ class MainWindow(QMainWindow):
             agg_quality_df = aggregate_quality_metrics(quality_dfs, agg_method)
             # For visualization, aggregate strains (taking the maximum across measurements).
             strains_agg = np.max(np.stack(strains_list, axis=-1), axis=-1)
-            if selection_strategy == "quality":
+            if selection_strategy == "Quality-based (Greedy Search)":
                 candidates_df = select_candidate_points(nodes, coords, None, angles, candidate_count,
                                                         min_distance, uniformity_radius, quality_mode,
                                                         precomputed_df=agg_quality_df)
-            elif selection_strategy == "spatial":
+            elif selection_strategy == "Max Spatial Coverage (K-Means Clustering)":
                 if self.spatial_update_count == 0:
                     self.display_kmeans(coords, candidate_count, cloud_point_size)
                     self.spatial_update_count += 1
