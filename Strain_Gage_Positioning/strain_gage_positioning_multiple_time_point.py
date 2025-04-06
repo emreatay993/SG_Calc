@@ -109,7 +109,7 @@ def greedy_selection(df, min_distance, candidate_count):
 # MODIFIED: Added optional precomputed_df parameter.
 def select_candidate_points(nodes, coords, strains, angles, candidate_count,
                             min_distance, uniformity_radius, quality_mode="original", precomputed_df=None):
-    """Quality-based candidate selection using a greedy algorithm.
+    """Max Quality-based candidate selection using a greedy algorithm.
     If precomputed_df is provided, it will be used instead of computing quality metrics.
     """
     if precomputed_df is None:
@@ -180,7 +180,7 @@ def save_strain_results(output_filename, nodes, coords, strains, header_full):
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("Strain Gage Positioning Tool v0.4")
+        self.setWindowTitle("Strain Gage Positioning Tool v0.4.1")
         self.resize(1200, 800)
         self.project_dir = None
         self.input_file = None
@@ -260,7 +260,7 @@ class MainWindow(QMainWindow):
 
         cp_layout.addWidget(QLabel("Selection Strategy:"))
         self.combo_strategy = QComboBox()
-        self.combo_strategy.addItems(["Quality-based (Greedy Search)", "Max Spatial Coverage (K-Means Clustering)"])
+        self.combo_strategy.addItems(["Max Quality-based (Greedy Search)", "Max Spatial Coverage (K-Means Clustering)"])
         cp_layout.addWidget(self.combo_strategy)
 
         cp_layout.addWidget(QLabel("Quality Metrics Mode:"))
@@ -639,7 +639,7 @@ class MainWindow(QMainWindow):
                 vm_strains_agg = np.mean(np.column_stack(vm_strains_list), axis=1)
             else:
                 vm_strains_agg = np.max(np.column_stack(vm_strains_list), axis=1)
-            if selection_strategy == "Quality-based (Greedy Search)":
+            if selection_strategy == "Max Quality-based (Greedy Search)":
                 candidates_df = select_candidate_points(nodes, coords, None, angles_i, candidate_count,
                                                         min_distance, uniformity_radius, quality_mode,
                                                         precomputed_df=agg_quality_df)
@@ -672,7 +672,7 @@ class MainWindow(QMainWindow):
             agg_quality_df = aggregate_quality_metrics(quality_dfs, agg_method)
             # For visualization, aggregate strains (taking the maximum across measurements).
             strains_agg = np.max(np.stack(strains_list, axis=-1), axis=-1)
-            if selection_strategy == "Quality-based (Greedy Search)":
+            if selection_strategy == "Max Quality-based (Greedy Search)":
                 candidates_df = select_candidate_points(nodes, coords, None, angles, candidate_count,
                                                         min_distance, uniformity_radius, quality_mode,
                                                         precomputed_df=agg_quality_df)
