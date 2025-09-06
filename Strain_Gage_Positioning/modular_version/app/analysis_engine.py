@@ -1,13 +1,39 @@
 # File: app/analysis_engine.py
 
 import numpy as np
-import pandas as pd
 from PyQt5.QtCore import QObject, pyqtSignal
 from sklearn.cluster import KMeans
 
 # Import our computation and selection modules
 from . import computation
 from . import selection_strategies
+
+
+def _load_and_combine_data(filepaths):
+    """
+    Loads data from multiple files and combines their strain tensors.
+    Assumes nodes and coordinates are identical across all files.
+    """
+    if not filepaths:
+        raise ValueError("No input files provided.")
+
+    # Load the first file to get the base node and coordinate data
+    nodes, coords, _ = computation.load_data(filepaths[0])
+
+    combined_strain_tensors = {}
+    measurement_idx = 0
+
+    for fpath in filepaths:
+        # Load data from each file
+        # We assume nodes and coords are the same, so we discard them after the first file
+        _, _, strain_tensors = computation.load_data(fpath)
+
+        # Append the strain tensors from the current file to the combined dictionary
+        for i in range(len(strain_tensors)):
+            combined_strain_tensors[measurement_idx] = strain_tensors[i]
+            measurement_idx += 1
+
+    return nodes, coords, combined_strain_tensors
 
 
 class AnalysisEngine(QObject):
@@ -28,9 +54,9 @@ class AnalysisEngine(QObject):
     # Carries a string with the error message.
     analysis_failed = pyqtSignal(str)
 
-    def __init__(self, filepath, params, display_in_strain, is_continued_kmeans=False, parent=None):
+    def __init__(self, filepaths, params, display_in_strain, is_continued_kmeans=False, parent=None):
         super().__init__(parent)
-        self.filepath = filepath
+        self.filepaths = filepaths if isinstance(filepaths, list) else [filepaths]
         self.params = params
         self.display_in_strain = display_in_strain
         self.is_continued_kmeans = is_continued_kmeans
@@ -38,7 +64,7 @@ class AnalysisEngine(QObject):
     def run(self):
         """The main entry point to start the analysis workflow."""
         try:
-            nodes, coords, strain_tensors = computation.load_data(self.filepath)
+            nodes, coords, strain_tensors = _load_and_combine_data(self.filepaths)
 
             # Special handling for the two-step K-Means strategy
             if self.params["strategy"] == "Max Coverage (K-Means)" and not self.is_continued_kmeans:
@@ -66,6 +92,7 @@ class AnalysisEngine(QObject):
     def _compute_quality(self, nodes, coords, strain_tensors):
         """Private helper to run the core strain and quality computations."""
         quality_dfs = []
+        threshold_metric = None
 
         if self.params["measurement_mode"] == "Rosette":
             angles = [0]
@@ -87,6 +114,13 @@ class AnalysisEngine(QObject):
             strains_stack = np.column_stack(strains_list)
             agg_method = self.params["agg_method"]
             current_scalars = np.max(strains_stack, axis=1) if agg_method == "Max" else np.mean(strains_stack, axis=1)
+            
+            # Threshold metric across load cases
+            thresh_agg = self.params.get("strain_threshold_agg", "Max")
+            if thresh_agg == "Average":
+                threshold_metric = np.mean(strains_stack, axis=1)
+            else:
+                threshold_metric = np.max(strains_stack, axis=1)
 
         else:  # Uniaxial
             interval = 15
@@ -105,8 +139,28 @@ class AnalysisEngine(QObject):
             strains_stack = np.stack([np.max(np.abs(s), axis=1) for s in strains_list], axis=1)
             agg_method = self.params["agg_method"]
             current_scalars = np.max(strains_stack, axis=1) if agg_method == "Max" else np.mean(strains_stack, axis=1)
+            
+            # Threshold metric across load cases
+            thresh_agg = self.params.get("strain_threshold_agg", "Max")
+            if thresh_agg == "Average":
+                threshold_metric = np.mean(strains_stack, axis=1)
+            else:
+                threshold_metric = np.max(strains_stack, axis=1)
 
         agg_quality_df = computation.aggregate_quality_metrics(quality_dfs, self.params["agg_method"])
+
+        # Apply microstrain threshold filtering if enabled
+        if self.params.get("strain_threshold_enabled", False) and threshold_metric is not None:
+            # threshold_metric is in the same unit as input tensors after conversion depending on display mode
+            # Convert user-provided microstrain threshold into the working unit
+            user_thresh_micro = float(self.params.get("strain_threshold_value_microstrain", 0.0))
+            threshold_value = user_thresh_micro / 1e6 if self.display_in_strain else user_thresh_micro
+
+            # Filter DataFrame rows where the metric is below threshold
+            mask = threshold_metric >= threshold_value
+            if not np.all(mask):
+                agg_quality_df = agg_quality_df.loc[mask].reset_index(drop=True)
+
         return agg_quality_df, current_scalars
 
     def _select_candidates(self, agg_quality_df, coords):
@@ -122,7 +176,7 @@ class AnalysisEngine(QObject):
                 ),
             "Max Coverage (K-Means)":
                 lambda: selection_strategies.select_candidates_kmeans(
-                    agg_quality_df, coords, candidate_count
+                    agg_quality_df, agg_quality_df[["X", "Y", "Z"]].values, candidate_count
                 ),
             "Greedy Gradient Search":
                 lambda: selection_strategies.select_candidates_gradient_greedy(

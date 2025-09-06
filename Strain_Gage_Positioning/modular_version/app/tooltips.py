@@ -9,29 +9,46 @@
 # =====================================================================================
 
 LOAD_STRAIN_DATA = """
-<b>Load Strain Data File (.txt, .dat)</b><br><br>
-This is the first and most important step. This action opens a file dialog to select your
-engineering data file, which must be a plain text format.<br><br>
-<b><u>Required File Format:</u></b>
-<ul>
-  <li><b>Delimiter:</b> Columns must be separated by one or more spaces.</li>
-  <li><b>Header:</b> The very first line of the file is assumed to be a header and will be ignored.</li>
-  <li><b>Columns:</b> Each subsequent line must represent a single node and contain at least 8 numerical columns in this specific order:
-    <ol>
-      <li>Node ID (integer)</li>
-      <li>X-coordinate (float)</li>
-      <li>Y-coordinate (float)</li>
-      <li>Z-coordinate (float)</li>
-      <li>Exx (Normal Strain in X)</li>
-      <li>Eyy (Normal Strain in Y)</li>
-      <li>Ezz (Normal Strain in Z, often ignored but must be present)</li>
-      <li>Exy (Shear Strain in XY plane)</li>
+<b>Load Strain Data File (.txt, .dat)</b><br/>
+<br/>
+Select a whitespace-delimited text file containing node coordinates and strain tensors.
+<br/><br/>
+<b><u>Format:</u></b>
+<ul style="margin: 0 0 0 6px;">
+  <li><b>Delimiter:</b> One or more spaces (whitespace). CSV commas are not supported.</li>
+  <li><b>Header:</b> The first line is treated as a header and skipped.</li>
+  <li><b>Columns (per node):</b>
+    <ol style="margin: 6px 0 0 14px;">
+      <li>Node ID (int)</li>
+      <li>X (float)</li>
+      <li>Y (float)</li>
+      <li>Z (float)</li>
+      <li>Exx (strain, mm/mm)</li>
+      <li>Eyy (strain, mm/mm)</li>
+      <li>Ezz (strain, mm/mm) — parsed for compatibility</li>
+      <li>Exy (engineering shear strain γ<sub>xy</sub>, mm/mm)</li>
     </ol>
+    <div style="margin-top: 4px;">
+      <i>Optional:</i> Columns <b>9</b> and <b>10</b> may be <b>Eyz</b> and <b>Exz</b> (mm/mm). 
+      If present, they are read but <b>ignored</b> by the analysis.
+    </div>
   </li>
 </ul>
-<b><u>Multiple Load Cases:</u></b><br>
-The tool can handle multiple load cases in a single file. It automatically detects them by looking
-for additional sets of 4 strain columns (Exx, Eyy, Ezz, Exy).
+<br/>
+<b><u>Units:</u></b><br/>
+Provide strains in <b>strain (mm/mm)</b>. The tool converts to microstrain internally; display units can be toggled/changed later.
+<br/><br/>
+<b><u>Multiple Load Cases:</u></b><br/>
+Provide multiple cases in either of two ways:
+<ol style="margin: 6px 0 0 14px;">
+  <li><b>Single file, multiple cases:</b> Append extra <b>4-column</b> blocks
+      (Exx, Eyy, Ezz, Exy) for each load case. The tool auto-detects and analyzes all cases.<br/>
+      This method is not recommended as it can be confusing and error-prone.<br/>
+           Please use the multiple files method instead.<br/></li>
+  <li><b>Multiple files:</b> Select more than one file when loading. 
+      Files are stacked as separate load cases as long as they share the same Node and XYZ coordinates.</li>
+  
+</ol>
 """
 FILE_LABEL = """
 <b>Current Data File</b><br><br>
@@ -279,6 +296,37 @@ including the color bar legend and the candidate table.<br><br>
   (e.g., 1500 με). This is a common industry standard as it avoids dealing with many decimal places.
   (1 με = 1 x 10<sup>-6</sup> strain).<br>
 - <b>Checked:</b> Results are shown in dimensionless <b>strain</b> (e.g., 0.0015).
+"""
+
+# =====================================================================================
+# Threshold Filter Controls
+# =====================================================================================
+
+STRAIN_THRESHOLD_GROUP = """
+<b>Strain Threshold Filter</b><br><br>
+Exclude nodes whose strain signal is too small across all load cases.<br>
+When enabled, nodes whose selected metric (Average or Max across load cases)
+is below the specified microstrain threshold are removed from consideration
+before candidate-point selection strategies run.
+"""
+
+STRAIN_THRESHOLD_VALUE = """
+<b>Threshold (με)</b><br><br>
+The microstrain value used to filter out low-signal nodes. Typical values are
+10–50 με, but this depends on your material, loads, and measurement fidelity.
+"""
+
+STRAIN_THRESHOLD_AGG = """
+<b>Across load cases</b><br><br>
+Select how the per-node strain metric is computed across multiple load cases for the threshold check.<br>
+<ul>
+  <li><b>Average:</b> Mean microstrain across load cases. Favors nodes that are consistently above the threshold.<br>
+      <i>Example:</i> strains [5, 12, 7] με → avg = 8 με. With a 10 με threshold this node is filtered out.</li>
+  <li><b>Max:</b> Maximum microstrain across load cases. Keeps nodes that exceed the threshold in at least one case.<br>
+      <i>Example:</i> strains [5, 12, 7] με → max = 12 με. With a 10 με threshold this node is kept.</li>
+</ul>
+<b>Tip:</b> Use <b>Average</b> for robustness across loads; use <b>Max</b> to retain peak responders.<br>
+<b>Note:</b> This filter runs before selection and is independent of the Quality aggregation. The threshold is always specified in microstrain (με).
 """
 
 # =====================================================================================
