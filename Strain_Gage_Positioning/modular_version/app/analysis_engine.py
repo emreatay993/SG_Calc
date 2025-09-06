@@ -1,0 +1,145 @@
+# File: app/analysis_engine.py
+
+import numpy as np
+import pandas as pd
+from PyQt5.QtCore import QObject, pyqtSignal
+from sklearn.cluster import KMeans
+
+# Import our computation and selection modules
+from . import computation
+from . import selection_strategies
+
+
+class AnalysisEngine(QObject):
+    """
+    Performs the core analysis, completely decoupled from the UI. This class is
+    the "Model" in the MVC pattern. It takes parameters, runs calculations, and
+    emits signals with the results or errors.
+    """
+    # Signal emitted on successful completion of a full analysis run.
+    # Carries the final data needed for visualization and reporting.
+    analysis_complete = pyqtSignal(object, object, object)  # coords, scalars, candidates_df
+
+    # Signal emitted when the K-Means preview step is ready.
+    # Carries the coordinates and the cluster labels for visualization.
+    kmeans_preview_ready = pyqtSignal(object, object)  # coords, cluster_labels
+
+    # Signal emitted when any part of the analysis fails.
+    # Carries a string with the error message.
+    analysis_failed = pyqtSignal(str)
+
+    def __init__(self, filepath, params, display_in_strain, is_continued_kmeans=False, parent=None):
+        super().__init__(parent)
+        self.filepath = filepath
+        self.params = params
+        self.display_in_strain = display_in_strain
+        self.is_continued_kmeans = is_continued_kmeans
+
+    def run(self):
+        """The main entry point to start the analysis workflow."""
+        try:
+            nodes, coords, strain_tensors = computation.load_data(self.filepath)
+
+            # Special handling for the two-step K-Means strategy
+            if self.params["strategy"] == "Max Coverage (K-Means)" and not self.is_continued_kmeans:
+                # This is the first step: generate and show the clusters.
+                candidate_count = self.params["candidate_count"]
+                if len(coords) < candidate_count:
+                    candidate_count = len(coords)
+
+                kmeans = KMeans(n_clusters=candidate_count, random_state=42, n_init='auto').fit(coords)
+                self.kmeans_preview_ready.emit(coords, kmeans.labels_)
+                return  # Stop execution here until user clicks "Continue"
+
+            # Proceed with the full analysis for all other cases
+            agg_quality_df, current_scalars = self._compute_quality(nodes, coords, strain_tensors)
+
+            candidates_df = self._select_candidates(agg_quality_df, coords)
+
+            self.analysis_complete.emit(coords, current_scalars, candidates_df)
+
+        except Exception as e:
+            import traceback
+            print(traceback.format_exc())  # For debugging
+            self.analysis_failed.emit(f"An unexpected error occurred: {e}")
+
+    def _compute_quality(self, nodes, coords, strain_tensors):
+        """Private helper to run the core strain and quality computations."""
+        quality_dfs = []
+
+        if self.params["measurement_mode"] == "Rosette":
+            angles = [0]
+            strains_list = []
+            for tensor in strain_tensors.values():
+                strain_data = tensor / 1e6 if self.display_in_strain else tensor
+                # von Mises equivalent strain calculation
+                vm_strains = np.sqrt(
+                    strain_data[:, 0] ** 2 - strain_data[:, 0] * strain_data[:, 1] + strain_data[:, 1] ** 2 + 3 * (
+                                strain_data[:, 2] ** 2)
+                )
+                strains_list.append(vm_strains)
+                df = computation.compute_quality_metrics(
+                    nodes, coords, vm_strains.reshape(-1, 1), angles,
+                    self.params["quality_mode"], self.params["uniformity_radius"]
+                )
+                quality_dfs.append(df)
+
+            strains_stack = np.column_stack(strains_list)
+            agg_method = self.params["agg_method"]
+            current_scalars = np.max(strains_stack, axis=1) if agg_method == "Max" else np.mean(strains_stack, axis=1)
+
+        else:  # Uniaxial
+            interval = 15
+            angles = [0] + list(range(interval, 180, interval))
+            strains_list = []
+            for tensor in strain_tensors.values():
+                strain_data = tensor / 1e6 if self.display_in_strain else tensor
+                strains_i = computation.compute_normal_strains(strain_data, angles)
+                strains_list.append(strains_i)
+                df = computation.compute_quality_metrics(
+                    nodes, coords, strains_i, angles,
+                    self.params["quality_mode"], self.params["uniformity_radius"]
+                )
+                quality_dfs.append(df)
+
+            strains_stack = np.stack([np.max(np.abs(s), axis=1) for s in strains_list], axis=1)
+            agg_method = self.params["agg_method"]
+            current_scalars = np.max(strains_stack, axis=1) if agg_method == "Max" else np.mean(strains_stack, axis=1)
+
+        agg_quality_df = computation.aggregate_quality_metrics(quality_dfs, self.params["agg_method"])
+        return agg_quality_df, current_scalars
+
+    def _select_candidates(self, agg_quality_df, coords):
+        """Private helper to dispatch to the correct selection strategy."""
+        strategy = self.params["strategy"]
+        candidate_count = self.params["candidate_count"]
+
+        # A dispatch dictionary maps the strategy string to the correct function call
+        strategy_functions = {
+            "Max Quality (Greedy Search)":
+                lambda: selection_strategies.select_candidates_quality_greedy(
+                    agg_quality_df, self.params["min_distance"], candidate_count
+                ),
+            "Max Coverage (K-Means)":
+                lambda: selection_strategies.select_candidates_kmeans(
+                    agg_quality_df, coords, candidate_count
+                ),
+            "Greedy Gradient Search":
+                lambda: selection_strategies.select_candidates_gradient_greedy(
+                    agg_quality_df, self.params["min_distance"], candidate_count
+                ),
+            "Quality-Filtered K-Means":
+                lambda: selection_strategies.select_candidates_filtered_kmeans(
+                    agg_quality_df, candidate_count, self.params["quality_percentile"]
+                ),
+            "Region of Interest (ROI) Search":
+                lambda: selection_strategies.select_candidates_roi(
+                    agg_quality_df, self.params["roi_center"], self.params["roi_radius"],
+                    self.params["min_distance"], candidate_count
+                )
+        }
+
+        if strategy in strategy_functions:
+            return strategy_functions[strategy]()
+        else:
+            raise ValueError(f"Unknown selection strategy: {strategy}")
