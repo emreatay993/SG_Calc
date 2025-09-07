@@ -30,7 +30,7 @@ class DistanceMeasureUI:
 
         # Helper hint
         self._hint = self.pl.add_text(
-            "Distance: off  [M=toggle, C=clear]\nWhen on: click two points on the surface.",
+            "Distance Measurement: off  [M=toggle, C=clear]\nWhen on: click two points on the surface.",
             position="lower_left",
             font_size=6,
         )
@@ -190,9 +190,9 @@ class DistanceMeasureUI:
 
     def _update_hint(self):
         txt = (
-            "Distance: off  [M=toggle, C=clear]\nWhen on: click two points on the surface."
+            "Distance Measurement: off  [M=toggle, C=clear]\nWhen on: click two points on the surface."
             if self.enabled
-            else "Distance: off  [M=toggle, C=clear]\nToggle on, then click two points."
+            else "Distance Measurement: on  [M=toggle, C=clear]\nWhen on: click two points on the surface."
         )
         if self._hint is not None:
             try:

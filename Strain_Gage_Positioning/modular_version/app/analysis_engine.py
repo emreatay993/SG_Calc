@@ -64,6 +64,12 @@ class AnalysisEngine(QObject):
     def run(self):
         """The main entry point to start the analysis workflow."""
         try:
+            # Reset k-NN fallback counters for this run
+            try:
+                computation.reset_knn_counters()
+            except Exception:
+                pass
+
             nodes, coords, strain_tensors = _load_and_combine_data(self.filepaths)
 
             # Special handling for the two-step K-Means strategy
@@ -82,6 +88,16 @@ class AnalysisEngine(QObject):
 
             candidates_df = self._select_candidates(agg_quality_df, coords)
 
+            # Report k-NN fallback usage (console; escalate if >5%)
+            try:
+                used, total = computation.get_knn_counters()
+                if total > 0:
+                    ratio = 100.0 * used / float(total)
+                    msg = f"Local_Std k-NN fallback used for {used}/{total} nodes ({ratio:.1f}%)."
+                    print(msg)
+            except Exception:
+                pass
+
             self.analysis_complete.emit(coords, current_scalars, candidates_df)
 
         except Exception as e:
@@ -98,7 +114,8 @@ class AnalysisEngine(QObject):
             angles = [0]
             strains_list = []
             for tensor in strain_tensors.values():
-                strain_data = tensor / 1e6 if self.display_in_strain else tensor
+                # All internal calculations use microstrain
+                strain_data = tensor
                 # von Mises equivalent strain calculation
                 vm_strains = np.sqrt(
                     strain_data[:, 0] ** 2 - strain_data[:, 0] * strain_data[:, 1] + strain_data[:, 1] ** 2 + 3 * (
@@ -127,7 +144,7 @@ class AnalysisEngine(QObject):
             angles = [0] + list(range(interval, 180, interval))
             strains_list = []
             for tensor in strain_tensors.values():
-                strain_data = tensor / 1e6 if self.display_in_strain else tensor
+                strain_data = tensor
                 strains_i = computation.compute_normal_strains(strain_data, angles)
                 strains_list.append(strains_i)
                 df = computation.compute_quality_metrics(
@@ -154,7 +171,7 @@ class AnalysisEngine(QObject):
             # threshold_metric is in the same unit as input tensors after conversion depending on display mode
             # Convert user-provided microstrain threshold into the working unit
             user_thresh_micro = float(self.params.get("strain_threshold_value_microstrain", 0.0))
-            threshold_value = user_thresh_micro / 1e6 if self.display_in_strain else user_thresh_micro
+            threshold_value = user_thresh_micro  # compare in microstrain
 
             # Filter DataFrame rows where the metric is below threshold
             mask = threshold_metric >= threshold_value
@@ -180,7 +197,10 @@ class AnalysisEngine(QObject):
                 ),
             "Greedy Gradient Search":
                 lambda: selection_strategies.select_candidates_gradient_greedy(
-                    agg_quality_df, self.params["min_distance"], candidate_count
+                    agg_quality_df,
+                    self.params["min_distance"],
+                    candidate_count,
+                    True if self.params.get("gradient_mode", "Max Local Std").startswith("Max") else False
                 ),
             "Quality-Filtered K-Means":
                 lambda: selection_strategies.select_candidates_filtered_kmeans(

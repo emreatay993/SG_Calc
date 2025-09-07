@@ -15,6 +15,30 @@ except ImportError:
     QtInteractor = QWidget
 
 
+class InputDataPanel(QGroupBox):
+    """
+    A small panel for loading input data and showing the selected file.
+    """
+    file_load_requested = pyqtSignal()
+
+    def __init__(self, parent=None):
+        super().__init__("Input Data Controls", parent)
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(8, 8, 8, 8)
+        self.btn_load = QPushButton("Load Strain Data")
+        self.lbl_file = QLabel("No file loaded")
+        self.lbl_file.setWordWrap(True)
+        layout.addWidget(self.btn_load)
+        layout.addWidget(self.lbl_file)
+        self.btn_load.clicked.connect(self.file_load_requested.emit)
+        # Tooltips
+        self.btn_load.setToolTip(tips.LOAD_STRAIN_DATA)
+        self.lbl_file.setToolTip(tips.FILE_LABEL)
+
+    def set_file_label(self, text: str):
+        self.lbl_file.setText(text)
+
+
 class ControlPanel(QGroupBox):
     """
     A widget containing all user controls for the analysis. This class is part of the
@@ -23,8 +47,6 @@ class ControlPanel(QGroupBox):
     # Signal emitted when the user clicks the "Update" / "Run" button.
     analysis_requested = pyqtSignal(bool)  # bool indicates if it's a continued K-Means run
 
-    # Signal emitted when the user clicks "Load Strain Data".
-    file_load_requested = pyqtSignal()
 
     # Signal emitted when the display unit (strain/microstrain) changes.
     display_mode_changed = pyqtSignal(bool)
@@ -32,23 +54,6 @@ class ControlPanel(QGroupBox):
     def __init__(self, parent=None):
         super().__init__("Positioning Controls", parent)
         self.setFixedWidth(280)
-        self.setStyleSheet("""
-            QGroupBox { 
-                border: 1px solid #87CEFA; 
-                border-radius: 5px; 
-                margin-top: 10px; 
-            }
-            QGroupBox::title { 
-                subcontrol-origin: margin; 
-                subcontrol-position: top left;
-                left: 10px; 
-                padding: 0 5px; 
-                background-color: palette(window);
-                color: #3F94D1; 
-                font-weight: bold; 
-            }
-        """)
-
         self._setup_widgets()
         self._setup_layout()
         self._apply_tooltips()
@@ -57,9 +62,6 @@ class ControlPanel(QGroupBox):
 
     def _setup_widgets(self):
         """Creates all the control widgets."""
-        self.btn_load = QPushButton("Load Strain Data")
-        self.lbl_file = QLabel("No file loaded")
-        self.lbl_file.setWordWrap(True)
 
         self.combo_measurement = QComboBox()
         self.combo_measurement.addItems(["Rosette", "Uniaxial"])
@@ -103,6 +105,12 @@ class ControlPanel(QGroupBox):
         self.dspin_quality_percentile = QDoubleSpinBox()
         self.dspin_quality_percentile.setRange(0.0, 100.0)
         self.dspin_quality_percentile.setValue(75.0)
+
+        # Gradient mode (only used for Greedy Gradient strategy)
+        self.lbl_gradient_mode = QLabel("Gradient Mode:")
+        self.combo_gradient_mode = QComboBox()
+        self.combo_gradient_mode.addItems(["Max Local Std", "Min Local Std"])
+        self.combo_gradient_mode.setCurrentText("Max Local Std")
 
         # --- ROI Group Box ---
         self.roiGroup = QGroupBox("Region of Interest (Sphere)")
@@ -161,8 +169,6 @@ class ControlPanel(QGroupBox):
         main_layout.setAlignment(Qt.AlignTop)
 
         widgets_map = [
-            (None, self.btn_load),
-            (None, self.lbl_file),
             ("Measurement Mode:", self.combo_measurement),
             ("Selection Strategy:", self.combo_strategy),
             ("Quality Metrics Mode:", self.combo_quality),
@@ -170,6 +176,7 @@ class ControlPanel(QGroupBox):
             ("Candidate Points Requested:", self.spin_candidate_count),
             ("Uniformity Search Radius [mm]:", self.dspin_uniformity_radius),
             (self.lbl_min_distance, self.dspin_min_distance),
+            (self.lbl_gradient_mode, self.combo_gradient_mode),
             (self.lbl_quality_percentile, self.dspin_quality_percentile),
             (None, self.thresholdGroup),
             (None, self.roiGroup)
@@ -188,8 +195,6 @@ class ControlPanel(QGroupBox):
 
     def _apply_tooltips(self):
         """Applies all tooltips to the widgets in this panel."""
-        self.btn_load.setToolTip(tips.LOAD_STRAIN_DATA)
-        self.lbl_file.setToolTip(tips.FILE_LABEL)
         self.btn_update.setToolTip(tips.RUN_ANALYSIS)
 
         # Core Settings
@@ -228,13 +233,12 @@ class ControlPanel(QGroupBox):
         self.thresholdGroup.setToolTip(tips.STRAIN_THRESHOLD_GROUP)
         self.dspin_threshold_value.setToolTip(tips.STRAIN_THRESHOLD_VALUE)
         self.combo_threshold_agg.setToolTip(tips.STRAIN_THRESHOLD_AGG)
+        self.combo_gradient_mode.setToolTip(tips.GRADIENT_MODE)
 
     def _connect_signals(self):
         """Connects widget signals to this panel's internal logic or output signals."""
-        self.btn_load.clicked.connect(self.file_load_requested.emit)
         self.btn_update.clicked.connect(self._on_update_clicked)
         self.combo_strategy.currentTextChanged.connect(self._update_strategy_controls)
-        # Toggle visibility of threshold fields based on checkbox
         self.chk_threshold_enable.toggled.connect(self._on_threshold_toggle)
 
     def _on_update_clicked(self):
@@ -248,9 +252,12 @@ class ControlPanel(QGroupBox):
         is_greedy = "Greedy" in strategy or "ROI" in strategy
         is_roi = "ROI" in strategy
         is_filtered_kmeans = "Filtered" in strategy
+        is_gradient = "Gradient" in strategy
 
         self.lbl_min_distance.setVisible(is_greedy)
         self.dspin_min_distance.setVisible(is_greedy)
+        self.lbl_gradient_mode.setVisible(is_gradient)
+        self.combo_gradient_mode.setVisible(is_gradient)
         self.lbl_quality_percentile.setVisible(is_filtered_kmeans)
         self.dspin_quality_percentile.setVisible(is_filtered_kmeans)
         self.roiGroup.setVisible(is_roi)
@@ -261,7 +268,6 @@ class ControlPanel(QGroupBox):
 
     def _on_threshold_toggle(self, checked: bool):
         """Show or hide the threshold numeric and agg controls when enabled."""
-        # When enabled, show both labels and widgets; otherwise hide
         self.dspin_threshold_value.setVisible(checked)
         self.combo_threshold_agg.setVisible(checked)
         if hasattr(self, "_lbl_threshold_value") and self._lbl_threshold_value is not None:
@@ -283,6 +289,7 @@ class ControlPanel(QGroupBox):
             "strain_threshold_enabled": self.chk_threshold_enable.isChecked(),
             "strain_threshold_value_microstrain": self.dspin_threshold_value.value(),
             "strain_threshold_agg": self.combo_threshold_agg.currentText(),
+            "gradient_mode": self.combo_gradient_mode.currentText(),
             "roi_center": np.array([
                 self.dspin_roi_x.value(),
                 self.dspin_roi_y.value(),
@@ -335,7 +342,7 @@ class VisualizationPanel(QWidget):
         self.graphical_group.setStyleSheet(group_box_style)
         graphical_layout = QHBoxLayout(self.graphical_group)
         self.dspin_cloud_point_size = QDoubleSpinBox()
-        self.dspin_cloud_point_size.setRange(1.0, 50.0)
+        self.dspin_cloud_point_size.setRange(1.0, 100.0)
         self.dspin_cloud_point_size.setValue(10.0)
         self.dspin_candidate_point_size = QDoubleSpinBox()
         self.dspin_candidate_point_size.setRange(1.0, 50.0)
@@ -378,6 +385,10 @@ class VisualizationPanel(QWidget):
 
         # PyVista Interactor
         self.vtk_widget = QtInteractor(self)
+        
+        # Show orientation (camera) widget in the corner
+        self.vtk_widget.show_axes()
+
 
     def _setup_layout(self):
         """Lays out all the widgets in this panel."""

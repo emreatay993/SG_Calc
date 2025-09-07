@@ -83,12 +83,18 @@ def select_candidates_kmeans(df, coords, candidate_count):
     return best_rows.sort_values(by='Quality', ascending=False).reset_index(drop=True)
 
 
-def select_candidates_gradient_greedy(df, min_distance, candidate_count):
+def select_candidates_gradient_greedy(df, min_distance, candidate_count, maximize: bool = True):
     """
-    Selects candidates with the highest strain gradient ('Local_Std') using a
-    greedy algorithm that enforces a minimum distance.
+    Selects candidates by strain gradient ('Local_Std') using a greedy algorithm
+    that enforces a minimum distance.
+
+    Args:
+        df: DataFrame with 'Local_Std'.
+        min_distance: exclusion radius between picks.
+        candidate_count: number of picks to return.
+        maximize: if True (default) selects highest Local_Std; if False selects lowest.
     """
-    df_sorted = df.sort_values(by='Local_Std', ascending=False)
+    df_sorted = df.sort_values(by='Local_Std', ascending=not maximize)
     return _greedy_selection(df_sorted, min_distance, candidate_count)
 
 

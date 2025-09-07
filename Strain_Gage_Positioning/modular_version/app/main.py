@@ -3,6 +3,7 @@
 import sys
 from PyQt5.QtWidgets import QApplication
 from PyQt5.QtCore import Qt
+from pathlib import Path
 
 # Import the main window from our new structure
 from app.main_window import MainWindow
@@ -18,6 +19,11 @@ def main():
     QApplication.setAttribute(Qt.AA_UseHighDpiPixmaps, True)
 
     app = QApplication(sys.argv)
+
+    # Load a global stylesheet (keeps styling separate from code)
+    qss_path = Path(__file__).with_name("styles.qss")
+    if qss_path.is_file():
+        app.setStyleSheet(qss_path.read_text(encoding="utf-8"))
 
     # Instantiate and show the main window
     win = MainWindow()

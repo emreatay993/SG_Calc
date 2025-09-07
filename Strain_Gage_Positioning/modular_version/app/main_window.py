@@ -9,26 +9,19 @@ from pathlib import Path
 
 from PyQt5.QtWidgets import (QMainWindow, QHBoxLayout, QWidget, QFileDialog,
                              QMessageBox, QDockWidget, QTableWidget, QTableWidgetItem,
-                             QAction)
+                             QAction, QVBoxLayout, QHeaderView)
 from PyQt5.QtCore import Qt, QCoreApplication
+from pyvistaqt import MainWindow as PyVistaMainWindow
+
+from .ui_components import ControlPanel, VisualizationPanel, InputDataPanel
 from .ui_tools import DistanceMeasureUI
-
-# pyvistaqt is an optional dependency, so we handle the import gracefully
-try:
-    from pyvistaqt import MainWindow as PyVistaMainWindow
-except ImportError:
-    print("Error: pyvistaqt is required. Please install it using 'pip install pyvistaqt'")
-    sys.exit(1)
-
-# Import our refactored, encapsulated UI components
-from .ui_components import ControlPanel, VisualizationPanel
 from .analysis_engine import AnalysisEngine
 from . import tooltips as tips
 
 
 class MainWindow(QMainWindow):
     """
-    The main application window. This class is the "Controller" in the MVC pattern.
+    The main application window. This class is the "Controller" in the MVC design pattern.
     Its primary roles are:
     1. Assembling the UI from various components (ControlPanel, VisualizationPanel).
     2. Connecting signals from the UI (View) to trigger actions in the logic (Model).
@@ -55,14 +48,23 @@ class MainWindow(QMainWindow):
     def _setup_ui(self):
         """Creates and arranges all UI components."""
         main_widget = QWidget()
+        main_widget.setObjectName("AppCentralWidget")
         self.setCentralWidget(main_widget)
         main_layout = QHBoxLayout(main_widget)
 
         # Instantiate our custom UI components
+        self.input_panel = InputDataPanel()
         self.control_panel = ControlPanel()
         self.visualization_panel = VisualizationPanel(self.control_panel)
 
-        main_layout.addWidget(self.control_panel)
+        left_column = QVBoxLayout()
+        left_column.setContentsMargins(0, 0, 0, 0)
+        left_column.addWidget(self.input_panel)
+        left_column.addWidget(self.control_panel)
+        left_container = QWidget()
+        left_container.setLayout(left_column)
+
+        main_layout.addWidget(left_container)
         main_layout.addWidget(self.visualization_panel)
 
         # Attach the distance measurement UI tool to the plotter
@@ -90,6 +92,9 @@ class MainWindow(QMainWindow):
         self.candidate_table_dock = QDockWidget("Candidate Points", self)
         self.candidate_table = QTableWidget()
         self.candidate_table.setAlternatingRowColors(True)
+        header = self.candidate_table.horizontalHeader()
+        header.setSectionResizeMode(QHeaderView.ResizeToContents)
+        header.setStretchLastSection(True)
         self.candidate_table.horizontalHeader().setStyleSheet(
             "QHeaderView::section { background-color: lightgray; font-weight: bold; }")
         self.candidate_table.setEditTriggers(QTableWidget.NoEditTriggers)
@@ -97,6 +102,9 @@ class MainWindow(QMainWindow):
         self.candidate_table_dock.setWidget(self.candidate_table)
         self.addDockWidget(Qt.RightDockWidgetArea, self.candidate_table_dock)
         self.candidate_table_dock.hide()
+
+        # Camera fly-to on row click
+        self.candidate_table.cellClicked.connect(self.on_candidate_table_cell_clicked)
 
     def _apply_tooltips(self):
         """Applies all tooltips to the main window's widgets."""
@@ -109,7 +117,7 @@ class MainWindow(QMainWindow):
         """Connect the Model, View, and Controller components."""
         # --- Control Panel (View) -> MainWindow (Controller) ---
         self.control_panel.analysis_requested.connect(self.run_analysis)
-        self.control_panel.file_load_requested.connect(self.load_strain_data)
+        self.input_panel.file_load_requested.connect(self.load_strain_data)
 
         # --- Menu Actions (View) -> MainWindow (Controller) ---
         self.action_show_table.toggled.connect(self.toggle_candidate_table)
@@ -136,7 +144,7 @@ class MainWindow(QMainWindow):
                 label = f"{first} (+{count-1} more)" if count > 1 else first
             else:
                 label = Path(self.input_file).name
-            self.control_panel.set_file_label(label)
+            self.input_panel.set_file_label(label)
             self.last_results = {}  # Invalidate cache
 
     def toggle_display_mode(self, checked):
@@ -172,12 +180,17 @@ class MainWindow(QMainWindow):
         output_path = os.path.join(self.project_dir, "strain_candidate_points.csv")
         candidates_df.to_csv(output_path, index=False, float_format="%.6e")
 
+        # Decide whether to preserve camera based on whether we have a prior scene
+        preserve_camera = bool(self.last_results)
         self.last_results = {'coords': coords, 'scalars': scalars, 'candidates_df': candidates_df}
 
+        # Update legend limits from current data so clim matches the dataset
         if len(scalars) > 0:
-            self.visualization_panel.set_legend_limits(np.min(scalars), np.max(scalars))
+            self.visualization_panel.set_legend_limits(float(np.min(scalars)), float(np.max(scalars)))
 
-        self.refresh_visualization()
+        # Draw directly, resetting camera on the first render to fit the data bounds
+        self.display_strain_with_candidates(coords, scalars, candidates_df, preserve_camera=preserve_camera)
+
         self.update_candidate_table(output_path)
 
     def on_kmeans_preview_ready(self, coords, cluster_labels):
@@ -295,7 +308,55 @@ class MainWindow(QMainWindow):
                 item = QTableWidgetItem(item_text)
                 item.setTextAlignment(Qt.AlignCenter)
                 self.candidate_table.setItem(row_idx, col_idx, item)
+
+        # Auto-size columns and adjust dock width so all columns are visible
+        header = self.candidate_table.horizontalHeader()
+        header.setSectionResizeMode(QHeaderView.ResizeToContents)
         self.candidate_table.resizeColumnsToContents()
+        total_width = int(header.length() + self.candidate_table.verticalHeader().width() + self.candidate_table.frameWidth() * 2 + 32)
+        self.candidate_table_dock.setMinimumWidth(total_width)
+        self.candidate_table_dock.resize(total_width, self.candidate_table_dock.height())
+
+    def on_candidate_table_cell_clicked(self, row, column):
+        """
+        Fly the camera to the XYZ position of the clicked candidate row.
+
+        Behavior:
+        - Reads the table's column headers to locate the 'X', 'Y', 'Z' columns (robust to column order).
+        - Parses the numeric values from the clicked row (ignores empty / N/A cells).
+        - Uses PyVista's fly_to for a smooth camera transition; falls back to setting the
+          camera focal point if fly_to is unavailable in the installed version.
+        """
+        try:
+            # Determine indices of coordinate columns by header name, so this logic
+            # remains valid even if the table column order changes in the future.
+            headers = [self.candidate_table.horizontalHeaderItem(i).text() for i in range(self.candidate_table.columnCount())]
+            x_idx = headers.index('X') if 'X' in headers else None
+            y_idx = headers.index('Y') if 'Y' in headers else None
+            z_idx = headers.index('Z') if 'Z' in headers else None
+            if x_idx is None or y_idx is None or z_idx is None:
+                return
+
+            # Helper to get and safely convert a cell's text to float.
+            def get_val(col_idx):
+                item = self.candidate_table.item(row, col_idx)
+                return float(item.text()) if item and item.text() not in (None, '', 'N/A') else None
+
+            x = get_val(x_idx); y = get_val(y_idx); z = get_val(z_idx)
+            if x is None or y is None or z is None:
+                return
+
+            plotter = self.visualization_panel.vtk_widget
+            try:
+                # Preferred smooth navigation when available (PyVista >= certain versions).
+                plotter.fly_to((float(x), float(y), float(z)))
+            except Exception:
+                # Fallback for environments without fly_to: directly move camera focal point.
+                cam = plotter.camera
+                cam.focal_point = (float(x), float(y), float(z))
+                plotter.render()
+        except Exception:
+            pass
 
     def toggle_candidate_table(self, checked):
         if checked:

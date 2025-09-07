@@ -4,15 +4,52 @@ import numpy as np
 import pandas as pd
 from scipy.spatial import cKDTree
 
+# ---- Local Std fallback tracking (module-level) ---------------------------------------
+_KNN_FALLBACK_COUNT = 0
+_TOTAL_LOCAL_STD_POINTS = 0
+_MIN_NEIGHBORS = 4  # minimum neighbors desired for a stable local std estimate
+
+
+def reset_knn_counters():
+    global _KNN_FALLBACK_COUNT, _TOTAL_LOCAL_STD_POINTS
+    _KNN_FALLBACK_COUNT = 0
+    _TOTAL_LOCAL_STD_POINTS = 0
+
+
+def get_knn_counters():
+    return _KNN_FALLBACK_COUNT, _TOTAL_LOCAL_STD_POINTS
+
 
 def load_data(input_filename):
-    """Reads the input file and returns nodes, coords, and strain tensors."""
+    """Reads the input file and returns nodes, coords (in mm), and strain tensors.
+
+    Unit handling:
+    - Detects coordinate units from the header's location fields:
+      "X Location (m)"/"Y Location (m)"/"Z Location (m)" => coordinates in meters → converted to mm
+      "X Location (mm)"/... => already in mm
+    - Strains are treated as dimensionless and converted to microstrain (×1e6) regardless
+      of header labeling (m/m or mm/mm).
+    """
+    # Peek the first line to infer units from the header text
+    coord_scale_to_mm = 1.0
+    try:
+        with open(input_filename, 'r', encoding='utf-8', errors='ignore') as f:
+            first_line = f.readline().strip().lower()
+        if "location (m)" in first_line:
+            # Coordinates are provided in meters; convert to millimeters for internal consistency
+            coord_scale_to_mm = 1000.0
+        elif "location (mm)" in first_line:
+            coord_scale_to_mm = 1.0
+        # else: leave as 1.0 (assume mm if unspecified)
+    except Exception:
+        coord_scale_to_mm = 1.0
+
     df = pd.read_csv(input_filename, sep='\s+', skiprows=1, header=None)
     if df.shape[1] < 8:
         raise ValueError("Input file must have at least 8 columns: Node, X, Y, Z, Exx, Eyy, Ezz, Exy...")
 
     nodes = df.iloc[:, 0].astype(int).values
-    coords = df.iloc[:, 1:4].values
+    coords = df.iloc[:, 1:4].values * coord_scale_to_mm
     conversion_factor = 1e6  # Convert from strain to microstrain
 
     # Determine the number of measurements based on columns available
@@ -30,6 +67,8 @@ def load_data(input_filename):
 
         exx = df.iloc[:, base_col_idx].values * conversion_factor
         eyy = df.iloc[:, base_col_idx + 1].values * conversion_factor
+        # The input convention is [Exx, Eyy, Ezz, Exy, (optional Eyz, Exz)] per measurement block
+        # We only need Exx, Eyy, and engineering shear Exy for normal strain transform.
         exy = df.iloc[:, base_col_idx + 3].values * conversion_factor  # 4th component of tensor is Exy
         strain_tensors[i] = np.column_stack((exx, eyy, exy))
 
@@ -98,21 +137,52 @@ def compute_quality_metrics(nodes, coords, strains, angles, quality_mode, unifor
     # Query all points at once for better performance
     neighbors_list = tree.query_ball_point(coords, uniformity_radius)
 
+    global _KNN_FALLBACK_COUNT, _TOTAL_LOCAL_STD_POINTS
     for i, indices in enumerate(neighbors_list):
-        if len(indices) > 1:  # Standard deviation requires at least 2 points
-            local_std[i] = np.std(best_strains[indices])
+        # Track total attempts
+        _TOTAL_LOCAL_STD_POINTS += 1
+
+        # Standard deviation requires at least 2 points; prefer >= _MIN_NEIGHBORS
+        use_fallback = len(indices) < _MIN_NEIGHBORS
+        if use_fallback:
+            # k-NN fallback to stabilize estimate in sparse/edge regions
+            k = min(_MIN_NEIGHBORS, len(coords))
+            if k >= 2:
+                _, knn_idx = tree.query(coords[i], k=k)
+                # Ensure array of indices
+                knn_idx = np.atleast_1d(knn_idx)
+                local_std[i] = np.std(best_strains[knn_idx])
+                _KNN_FALLBACK_COUNT += 1
+            elif len(indices) > 1:
+                local_std[i] = np.std(best_strains[indices])
+            else:
+                local_std[i] = 0.0
+        else:
+            # Enough neighbors within radius
+            local_std[i] = np.std(best_strains[indices]) if len(indices) > 1 else 0.0
 
     abs_strain = np.abs(best_strains)
+
+    # Data-driven calibration helpers (microstrain):
+    # Use 75th percentile of local_std as a reference scale.
+    positive_std = local_std[local_std > 0]
+    sigma_ref = float(np.percentile(positive_std, 75)) if positive_std.size > 0 else 1.0
+    # Unit-aware epsilon for SNR: 1% of sigma_ref with a floor of 1 microstrain
+    eps0 = max(1.0, 0.01 * sigma_ref)
+    # Auto-k for exponential: set attenuation A at sigma_ref
+    A = 0.5
+    k_exp = (0.0 if sigma_ref <= 0 else -np.log(A) / sigma_ref)
 
     if quality_mode == "Default: |ε|/(1+σ)":
         quality = abs_strain / (1.0 + local_std)
     elif quality_mode == "Squared: |ε|/(1+σ²)":
         quality = abs_strain / (1.0 + local_std ** 2)
     elif quality_mode == "Exponential: |ε|·exp(–1000σ)":
-        quality = abs_strain * np.exp(-1000 * local_std)
+        # Auto-calibrated exponential penalty
+        quality = abs_strain * np.exp(-k_exp * local_std)
     elif quality_mode == "Signal-Noise Ratio: |ε|/(σ+1e-12)":
-        # Add a small epsilon to avoid division by zero
-        quality = abs_strain / (local_std + 1e-12)
+        # Use a data-driven epsilon to avoid singularities and keep scale stable
+        quality = abs_strain / (local_std + eps0)
     else:
         raise ValueError(f"Unknown quality_mode: {quality_mode}")
 
@@ -150,13 +220,19 @@ def aggregate_quality_metrics(quality_dfs, agg_method):
         return agg_df
 
     quality_matrix = np.stack([df["Quality"].values for df in quality_dfs], axis=1)
+    local_std_matrix = np.stack([df["Local_Std"].values for df in quality_dfs], axis=1)
 
     if agg_method.lower() == "max":
         agg_quality = np.max(quality_matrix, axis=1)
+        agg_local_std = np.max(local_std_matrix, axis=1)
     elif agg_method.lower() == "average":
         agg_quality = np.mean(quality_matrix, axis=1)
+        agg_local_std = np.mean(local_std_matrix, axis=1)
     else:
         raise ValueError(f"Unknown aggregation method: {agg_method}")
 
     agg_df["Quality"] = agg_quality
+    # Aggregate the gradient metric across load cases so Greedy Gradient Search
+    # reflects multi-load behavior (instead of using only the first case).
+    agg_df["Local_Std"] = agg_local_std
     return agg_df

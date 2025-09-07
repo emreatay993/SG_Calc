@@ -37,6 +37,8 @@ Select a whitespace-delimited text file containing node coordinates and strain t
 <br/>
 <b><u>Units:</u></b><br/>
 Provide strains in <b>strain (mm/mm)</b>. The tool converts to microstrain internally; display units can be toggled/changed later.
+<br/>
+<i>Unit detection from header:</i> If the first line contains <b>"X Location (m)"</b>, coordinates are treated as meters and converted to <b>mm</b> internally. If it contains <b>"X Location (mm)"</b>, they are used as mm. If unspecified, mm is assumed. All distance inputs in the UI (Min Distance, Uniformity Search Radius, ROI) are always specified in <b>millimeters</b>.
 <br/><br/>
 <b><u>Multiple Load Cases:</u></b><br/>
 Provide multiple cases in either of two ways:
@@ -82,19 +84,16 @@ MEASUREMENT_MODE = """
 This setting defines the fundamental engineering quantity that the tool will optimize for.
 Your choice depends on the type of strain gage you intend to use and what you want to measure.<br><br>
 <ul>
-  <li><b>Rosette:</b> This mode calculates the <b>von Mises equivalent strain</b>. This is a single
+  <li><b>Rosette:</b> This mode calculates the equivalent <b>von Mises strain</b>. This is a single
     scalar value that represents the total strain energy or "intensity" at a point, regardless of
     direction.
-    <br><b>Analogy:</b> Imagine a rubber sheet being stretched in multiple directions. The von Mises
-    strain tells you <i>how much</i> total stretching is happening at a point, but not the primary
-    direction of the stretch.
     <br><b>Use Case:</b> Excellent for general-purpose analysis or when you plan to use a triaxial
-    (0-45-90 or 0-60-120 degree) rosette gage. It's the best choice when you don't know the
+    (0-45-90 or 0-60-120 degree) rosette gage. It's the best choice when you don't know much aboutthe
     principal strain direction beforehand.</li>
   <br>
   <li><b>Uniaxial:</b> This mode calculates the normal strain (direct stretching or compression)
     across a full range of angles (0-180 degrees) for each node. It then identifies the single angle
-    that produces the highest absolute strain value.
+    that produces the highest absolute strain value (principal strain).
     <br><b>Analogy:</b> This is like rotating a single, straight ruler at a point on the rubber
     sheet and finding the orientation where the ruler measures the most stretch.
     <br><b>Use Case:</b> The ideal choice when you plan to use a simple, single-element (uniaxial)
@@ -128,6 +127,12 @@ calculates the standard deviation of those values.
     an area, "smoothing out" and hiding important local hot spots.</li>
 </ul>
 <b>Pro Tip:</b> A good starting value is often 2-3 times the average distance between nodes in your area of interest.
+<br><br>
+<b>Stability safeguards:</b><br>
+When very few neighbors fall inside the radius (e.g., at edges or sparse regions), the tool
+computes the local gradient using the <b>k nearest neighbors</b> (k≥4) to stabilize the estimate.
+After each run, it reports how often this fallback was used. If more than ~<b>5%</b> of points rely
+on the fallback, consider increasing the radius or refining the mesh.
 """
 
 # =====================================================================================
@@ -148,7 +153,10 @@ Your choice of formula depends on how strongly you want to penalize high-gradien
   <li><b>Signal-Noise Ratio: |ε|/(σ+1e-12)</b> (Default): This is a standard in signal processing.
     Think of the strain magnitude (|ε|) as the "signal" you want to measure and the gradient (σ) as the
     "noise" that can corrupt the measurement. This formula aggressively favors a strong signal over
-    low noise and is extremely effective at finding peak strain locations that are reasonably stable.</li>
+    low noise and is extremely effective at finding peak strain locations that are reasonably stable.<br>
+    <i>Auto-calibration:</i> ε<sub>0</sub> is set from the data as <b>max(1 μɛ, 1% of σ<sub>75</sub>)</b>,
+    where σ<sub>75</sub> is the 75th percentile of the local gradient. This prevents blow-ups when σ≈0
+    and keeps the scale consistent across different models.</li>
   <br>
   <li><b>Default: |ε|/(1+σ):</b> A balanced and intuitive approach. The quality score decreases
     linearly as the local gradient increases. It's a reliable, general-purpose choice.</li>
@@ -159,9 +167,11 @@ Your choice of formula depends on how strongly you want to penalize high-gradien
     <br><b>Use Case:</b> Select this if measurement accuracy and strain field uniformity are far more
     important to you than simply finding the absolute highest peak strain.</li>
   <br>
-  <li><b>Exponential: |ε|·exp(–1000σ):</b> This is the most aggressive penalty against gradients.
-    The exponential function means that the quality score will plummet to near-zero with even a
-    very small local gradient.
+  <li><b>Exponential: |ε|·exp(–kσ):</b> This is the most aggressive penalty against gradients.
+    The exponential function means that the quality score decays with the local gradient.
+    In this tool, <b>k auto‑calibrates</b> per dataset so that at the 75th percentile of σ the
+    exponential factor is ~<b>0.5</b> (i.e., <b>k = ln(2)/σ<sub>75</sub></b>). This keeps behavior
+    consistent across meshes and load cases without manual tuning.
     <br><b>Use Case:</b> Use this for applications requiring extreme measurement fidelity, where you
     must find and place gages only in the most stable, flat, and uniform strain fields.</li>
 </ul>
@@ -274,6 +284,14 @@ the value below which a given percentage of observations in a group of observati
 For example, a value of <b>75</b> means that the algorithm will only consider points whose 'Quality'
 score is in the top <b>25%</b> of all points. The remaining 75% of lower-quality points are discarded
 before the K-Means clustering begins.
+"""
+GRADIENT_MODE = """
+<b>Gradient Mode</b><br><br>
+Controls how 'Greedy Gradient Search' ranks candidates:<br>
+<ul>
+  <li><b>Max Local Std:</b> Prioritize the steepest strain gradients (typical use).</li>
+  <li><b>Min Local Std:</b> Prioritize the flattest, most uniform regions (e.g., for highly stable measurements).</li>
+<ul>
 """
 ROI_GROUP = "Define a spherical Region of Interest (ROI) by specifying its center coordinates (X, Y, Z) and its radius in millimeters."
 
