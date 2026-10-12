@@ -14,6 +14,20 @@ import os
 import re
 # endregion
 
+def _group_objects_in_tree(objects, folder_name):
+    """Keep legacy grouping compatible with newer Mechanical releases."""
+    tree = ExtAPI.DataModel.Tree
+    tree.Activate(objects)
+    try:
+        context_menu.DoCreateGroupingFolderInTree(ExtAPI)
+    except Exception:
+        # Newer releases no longer expose the legacy context-menu helper.
+        folder = tree.Group(objects)
+    else:
+        folder = DataModel.GetObjectsByName("New Folder")[0]
+    folder.Name = folder_name
+    return folder
+
 #---------------------------------------------------------------------------------------------------------
 
 list_of_selected_CAD_files_for_each_rosette_SG = []
@@ -455,38 +469,24 @@ list_of_obj_of_SG_mesh_controls = [
     if list_of_obj_of_all_mesh_controls[i].Name.Contains("Body_Sizing_SG_")]
 
 # Group the coordinate systems of each grid channel
-ExtAPI.DataModel.Tree.Activate(list_of_obj_of_CS_SG_Ch_of_grids)
-context_menu.DoCreateGroupingFolderInTree(ExtAPI)
-DataModel.GetObjectsByName("New Folder")[0].Name = "CS_SG_Ch"
+_group_objects_in_tree(list_of_obj_of_CS_SG_Ch_of_grids, "CS_SG_Ch")
 
 # Group the element orientations created
-ExtAPI.DataModel.Tree.Activate(list_of_obj_of_grid_element_orientations)
-context_menu.DoCreateGroupingFolderInTree(ExtAPI)
-DataModel.GetObjectsByName("New Folder")[0].Name = "Orient_CS_SG_Ch"
+_group_objects_in_tree(list_of_obj_of_grid_element_orientations, "Orient_CS_SG_Ch")
 
 # Group the SG grid bodies created
-ExtAPI.DataModel.Tree.Activate(list_of_obj_of_SG_grid_bodies)
-context_menu.DoCreateGroupingFolderInTree(ExtAPI)
-DataModel.GetObjectsByName("New Folder")[0].Name = "SG_Grid_Body"
+_group_objects_in_tree(list_of_obj_of_SG_grid_bodies, "SG_Grid_Body")
 
 # Group the SG geometry imports from library
-ExtAPI.DataModel.Tree.Activate(list_of_obj_of_SG_geometry_imports)
-context_menu.DoCreateGroupingFolderInTree(ExtAPI)
-DataModel.GetObjectsByName("New Folder")[0].Name = "SG_Geometry_Imports"
+_group_objects_in_tree(list_of_obj_of_SG_geometry_imports, "SG_Geometry_Imports")
 
 # Group the strain result objects of SG grids
-ExtAPI.DataModel.Tree.Activate(list_of_obj_of_SG_grid_strains)
-context_menu.DoCreateGroupingFolderInTree(ExtAPI)
-DataModel.GetObjectsByName("New Folder")[0].Name = "StrainX_SG"
+_group_objects_in_tree(list_of_obj_of_SG_grid_strains, "StrainX_SG")
 
 # Group the connection group objects of SG grids/bodies
-ExtAPI.DataModel.Tree.Activate(list_of_obj_of_connection_groups_of_SG_bodies)
-context_menu.DoCreateGroupingFolderInTree(ExtAPI)
-DataModel.GetObjectsByName("New Folder")[0].Name = "Contacts_SG"
+_group_objects_in_tree(list_of_obj_of_connection_groups_of_SG_bodies, "Contacts_SG")
 
-ExtAPI.DataModel.Tree.Activate(list_of_obj_of_SG_mesh_controls)
-context_menu.DoCreateGroupingFolderInTree(ExtAPI)
-DataModel.GetObjectsByName("New Folder")[0].Name = "Mesh_Controls_SG"
+_group_objects_in_tree(list_of_obj_of_SG_mesh_controls, "Mesh_Controls_SG")
 # endregion
 
 # region Modify the contact regions of SG grids/bodies and their properties
